@@ -1,5 +1,5 @@
 {
-  "name": "mpos-domify",
+  "name": "mpos-precept",
   "version": "1.0.0",
   "description": "Imposter layout to represent DOM rects as THREE bounds.",
   "keywords": [],

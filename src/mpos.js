@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-//import { CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
+import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 
 const mpos = {
@@ -14,31 +14,46 @@ const mpos = {
     },
     geo: new THREE.BoxGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      wireframe: false,
       transparent: true
     })
   },
   init: function () {
     // INIT THREE
     mpos.var.scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(60, mpos.var.fov.w / mpos.var.fov.h, 0.1, 1000)
+    const camera = new THREE.PerspectiveCamera(60, mpos.var.fov.w / mpos.var.fov.h, 0.01, 1000)
     camera.position.z = 1
     const renderer = new THREE.WebGLRenderer()
     renderer.setSize(mpos.var.fov.w, mpos.var.fov.h)
     document.body.appendChild(renderer.domElement)
-    new OrbitControls(camera, renderer.domElement)
+    const controls = new OrbitControls(camera, renderer.domElement)
 
-    // ADD LIGHT
-    const light = new THREE.PointLight(0xff0000, 1, 100)
-    light.position.set(0, 4, 4)
-    mpos.var.scene.add(light)
-
-    // ADD SCREEN
+    // helpers...
     let axes = new THREE.AxesHelper(0.5)
     mpos.var.scene.add(axes)
+    //const light = new THREE.PointLight(0xff0000, 1, 100)
+    //light.position.set(0, 4, 4)
+    //mpos.var.scene.add(light)
+
     // ADD TARGET
     mpos.add.dom()
+
+    // CSS3D
+    const container = document.getElementById('container')
+    const rendererCSS = new CSS3DRenderer()
+    rendererCSS.setSize(mpos.var.fov.w, mpos.var.fov.h)
+    container.appendChild(rendererCSS.domElement)
+    const controlsCSS = new OrbitControls(camera, rendererCSS.domElement)
+    //const group = new THREE.Group()
+
+    const blocker = document.getElementById('blocker')
+    blocker.style.display = 'none'
+
+    controlsCSS.addEventListener('start', function () {
+      blocker.style.display = ''
+    })
+    controlsCSS.addEventListener('end', function () {
+      blocker.style.display = 'none'
+    })
 
     // RENDER LOOP
     function animate() {
@@ -53,6 +68,7 @@ const mpos = {
         }
       }
       renderer.render(mpos.var.scene, camera)
+      rendererCSS.render(mpos.var.scene, camera)
     }
     animate()
 
@@ -106,22 +122,18 @@ const mpos = {
       }
 
       // tree THREE
-      const group = new THREE.Group(selector)
-      group.name = selector
+      mpos.var.group = new THREE.Group(selector)
+      mpos.var.group.name = selector
 
       // tree ROOT
-      let actor = mpos.add.act(document.body, -1)
-      actor.material.wireframe = true
-      group.add(actor)
+      mpos.add.act(document.body, -1, { m: 'wire' })
 
       function struct(sel, layer) {
         console.log('struct', layer, sel.tagName)
         let depth = layer
 
         // tree self
-        let actor = mpos.add.act(sel, layers - depth)
-        actor.material.wireframe = true
-        group.add(actor)
+        mpos.add.act(sel, layers - depth, { m: 'child' })
 
         // tree child
         // todo: fake child node (~text !whitespace)
@@ -141,33 +153,14 @@ const mpos = {
           } else {
             // child composite
             console.log(depth, child.tagName)
-            let actor = mpos.add.act(child, layers - depth)
-            actor.material.opacity = 0.5
-            group.add(actor)
-
-            //
-            // CSSObject3D...
-            //
+            mpos.add.act(child, layers - depth, { m: 'child' })
 
             // FILTER TYPE
             const type = child.tagName.toUpperCase()
             if (type === 'IMG') {
               console.log('type', type, child.src)
-
               /*
               // TO-DO: fix local CORS
-              var canvas = document.createElement("canvas");
-              ctx = canvas.getContext("2d");
-
-              canvas.width = child.width;
-              canvas.height = child.height;
-              ctx.drawImage( child, 0, 0, canvas.width, canvas.height );
-
-              let map = new THREE.CanvasTexture(canvas);
-
-
-              let material = new THREE.MeshStandardMaterial({map:map})
-              actor.material = material
               */
             } else if (type === 'FORM') {
               // CSS 3D
@@ -180,33 +173,56 @@ const mpos = {
 
       struct(sel, layers)
 
-      group.scale.multiplyScalar(1 / mpos.var.fov.max)
-      mpos.var.scene.add(group)
+      mpos.var.group.scale.multiplyScalar(1 / mpos.var.fov.max)
+      mpos.var.scene.add(mpos.var.group)
     },
 
-    act: function (element, layer = 0) {
+    act: function (element, layer = 0, opt = {}) {
       const geo = mpos.var.geo.clone()
       const mat = mpos.var.mat.clone()
-      const actor = new THREE.Mesh(geo, mat)
+      const mesh = new THREE.Mesh(geo, mat)
 
       // options
-      actor.name = layer + '_' + element.tagName
+      mesh.name = [layer, element.tagName].join('_')
       const rect = element.getClientRects()[0]
       // scale
       const w = rect.width
       const h = rect.height
       const d = mpos.var.fov.z
-      actor.scale.set(w, h, d)
+      mesh.scale.set(w, h, d)
       // position
       //if(layer !== false){
       let x = rect.width / 2 + rect.left
       let y = -(rect.height / 2) - rect.top
-      actor.position.set(x, y, mpos.var.fov.z * layer)
+      let z = mpos.var.fov.z * layer
+      mesh.position.set(x, y, z)
       //}
 
-      return actor
+      let css3d = null
+      if (opt.m === 'child') {
+        mesh.material.opacity = 0.75
+        // CSSObject3D...
+        z += mpos.var.fov.z / 2 + 0.01
+        css3d = new Element(element, x, y, z, 0)
+        css3d.name = ['CSS', element.tagName].join('_')
+        //
+      } else {
+        mesh.material.wireframe = true
+      }
+
+      mpos.var.group.add(mesh, css3d)
     }
   }
+}
+
+function Element(element, x, y, z, ry) {
+  let el = element.cloneNode(true)
+
+  const object = new CSS3DObject(el)
+  object.position.set(x, y, z)
+  object.rotation.y = ry
+
+  return object
 }
 
 export default mpos
