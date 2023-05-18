@@ -28,10 +28,16 @@ subgraph type
   a-.-tag{blacklist}
   a-->b{interactive}
   b---canvas("2x: img, text")
-  b---css3d("3x: video, form")
+  b---css3d("3x: form, video")
 
 end
 
 canvas-->html2canvas
 css3d-->CSS3DRenderer
 ```
+
+### lists
+- `blacklist` () -- `.ignore,style,script,canvas[data-engine],embed,object,frame,br`
+- `whitelist` (semantic) -- `div,main,section,article,header,footer,aside,table,details,form,ul,ol,li`
+- `html2canvas` (legible) -- `img,svg,h1,h2,h3,p,li,ul,ol`
+- `CSS3DRenderer` (interactive) -- `iframe,table,form,video,audio`
