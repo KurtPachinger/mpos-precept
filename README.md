@@ -13,7 +13,10 @@ subgraph selector
 end
 
 
-pre-count-.-b
+grade("Pre-grade. Classify ancestors to hide node.")
+  
+
+grade-.-b
 selector--userData-->Box3-->a
 
 
