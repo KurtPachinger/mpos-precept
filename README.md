@@ -18,11 +18,13 @@ selector---Box3-->a
 
 subgraph type
   direction TB
-  tag{blacklist}-.-a
+
   a("1x: semantic, viewport, hardmax")
+  a-.-tag{blacklist}
   a-->b{interactive}
   b---canvas("2x: img, text")
   b---css3d("3x: video, form")
+
 end
 
 canvas-->html2canvas
