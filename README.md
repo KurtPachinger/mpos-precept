@@ -8,17 +8,19 @@ flowchart TB;
 
 
 
+
+  
+
+
 subgraph box
   b("1x: semantic, viewport, hardmax")
+  canvas("2x: img, text")
+  css3d("3x: video, form")
 end
 
-subgraph canvas
-  c("2x: img, text")
-end
 
-subgraph css3d
-  s("3x: video, form")
-end
+
+
 
 window -.- selector
 subgraph selector
@@ -30,9 +32,9 @@ subgraph selector
 end
 selector--type-->box
 
+canvas-->Canvas
+css3d-->CSS3DRenderer
 
 
-box-->canvas
-box-->css3d
 
 ```
