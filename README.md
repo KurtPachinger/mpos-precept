@@ -37,7 +37,9 @@ css3d-->CSS3DRenderer
 ```
 
 ### lists
-- `blacklist` () -- `.ignore,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr`
-- `whitelist` (semantic) -- `div,span,main,section,article,nav,header,footer,aside,figure,details,table,form,ul,ol,li`
-- `html2canvas` (legible) -- `img,svg,h1,h2,h3,p,li,ul,ol`
-- `CSS3DRenderer` (interactive) -- `iframe,frame,embed,object,table,form,video,audio`
+- `blacklist` (empty) -- `.ignore,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr`
+- `whitelist` (semantic) -- `div,span,main,section,article,nav,header,footer,aside,figure,details,table,form,li,ul,ol`
+- `html2canvas` (legible) -- `canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd`
+- `CSS3DRenderer` (interactive) -- `iframe,frame,embed,object,table,form,details,video,audio`
+- `mixed-content` (test resource) -- `canvas,svg,object,embed,audio`
+- `dimensions` (track, crash) -- `1 > n < 3840`
