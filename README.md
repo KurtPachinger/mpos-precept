@@ -3,26 +3,15 @@ Imposter layout to represent DOM rects as THREE bounds.
 
 ### Process
 ```mermaid
-flowchart TB;
+flowchart TB
 
-
-
-
-
-  
-
-
-subgraph box
+subgraph type
   b("1x: semantic, viewport, hardmax")
   canvas("2x: img, text")
   css3d("3x: video, form")
 end
 
-
-
-
-
-window -.- selector
+window-.-selector
 subgraph selector
  direction TB
  child--maxnode-->parent
@@ -30,11 +19,8 @@ subgraph selector
 
 
 end
-selector--type-->box
+selector---box-->type
 
-canvas-->Canvas
+canvas-->html2canvas
 css3d-->CSS3DRenderer
-
-
-
 ```
