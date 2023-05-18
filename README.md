@@ -12,8 +12,8 @@ subgraph selector
  parent--depth-->child
 end
 
-precount-.-b
-selector---box-->a
+pre-count-.-b
+selector---Box3-->a
 
 
 subgraph type
