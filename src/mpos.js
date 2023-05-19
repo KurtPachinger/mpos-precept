@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
+import { toCanvas, toSvg } from 'html-to-image'
 
 const mpos = {
   var: {
@@ -14,18 +15,21 @@ const mpos = {
     },
     geo: new THREE.BoxGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
-      transparent: true
+      transparent: true,
+      wireframe: true,
+      side: THREE.FrontSide
     })
   },
   init: function () {
     let vars = mpos.var
     // THREE
     vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(60, vars.fov.w / vars.fov.h, 0.001, 1000)
+    vars.camera = new THREE.PerspectiveCamera(60, vars.fov.w / vars.fov.h, 0.01, 1000)
     vars.camera.position.z = 1
     vars.renderer = new THREE.WebGLRenderer()
     vars.renderer.setSize(vars.fov.w, vars.fov.h)
     document.body.appendChild(vars.renderer.domElement)
+    vars.renderer.setClearColor(0x00ff00, 0)
     // helpers
     let axes = new THREE.AxesHelper(0.5)
     vars.scene.add(axes)
@@ -71,7 +75,7 @@ const mpos = {
       // root DOM node (viewport)
       mpos.add.box(document.body, -1, { m: 'wire' })
 
-      let maxnode = 20
+      let maxnode = 32
       function struct(sel, layer) {
         //console.log('struct', layer, sel.tagName)
         let depth = layer
@@ -81,8 +85,8 @@ const mpos = {
         // structure
         const blacklist = '.ignore,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'
         const whitelist = 'div,span,main,section,article,nav,header,footer,aside,figure,details,li,ul,ol'
-        const canvas = 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd'
-        const css3d = 'iframe,frame,embed,object,table,form,details,video,audio'
+        const poster = 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd'
+        const native = 'iframe,frame,embed,object,table,form,details,video,audio'
 
         // child DOM node
         depth--
@@ -95,12 +99,12 @@ const mpos = {
           const allow = child.matches(whitelist)
 
           if (block) {
-            console.log('blacklist', child.nodeName)
+            console.log('blacklist', child.tagName)
             continue
           } else {
             maxnode--
             if (maxnode < 1) {
-              console.log('MAX_SELF', sel.nodeName, sel.id)
+              console.log('MAX_SELF', sel.tagName, sel.id)
               return false
             }
             if (depth >= 1 && !empty && allow) {
@@ -113,12 +117,12 @@ const mpos = {
 
               // FILTER TYPE
 
-              if (child.matches(canvas)) {
-                //console.log('type', child,child.nodeName)
-                m = 'canvas'
-              } else if (child.matches(css3d)) {
+              if (child.matches(poster)) {
+                //console.log('type', child,child.tagName)
+                m = 'poster'
+              } else if (child.matches(native)) {
                 // CSS 3D
-                m = 'css3d'
+                m = 'native'
               }
 
               mpos.add.box(child, layers - depth, { m: m })
@@ -134,9 +138,10 @@ const mpos = {
     },
 
     box: function (element, layer = 0, opt = {}) {
-      const geo = mpos.var.geo.clone()
-      const mat = mpos.var.mat.clone()
-      const mesh = new THREE.Mesh(geo, mat)
+      //const geo = mpos.var.geo.clone()
+      const mat = mpos.var.mat
+      const mesh = new THREE.Mesh(mpos.var.geo, mat)
+      mesh.userData.el = element
       mesh.name = [layer, element.tagName].join('_')
 
       const rect = element.getBoundingClientRect()
@@ -151,29 +156,45 @@ const mpos = {
       let z = mpos.var.fov.z * layer
       mesh.position.set(x, y, z)
 
-      // types
-      let actors = [mesh]
-
+      // static or dynamic
+      let types = [mesh]
       if (opt.m === 'wire') {
-        mesh.material.wireframe = true
+        mat.color.setStyle('cyan')
+        mat.opacity = 0.5
       } else {
-        mesh.material.opacity = 0.75
-        if (opt.m === 'css3d') {
+        const map = mat.clone()
+        map.wireframe = false
+        map.name = element.tagName
+
+        // todo: data-taxonomy...
+        if (opt.m === 'poster') {
+          mesh.material = [mat, mat, mat, mat, map, null]
+          toSvg(element).then(function (dataUrl) {
+            map.map = new THREE.TextureLoader().load(dataUrl)
+            map.needsUpdate = true
+          })
+        } else if (opt.m === 'native') {
           // CSSObject3D...
           z += mpos.var.fov.z / 2 + 0.1
           let css3d = mpos.add.css(element, x, y, z, 0)
           css3d.name = ['CSS', element.tagName].join('_')
-          actors.push(css3d)
-        } else if (opt.m === 'canvas') {
-          // canvas texture
+          types.push(css3d)
         } else {
           let style = window.getComputedStyle(element)
-          mesh.material.color.setStyle(style.backgroundColor)
+          let bg = style.backgroundColor
+          let alpha = bg.replace(/[rgba()]/g, '').split(',')[3]
+          console.log('alpha', alpha, element.tagName)
+          if (alpha <= 0) {
+            bg = 'transparent'
+          }
+          mesh.material = map
+          map.color.setStyle(bg)
         }
-        console.log(element, opt.m, mesh.material.color, mesh.material.map)
+
+        //console.log(element, opt.m, mesh.material)
       }
 
-      mpos.var.group.add(...actors)
+      mpos.var.group.add(...types)
     },
     css: function (element, x, y, z, ry) {
       let el = element.cloneNode(true)
@@ -214,16 +235,17 @@ const mpos = {
     })
 
     // RENDER LOOP
-    vars.controls.addEventListener('change', animate)
+    //vars.controls.addEventListener('change', animate)
+
     function animate() {
-      //requestAnimationFrame(animate)
+      requestAnimationFrame(animate)
       const body = vars.scene.getObjectsByProperty('name', '-1_BODY')
       if (body) {
         let time = new Date().getTime() / 100
         for (let i = 0; i < body.length; i++) {
           let wiggle = body[i]
-          wiggle.rotation.x += Math.sin(time) / 100
-          wiggle.rotation.y += Math.cos(time) / 100
+          wiggle.rotation.x = Math.sin(time) / 10
+          wiggle.rotation.y = Math.cos(time) / 10
         }
       }
       vars.renderer.render(vars.scene, vars.camera)

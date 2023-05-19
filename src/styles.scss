@@ -18,6 +18,7 @@ section, aside, p, ul, ol {
   background-color: #fff;
   width: 100%;
   max-width: 18em;
+  z-index: 1;
 }
 
 
@@ -67,5 +68,6 @@ img {
   padding-bottom: 56.25%;
 }
 
-
-
+#canvas canvas {
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=");
+}
