@@ -27,13 +27,13 @@ subgraph type
   a("1x: semantic, viewport, hardmax")
   a-.-tag{blacklist}
   a-->b{interactive}
-  b---canvas("2x: img, text")
-  b---css3d("3x: form, video")
+  b---static("2x: img, text")
+  b---dynamic("3x: form, video")
 
 end
 
-canvas-->html2canvas
-css3d-->CSS3DRenderer
+static-->html-to-image
+dynamic-->CSS3DRenderer
 ```
 
 ### structure 
