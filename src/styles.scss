@@ -6,54 +6,65 @@
   font-size: 1rem;
 }
 
+:root {
+  --width: 18rem;
+  --u1: 0.25rem;
+  --u2: 0.50rem;
+  --sup: rgba( 255, 255, 0, 0.5 );
+  --sub: rgba( 255, 0, 0, 0.5 );
+  --med: rgba( 128, 128, 128, 0.125 );
+}
 
-/* structure */
-main, section, aside { padding: 0.5em; }
-section, aside, p, ul, ol { 
-  margin-bottom: 0.25em;
+
+/* STYLE */
+.sel { border-top: var(--u1) solid var(--sup); }
+.sel span { background-color: var(--sup); }
+
+#canvas canvas {
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=");
+}
+
+main, section, aside { padding: var(--u2); }
+section, aside, h2, p, ul, ol, form, table { 
+  margin-bottom: var(--u2);
+}
+
+.w { overflow: auto; }
+.w25, .w50 { float: left; }
+.w25 { width: 25.00%; }
+.w50 { width: 50.00%; }
+.w100 { width: 100%;  }
+
+
+/* STRUCTURE */
+#tools, main, img, .w100 {
+  width: 100%;
+  max-width: var(--width);
 }
 
 #tools, main {
   position: absolute;
-  background-color: #fff;
-  width: 100%;
-  max-width: 18em;
   z-index: 1;
+  margin: var(--u2);
 }
-
 
 aside {
   position: absolute;
   left: 100%;
-  background: rgba( 255, 255, 255, 0.66 );
+  background: var(--med);
   transform: rotate(15deg) scale(1.5);
 }
 
-
-table { text-align: left;width:100%; }
-tr{background-color: #fff;}
-tr:nth-child( 2n+1 ) { background-color: #ddd; }
-tr:hover{background-color:red;}
+table {
+ text-align: left; 
+ tr:nth-child( 2n+1 ) { background-color: var(--med); }
+ tr:hover { background-color: var(--sub); }
+ td, th { padding: var(--u1); }
+}
 ul { padding-left: 1.75em; }
 
-/* layout */
 
-img {
-  width: 100%;
-  max-width: 24em;
- }
-
-.w { float: left; }
-.w25 { width: 25.00%; }
-.w33 { width: 33.33%; }
-.w66 { width: 66.66%; }
-.w50 { width: 50.00%; }
-.w100 { width: 100%; }
-
-.sel { border-top: 0.25em solid rgba( 255, 255, 0, 0.66 ); }
-.sel span { background-color: rgba( 255, 255, 0, 0.66 ); }
-
-// fullscreen, responsive
+// containers
 .full, .yt iframe {
   position: absolute;
   top: 0;
@@ -68,6 +79,4 @@ img {
   padding-bottom: 56.25%;
 }
 
-#canvas canvas {
-  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=");
-}
+main { line-height: 1; }

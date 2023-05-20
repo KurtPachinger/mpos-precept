@@ -6,7 +6,7 @@ import { toCanvas, toSvg } from 'html-to-image'
 
 const mpos = {
   var: {
-    opt: { selector: 'main', depth: 8, dispose: true },
+    opt: { dispose: true, selector: 'main', depth: 8, arc: false },
     fov: {
       w: window.innerWidth,
       h: window.innerHeight,
@@ -39,6 +39,9 @@ const mpos = {
     vars.rendererCSS = new CSS3DRenderer()
     vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
     css3d.appendChild(vars.rendererCSS.domElement)
+    css3d.querySelectorAll('div').forEach(function (el) {
+      el.classList.add('transform')
+    })
     vars.controls = new OrbitControls(vars.camera, vars.rendererCSS.domElement)
 
     // ADD HTML ELEMENT
@@ -47,6 +50,7 @@ const mpos = {
     mpos.ux(vars)
   },
   old: function (selector) {
+    // Mesh
     let old
     if (!selector || typeof selector !== 'string') {
       old = mpos.var.scene.getObjectsByProperty('type', 'Group')
@@ -56,6 +60,13 @@ const mpos = {
     for (let i = 0; i < old.length; i++) {
       old[i].removeFromParent()
     }
+
+    // CSS
+    let css3d = mpos.var.rendererCSS.domElement
+    let clones = css3d.querySelectorAll(':not(.transform)')
+    clones.forEach(function (el) {
+      el.parentElement.removeChild(el)
+    })
   },
   add: {
     dom: function (selector, layers = 8) {
@@ -138,9 +149,10 @@ const mpos = {
     },
 
     box: function (element, layer = 0, opt = {}) {
+      const vars = mpos.var
       //const geo = mpos.var.geo.clone()
-      const mat = mpos.var.mat
-      const mesh = new THREE.Mesh(mpos.var.geo, mat)
+      const mat = vars.mat
+      const mesh = new THREE.Mesh(vars.geo, mat)
       mesh.userData.el = element
       mesh.name = [layer, element.tagName].join('_')
 
@@ -148,12 +160,12 @@ const mpos = {
       // scale
       const w = rect.width
       const h = rect.height
-      const d = mpos.var.fov.z
+      const d = vars.fov.z
       mesh.scale.set(w, h, d)
       // position
-      let x = rect.width / 2 + rect.left
-      let y = -(rect.height / 2) - rect.top
-      let z = mpos.var.fov.z * layer
+      const x = rect.width / 2 + rect.left
+      const y = -(rect.height / 2) - rect.top
+      const z = d * layer
       mesh.position.set(x, y, z)
 
       // static or dynamic
@@ -174,9 +186,9 @@ const mpos = {
             map.needsUpdate = true
           })
         } else if (opt.m === 'native') {
-          // CSSObject3D...
-          z += mpos.var.fov.z / 2 + 0.1
-          let css3d = mpos.add.css(element, x, y, z, 0)
+          const el = element.cloneNode(true)
+          const css3d = new CSS3DObject(el)
+          css3d.position.set(x, y, z + d / 2)
           css3d.name = ['CSS', element.tagName].join('_')
           types.push(css3d)
         } else {
@@ -188,22 +200,25 @@ const mpos = {
             bg = 'transparent'
           }
           mesh.material = map
-          map.color.setStyle(bg)
+          //map.color.setStyle(bg)
         }
 
         //console.log(element, opt.m, mesh.material)
       }
 
-      mpos.var.group.add(...types)
-    },
-    css: function (element, x, y, z, ry) {
-      let el = element.cloneNode(true)
+      // rotation
+      if (vars.opt.arc) {
+        const damp = 0.5
+        const mid = vars.fov.w / 2
+        const rad = (mid - x) / mid
+        const pos = mid * Math.abs(rad)
+        types.forEach((el) => {
+          el.rotateY(rad * damp * 2)
+          el.position.setZ(z + pos * damp)
+        })
+      }
 
-      const object = new CSS3DObject(el)
-      object.position.set(x, y, z)
-      object.rotation.y = ry
-
-      return object
+      vars.group.add(...types)
     }
   },
   ux: function (vars) {
@@ -258,9 +273,10 @@ const mpos = {
       mpos.add.dom(mpos.var.opt.selector, mpos.var.opt.depth)
     }
     const gui = new GUI()
+    gui.add(mpos.var.opt, 'dispose')
     gui.add(mpos.var.opt, 'selector', ['body', 'main', '#media', '#text', '#transform']).onChange(precept)
     gui.add(mpos.var.opt, 'depth', 0, 16, 1).onFinishChange(precept)
-    gui.add(mpos.var.opt, 'dispose')
+    gui.add(mpos.var.opt, 'arc')
   }
 }
 

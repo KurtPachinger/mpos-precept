@@ -3,63 +3,68 @@
     <section style="background-color: red;">
       <h2>mpos-precept</h2>
       <p>Imposter layout to represent DOM rects as THREE bounds.</p>
-      <form onSubmit="return false;">
-        <input class="w w50" type="range" />
-        <input class="w w25" type="button" value="Submit" />
-        <input class="w w25" type="reset" />
+      <form onSubmit="return false;" class="w">
+        <input class="w50" type="range" />
+        <input class="w25" type="button" value="Submit" />
+        <input class="w25" type="reset" />
       </form>
     </section>
     <aside id="transform">
       <h2 class="sel">aside<span>#transform</span></h2>
       <p>support air</p>
     </aside>
-    <section id="media">
-      <h2 class="sel">section<span>#media</span></h2>
-      <img src="./OIG.jpg" />
-      <div class="yt">
-        <iframe src="https://youtube.com/embed/joOIBteSo1w" allow="encrypted-media;"></iframe>
-      </div>
-    </section>
     <section id="text">
       <h2 class="sel">section<span>#text</span></h2>
       UNWRAPPED TEXT NODE
-      <details>
-        <article>
-          <table class="w100">
-            <tr>
-              <th>Property</th>
-              <th>Value</th>
-            </tr>
-            <tr>
-              <td>aaaaaaaa</td>
-              <td>9</td>
-            </tr>
-            <tr>
-              <td>BigOTimes</td>
-              <td>&bigotimes;</td>
-            </tr>
-          </table>
-          <h2>deep list</h2>
+      <h2>deep list</h2>
+      <ul>
+        <li>
+          A. AAAAAAAA
           <ul>
             <li>
-              A. AAAAAAAA
+              1. 11111111
               <ul>
-                <li>
-                  1. 11111111
-                  <ul>
-                    <li>a. aaaaaaaa</li>
-                    <li>b. bbbbbbbb</li>
-                    <li>c. cccccccc</li>
-                  </ul>
-                </li>
-                <li>2. 22222222</li>
-                <li>3. 33333333</li>
+                <li>a. aaaaaaaa</li>
+                <li>b. bbbbbbbb</li>
+                <li>c. cccccccc</li>
               </ul>
             </li>
-            <li>B. BBBBBBBB</li>
-            <li>C. CCCCCCCC</li>
+            <li>2. 22222222</li>
+            <li>3. 33333333</li>
           </ul>
-        </article>
+        </li>
+        <li>B. BBBBBBBB</li>
+        <li>C. CCCCCCCC</li>
+      </ul>
+    </section>
+    <section id="media">
+      <h2 class="sel">section<span>#media</span></h2>
+      <img src="./OIG.jpg" />
+      <details>
+        <table class="w100 ignore">
+          <tr>
+            <th>Property</th>
+            <th>Value</th>
+          </tr>
+          <tr>
+            <td>charmap</td>
+            <td>&bigotimes;🐧</td>
+          </tr>
+          <tr>
+            <td>iframe video</td>
+            <td>
+              <div class="yt">
+                <iframe src="https://youtube.com/embed/joOIBteSo1w" allow="encrypted-media;"></iframe>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>svg</td>
+            <td>
+              <object data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg" type="image/svg+xml"></object>
+            </td>
+          </tr>
+        </table>
       </details>
     </section>
   </main>
