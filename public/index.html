@@ -1,22 +1,23 @@
 <details id="tools" open>
   <main>
-    <section style="background-color: red;">
-      <h2>mpos-precept</h2>
-      <p>Imposter layout to represent DOM rects as THREE bounds.</p>
-      <form onSubmit="return false;" class="w">
-        <input class="w50" type="range" />
+    <h2><span>main</span></h2>
+    <form onSubmit="return false;" class="w"">
+      <fieldset class="sub">
+        <legend>fluid</legend>
+        <input class="w75" type="url" value="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg" />
         <input class="w25" type="button" value="Submit" />
+        <input class="w75" type="range" />
         <input class="w25" type="reset" />
-      </form>
-    </section>
+      </fieldset>
+    </form>
     <aside id="transform">
-      <h2 class="sel">aside<span>#transform</span></h2>
+      <h2>aside<span>#transform</span></h2>
       <p>support air</p>
     </aside>
     <section id="text">
-      <h2 class="sel">section<span>#text</span></h2>
+      <h2>section<span>#text</span></h2>
       UNWRAPPED TEXT NODE
-      <h2>deep list</h2>
+      <h3>deep list</h3>
       <ul>
         <li>
           A. AAAAAAAA
@@ -38,10 +39,10 @@
       </ul>
     </section>
     <section id="media">
-      <h2 class="sel">section<span>#media</span></h2>
+      <h2>section<span>#media</span></h2>
       <img src="./OIG.jpg" />
       <details>
-        <table class="w100 ignore">
+        <table class="w100 ignored">
           <tr>
             <th>Property</th>
             <th>Value</th>
@@ -61,7 +62,7 @@
           <tr>
             <td>svg</td>
             <td>
-              <object data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg" type="image/svg+xml"></object>
+              <object data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg"></object>
             </td>
           </tr>
         </table>
@@ -73,3 +74,4 @@
 <!--CSSObject3D-->
 <div id="css3d" class="full ignore"></div>
 <div id="block" class="full ignore"></div>
+<div id="url"><object></object></div>

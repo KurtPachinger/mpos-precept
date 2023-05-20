@@ -2,11 +2,20 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
-import { toCanvas, toSvg } from 'html-to-image'
+import { toSvg } from 'html-to-image'
 
 const mpos = {
   var: {
-    opt: { dispose: true, selector: 'main', depth: 8, arc: false },
+    opt: {
+      dispose: true,
+      selector: 'main',
+      url: '',
+      depth: 8,
+      arc: false,
+      update: function () {
+        mpos.add.dom(mpos.var.opt.selector, mpos.var.opt.depth)
+      }
+    },
     fov: {
       w: window.innerWidth,
       h: window.innerHeight,
@@ -69,20 +78,32 @@ const mpos = {
     })
   },
   add: {
-    dom: function (selector, layers = 8) {
+    dom: async function (selector, layers = 8) {
+      const vars = mpos.var
       // dispose old THREE group
-      let dispose = mpos.var.opt.dispose ? false : selector
+      let dispose = vars.opt.dispose ? false : selector
       mpos.old(dispose)
       // get DOM node
-      selector = selector || mpos.var.opt.selector || 'body'
-      const sel = document.querySelector(selector)
+      selector = selector || vars.opt.selector || 'body'
+      let sel
+
+      // load URL
+      if (selector === 'url' && vars.opt.url) {
+        sel = document.querySelector('#' + selector)
+        sel.querySelector('object').setAttribute('data', vars.opt.url)
+        console.log(sel, sel.getBoundingClientRect())
+      } else {
+        sel = document.querySelector(selector)
+      }
+
+      //
       if (sel === null) {
         return
       }
 
       // new THREE group
-      mpos.var.group = new THREE.Group(selector)
-      mpos.var.group.name = selector
+      vars.group = new THREE.Group(selector)
+      vars.group.name = selector
       // root DOM node (viewport)
       mpos.add.box(document.body, -1, { m: 'wire' })
 
@@ -96,8 +117,8 @@ const mpos = {
         // structure
         const blacklist = '.ignore,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'
         const whitelist = 'div,span,main,section,article,nav,header,footer,aside,figure,details,li,ul,ol'
-        const poster = 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd'
-        const native = 'iframe,frame,embed,object,table,form,details,video,audio'
+        const poster = 'canvas,img,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd'
+        const native = 'iframe,frame,embed,object,svg,table,form,details,video,audio'
 
         // child DOM node
         depth--
@@ -144,8 +165,8 @@ const mpos = {
 
       struct(sel, layers)
 
-      mpos.var.group.scale.multiplyScalar(1 / mpos.var.fov.max)
-      mpos.var.scene.add(mpos.var.group)
+      vars.group.scale.multiplyScalar(1 / vars.fov.max)
+      vars.scene.add(vars.group)
     },
 
     box: function (element, layer = 0, opt = {}) {
@@ -186,6 +207,7 @@ const mpos = {
             map.needsUpdate = true
           })
         } else if (opt.m === 'native') {
+          console.log('NATIVE')
           const el = element.cloneNode(true)
           const css3d = new CSS3DObject(el)
           css3d.position.set(x, y, z + d / 2)
@@ -269,14 +291,13 @@ const mpos = {
     animate()
 
     // GUI
-    function precept() {
-      mpos.add.dom(mpos.var.opt.selector, mpos.var.opt.depth)
-    }
     const gui = new GUI()
     gui.add(mpos.var.opt, 'dispose')
-    gui.add(mpos.var.opt, 'selector', ['body', 'main', '#media', '#text', '#transform']).onChange(precept)
-    gui.add(mpos.var.opt, 'depth', 0, 16, 1).onFinishChange(precept)
+    gui.add(mpos.var.opt, 'selector', ['body', 'main', '#media', '#text', '#transform', 'url'])
+    gui.add(mpos.var.opt, 'url')
+    gui.add(mpos.var.opt, 'depth', 0, 16, 1)
     gui.add(mpos.var.opt, 'arc')
+    gui.add(mpos.var.opt, 'update')
   }
 }
 
