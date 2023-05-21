@@ -27,8 +27,8 @@ subgraph type
   a("1x: semantic, viewport, hardmax")
   a-.-tag{blacklist}
   a-->b{interactive}
-  b---poster("2x: img, text")
-  b---native("3x: form, video")
+  b--no---poster("2x: img, text")
+  b--yes---native("3x: form, video")
 
 end
 
