@@ -9,7 +9,7 @@ const mpos = {
     opt: {
       dispose: true,
       selector: 'main',
-      url: '',
+      address: '',
       depth: 8,
       arc: false,
       update: function () {
@@ -78,7 +78,7 @@ const mpos = {
     })
   },
   add: {
-    dom: async function (selector, layers = 8) {
+    dom: function (selector, layers = 8) {
       const vars = mpos.var
       // dispose old THREE group
       let dispose = vars.opt.dispose ? false : selector
@@ -87,13 +87,10 @@ const mpos = {
       selector = selector || vars.opt.selector || 'body'
       let sel
 
-      // load URL
-      if (selector === 'url' && vars.opt.url) {
-        sel = document.querySelector('#' + selector)
-        sel.querySelector('object').setAttribute('data', vars.opt.url)
-        console.log(sel, sel.getBoundingClientRect())
-      } else {
-        sel = document.querySelector(selector)
+      sel = document.querySelector(selector)
+      if (selector === 'address') {
+        // load URL
+        sel.querySelector('object').setAttribute('data', vars.opt.address)
       }
 
       //
@@ -107,36 +104,58 @@ const mpos = {
       // root DOM node (viewport)
       mpos.add.box(document.body, -1, { m: 'wire' })
 
-      let maxnode = 32
+      let maxnode = 64
       function struct(sel, layer) {
-        //console.log('struct', layer, sel.tagName)
+        //console.log('struct', layer, sel.nodeName)
         let depth = layer
 
         // self DOM node
         mpos.add.box(sel, layers - depth, { m: 'self' })
         // structure
-        const blacklist = '.ignore,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'
+        const blacklist = '.ignore,head,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'
         const whitelist = 'div,span,main,section,article,nav,header,footer,aside,figure,details,li,ul,ol'
-        const poster = 'canvas,img,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd'
-        const native = 'iframe,frame,embed,object,svg,table,form,details,video,audio'
+        const poster = 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd,.text'
+        const native = 'iframe,frame,embed,object,table,form,details,video,audio'
 
         // child DOM node
         depth--
-        const children = sel.children
+        const children = []
+        sel.childNodes.forEach(function (node) {
+          if (node.tagName || node.textContent.trim()) {
+            // wrap text in block-level for canvas
+            if (node.nodeName === '#text') {
+              let wrapper = document.createElement('div')
+              wrapper.classList.add('text')
+              node.parentNode.insertBefore(wrapper, node)
+              wrapper.appendChild(node)
+              node = wrapper
+            } else if (node.nodeName === '#comment') {
+              // todo: other CDATA
+              console.log(node)
+              return
+            }
+            children.push(node)
+          }
+        })
+
+        // print DOM
+        //console.log(children)
+
         for (let i = 0; i < children.length; i++) {
-          console.log('maxnode', maxnode)
           let child = children[i]
+          //console.log(maxnode, child.nodeName)
+
           const empty = child.children.length === 0
           const block = child.matches(blacklist)
           const allow = child.matches(whitelist)
 
           if (block) {
-            console.log('blacklist', child.tagName)
+            console.log('blacklist', child.nodeName)
             continue
           } else {
             maxnode--
             if (maxnode < 1) {
-              console.log('MAX_SELF', sel.tagName, sel.id)
+              console.log('MAX_SELF', sel.nodeName, sel.id)
               return false
             }
             if (depth >= 1 && !empty && allow) {
@@ -144,13 +163,13 @@ const mpos = {
               struct(child, depth)
             } else {
               // filter child composite interactive resource
-              //console.log(depth, child.tagName)
+              //console.log(depth, child.nodeName)
               let m = 'child'
 
               // FILTER TYPE
 
               if (child.matches(poster)) {
-                //console.log('type', child,child.tagName)
+                //console.log('type', child,child.nodeName)
                 m = 'poster'
               } else if (child.matches(native)) {
                 // CSS 3D
@@ -175,7 +194,7 @@ const mpos = {
       const mat = vars.mat
       const mesh = new THREE.Mesh(vars.geo, mat)
       mesh.userData.el = element
-      mesh.name = [layer, element.tagName].join('_')
+      mesh.name = [layer, opt.m, element.nodeName].join('_')
 
       const rect = element.getBoundingClientRect()
       // scale
@@ -198,7 +217,7 @@ const mpos = {
         const map = mat.clone()
         map.wireframe = false
         map.name = element.tagName
-
+        mesh.material = map
         // todo: data-taxonomy...
         if (opt.m === 'poster') {
           mesh.material = [mat, mat, mat, mat, map, null]
@@ -207,23 +226,23 @@ const mpos = {
             map.needsUpdate = true
           })
         } else if (opt.m === 'native') {
-          console.log('NATIVE')
           const el = element.cloneNode(true)
           const css3d = new CSS3DObject(el)
           css3d.position.set(x, y, z + d / 2)
-          css3d.name = ['CSS', element.tagName].join('_')
+          css3d.name = ['CSS', element.nodeName].join('_')
           types.push(css3d)
-        } else {
-          let style = window.getComputedStyle(element)
-          let bg = style.backgroundColor
-          let alpha = bg.replace(/[rgba()]/g, '').split(',')[3]
-          console.log('alpha', alpha, element.tagName)
-          if (alpha <= 0) {
-            bg = 'transparent'
-          }
-          mesh.material = map
-          //map.color.setStyle(bg)
         }
+        let style = window.getComputedStyle(element)
+        let bg = style.backgroundColor
+        let alpha = bg.replace(/[rgba()]/g, '').split(',')[3]
+        //console.log('alpha', alpha, element.nodeName)
+        if (alpha <= 0) {
+          bg = 'transparent'
+        }
+        //
+        //if(!element.classList.contains('text')){
+        map.color.setStyle(bg)
+        //}
 
         //console.log(element, opt.m, mesh.material)
       }
@@ -292,12 +311,14 @@ const mpos = {
 
     // GUI
     const gui = new GUI()
-    gui.add(mpos.var.opt, 'dispose')
-    gui.add(mpos.var.opt, 'selector', ['body', 'main', '#media', '#text', '#transform', 'url'])
-    gui.add(mpos.var.opt, 'url')
-    gui.add(mpos.var.opt, 'depth', 0, 16, 1)
-    gui.add(mpos.var.opt, 'arc')
-    gui.add(mpos.var.opt, 'update')
+
+    Object.keys(vars.opt).forEach(function (key) {
+      let p = []
+      if (key === 'selector') p = [['body', 'main', '#media', '#text', '#transform', 'address']]
+      if (key === 'depth') p = [0, 24, 1]
+
+      gui.add(vars.opt, key, ...p)
+    })
   }
 }
 

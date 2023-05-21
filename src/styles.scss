@@ -15,7 +15,6 @@
   --med: rgba( 128, 128, 128, 0.125 );
 }
 
-
 /* STYLE */
 h2 { border-top: var(--u1) solid var(--sup); }
 .sup, h2 span { background-color: var(--sup); }
@@ -37,7 +36,7 @@ body, .w { overflow: hidden; overflow-y: auto; }
 .w75 { width: 75.00%; }
 .w100 { width: 100%;  }
 
-#url{ z-index: -1; position: absolute; }
+address{ z-index: -1; visibility: hidden; }
 
 
 /* STRUCTURE */
