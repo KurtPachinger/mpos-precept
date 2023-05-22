@@ -3,7 +3,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { toSvg } from 'html-to-image'
-import { group } from 'console'
 
 const mpos = {
   var: {
@@ -81,11 +80,6 @@ const mpos = {
   add: {
     dom: function (selector, layers = 8, update) {
       const vars = mpos.var
-      // dispose old THREE group
-      let dispose = vars.opt.dispose ? false : selector
-      if (!update) {
-        mpos.old(dispose)
-      }
 
       // get DOM node
       selector = selector || vars.opt.selector || 'body'
@@ -96,14 +90,26 @@ const mpos = {
         sel.querySelector('object').setAttribute('data', vars.opt.address)
       }
 
+      // THREE housekeeping
+      let dispose = vars.opt.dispose ? false : selector
+      if (!update) {
+        mpos.old(dispose)
+        // new THREE group
+        vars.group = new THREE.Group(selector)
+        vars.group.name = selector
+        // root DOM node (viewport)
+        mpos.add.box(document.body, -1, { m: 'wire' })
+      }
+
       // structure
       const precept = {
-        allow: 'div,span,main,section,article,nav,header,footer,aside,figure,li,ul,ol'.split(','),
-        block: '.ignore,head,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'.split(','),
-        native: 'iframe,frame,embed,object,table,details,.gg,form,video,audio'.split(','),
-        poster: 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd,.text'.split(','),
+        allow: '.allow,div,span,main,section,article,nav,header,footer,aside,thead,tfoot,tbody,tr,th,td,figure,li,ul,ol'.split(','),
+        block: '.block,head,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'.split(','),
+        native: '.native,iframe,frame,embed,object,table,details,form,video,audio,a'.split(','),
+        poster: '.poster,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,th,td,caption,dt,dd,.text'.split(','),
         grade: {
           max: 4096,
+          softmax: 0,
           els: [],
           interactive: 0
         }
@@ -113,25 +119,24 @@ const mpos = {
       const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
       let node
       while ((node = ni.nextNode())) {
-        let name = node.tagName
-        if (name && node.checkVisibility()) {
-          name = name.toLowerCase()
-          precept.grade.els.push(node)
-          if (precept.native.indexOf(name) > -1 || precept.poster.indexOf(name) > -1) {
-            precept.grade.interactive++
+        const empty = !node.tagName && !node.textContent.trim()
+        if (!empty) {
+          let name = node.tagName
+          if (name && node.checkVisibility()) {
+            name = name.toLowerCase()
+            precept.grade.els.push(node)
+            if (precept.native.indexOf(name) > -1 || precept.poster.indexOf(name) > -1) {
+              precept.grade.interactive++
+            }
           }
+          precept.grade.softmax++
         }
       }
       console.log(precept.grade)
 
-      // new THREE group
-      vars.group = new THREE.Group(selector)
-      vars.group.name = selector
-      // root DOM node (viewport)
-      mpos.add.box(document.body, -1, { m: 'wire' })
-
       const generic = new THREE.InstancedMesh(vars.geo, vars.mat, precept.grade.max)
-      generic.count = precept.grade.els.length - precept.grade.interactive
+      //generic.count = precept.grade.els.length - precept.grade.interactive
+      generic.count = precept.grade.softmax
       generic.userData.el = sel
       generic.name = selector
       vars.group.add(generic)
@@ -158,6 +163,7 @@ const mpos = {
             if (node.nodeName === '#comment') {
               return
             }
+            //node.compareDocumentPosition(temp2)
             if (!node.checkVisibility()) {
               //return
             }
@@ -169,10 +175,12 @@ const mpos = {
             } else if (--precept.grade.softmax < 1) {
               console.log('MAX_SELF', node.nodeName, sel.id)
             } else {
+              const poster = node.classList.contains('poster')
+              const native = node.classList.contains('native')
               const allow = node.matches(precept.allow)
-              const empty = node.children.length === 0
+              const empty = node.children.length === 0 //
 
-              if (layer >= 1 && allow && !empty) {
+              if (layer >= 1 && allow && !empty && !poster && !native) {
                 // child structure
                 let depth = layer - 1
                 struct(node, depth)
