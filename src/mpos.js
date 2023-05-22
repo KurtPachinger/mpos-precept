@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { toSvg } from 'html-to-image'
+import { group } from 'console'
 
 const mpos = {
   var: {
@@ -78,11 +79,13 @@ const mpos = {
     })
   },
   add: {
-    dom: function (selector, layers = 8) {
+    dom: function (selector, layers = 8, update) {
       const vars = mpos.var
       // dispose old THREE group
       let dispose = vars.opt.dispose ? false : selector
-      mpos.old(dispose)
+      if (!update) {
+        mpos.old(dispose)
+      }
 
       // get DOM node
       selector = selector || vars.opt.selector || 'body'
@@ -95,21 +98,29 @@ const mpos = {
 
       // structure
       const precept = {
-        block: '.ignore,head,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr',
-        allow: 'div,span,main,section,article,nav,header,footer,aside,figure,details,li,ul,ol',
-        native: 'iframe,frame,embed,object,table,form,details,video,audio',
-        poster: 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd,.text',
+        allow: 'div,span,main,section,article,nav,header,footer,aside,figure,li,ul,ol'.split(','),
+        block: '.ignore,head,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'.split(','),
+        native: 'iframe,frame,embed,object,table,details,.gg,form,video,audio'.split(','),
+        poster: 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd,.text'.split(','),
         grade: {
-          softmax: 64,
-          els: []
+          max: 4096,
+          els: [],
+          interactive: 0
         }
       }
 
-      // todo: grading elements
+      // todo: grade, filter
       const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
       let node
       while ((node = ni.nextNode())) {
-        precept.grade.els.push(node)
+        let name = node.tagName
+        if (name && node.checkVisibility()) {
+          name = name.toLowerCase()
+          precept.grade.els.push(node)
+          if (precept.native.indexOf(name) > -1 || precept.poster.indexOf(name) > -1) {
+            precept.grade.interactive++
+          }
+        }
       }
       console.log(precept.grade)
 
@@ -119,23 +130,36 @@ const mpos = {
       // root DOM node (viewport)
       mpos.add.box(document.body, -1, { m: 'wire' })
 
+      const generic = new THREE.InstancedMesh(vars.geo, vars.mat, precept.grade.max)
+      generic.count = precept.grade.els.length - precept.grade.interactive
+      generic.userData.el = sel
+      generic.name = selector
+      vars.group.add(generic)
+
       function struct(sel, layer) {
         //console.log('struct', layer, sel.nodeName)
 
         // SELF
-        let depth = layer
-        mpos.add.box(sel, layers - depth, { m: 'self' })
+        mpos.add.box(sel, layers - layer, { m: 'self' })
+
         // CHILD
         sel.childNodes.forEach(function (node) {
           const empty = !node.tagName && !node.textContent.trim()
           if (!empty) {
             // SANITIZE
             if (node.nodeName === '#text') {
+              // needs box size
               let wrap = document.createElement('div')
               wrap.classList.add('text')
               node.parentNode.insertBefore(wrap, node)
               wrap.appendChild(node)
               node = wrap
+            }
+            if (node.nodeName === '#comment') {
+              return
+            }
+            if (!node.checkVisibility()) {
+              //return
             }
 
             // CLASSIFY
@@ -143,12 +167,14 @@ const mpos = {
             if (block) {
               console.log('blacklist', node.nodeName)
             } else if (--precept.grade.softmax < 1) {
-              console.log('MAX_SELF', sel.nodeName, sel.id)
+              console.log('MAX_SELF', node.nodeName, sel.id)
             } else {
               const allow = node.matches(precept.allow)
               const empty = node.children.length === 0
-              if (--depth >= 1 && allow && !empty) {
+
+              if (layer >= 1 && allow && !empty) {
                 // child structure
+                let depth = layer - 1
                 struct(node, depth)
               } else {
                 // child interactive
@@ -159,7 +185,7 @@ const mpos = {
                   m = 'native'
                 }
 
-                mpos.add.box(node, layers - depth, { m: m })
+                mpos.add.box(node, layers - layer, { m: m })
               }
             }
           }

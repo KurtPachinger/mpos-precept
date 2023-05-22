@@ -62,10 +62,10 @@ table {
   border-collapse: collapse;
  text-align: left; 
  tr:nth-child( 2n+1 ) { background-color: var(--med); }
- tr:hover { background-color: var(--sub); }
  td, th { padding: var(--u1); }
 }
 ul { padding-left: 1.75em; }
+
 
 
 // containers
@@ -82,5 +82,12 @@ ul { padding-left: 1.75em; }
   width: 100%;
   padding-bottom: 56.25%;
 }
+
+
+summary,tr,li{
+  &:hover{
+    background-color: var(--sub); }
+}
+
 
 main { line-height: 1; }
