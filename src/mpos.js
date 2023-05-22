@@ -83,20 +83,35 @@ const mpos = {
       // dispose old THREE group
       let dispose = vars.opt.dispose ? false : selector
       mpos.old(dispose)
+
       // get DOM node
       selector = selector || vars.opt.selector || 'body'
-      let sel
-
-      sel = document.querySelector(selector)
-      if (selector === 'address') {
-        // load URL
+      let sel = document.querySelector(selector)
+      if (sel === null) {
+        return
+      } else if (selector === 'address') {
         sel.querySelector('object').setAttribute('data', vars.opt.address)
       }
 
-      //
-      if (sel === null) {
-        return
+      // structure
+      const precept = {
+        block: '.ignore,head,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr',
+        allow: 'div,span,main,section,article,nav,header,footer,aside,figure,details,li,ul,ol',
+        native: 'iframe,frame,embed,object,table,form,details,video,audio',
+        poster: 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd,.text',
+        grade: {
+          softmax: 64,
+          els: []
+        }
       }
+
+      // todo: grading elements
+      const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
+      let node
+      while ((node = ni.nextNode())) {
+        precept.grade.els.push(node)
+      }
+      console.log(precept.grade)
 
       // new THREE group
       vars.group = new THREE.Group(selector)
@@ -104,82 +119,51 @@ const mpos = {
       // root DOM node (viewport)
       mpos.add.box(document.body, -1, { m: 'wire' })
 
-      let maxnode = 64
       function struct(sel, layer) {
         //console.log('struct', layer, sel.nodeName)
+
+        // SELF
         let depth = layer
-
-        // self DOM node
         mpos.add.box(sel, layers - depth, { m: 'self' })
-        // structure
-        const blacklist = '.ignore,head,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'
-        const whitelist = 'div,span,main,section,article,nav,header,footer,aside,figure,details,li,ul,ol'
-        const poster = 'canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,dt,dd,.text'
-        const native = 'iframe,frame,embed,object,table,form,details,video,audio'
-
-        // child DOM node
-        depth--
-        const children = []
+        // CHILD
         sel.childNodes.forEach(function (node) {
-          if (node.tagName || node.textContent.trim()) {
-            // wrap text in block-level for canvas
+          const empty = !node.tagName && !node.textContent.trim()
+          if (!empty) {
+            // SANITIZE
             if (node.nodeName === '#text') {
-              let wrapper = document.createElement('div')
-              wrapper.classList.add('text')
-              node.parentNode.insertBefore(wrapper, node)
-              wrapper.appendChild(node)
-              node = wrapper
-            } else if (node.nodeName === '#comment') {
-              // todo: other CDATA
-              console.log(node)
-              return
+              let wrap = document.createElement('div')
+              wrap.classList.add('text')
+              node.parentNode.insertBefore(wrap, node)
+              wrap.appendChild(node)
+              node = wrap
             }
-            children.push(node)
+
+            // CLASSIFY
+            const block = node.matches(precept.block)
+            if (block) {
+              console.log('blacklist', node.nodeName)
+            } else if (--precept.grade.softmax < 1) {
+              console.log('MAX_SELF', sel.nodeName, sel.id)
+            } else {
+              const allow = node.matches(precept.allow)
+              const empty = node.children.length === 0
+              if (--depth >= 1 && allow && !empty) {
+                // child structure
+                struct(node, depth)
+              } else {
+                // child interactive
+                let m = 'child'
+                if (node.matches(precept.poster)) {
+                  m = 'poster'
+                } else if (node.matches(precept.native)) {
+                  m = 'native'
+                }
+
+                mpos.add.box(node, layers - depth, { m: m })
+              }
+            }
           }
         })
-
-        // print DOM
-        //console.log(children)
-
-        for (let i = 0; i < children.length; i++) {
-          let child = children[i]
-          //console.log(maxnode, child.nodeName)
-
-          const empty = child.children.length === 0
-          const block = child.matches(blacklist)
-          const allow = child.matches(whitelist)
-
-          if (block) {
-            console.log('blacklist', child.nodeName)
-            continue
-          } else {
-            maxnode--
-            if (maxnode < 1) {
-              console.log('MAX_SELF', sel.nodeName, sel.id)
-              return false
-            }
-            if (depth >= 1 && !empty && allow) {
-              // child structure
-              struct(child, depth)
-            } else {
-              // filter child composite interactive resource
-              //console.log(depth, child.nodeName)
-              let m = 'child'
-
-              // FILTER TYPE
-
-              if (child.matches(poster)) {
-                //console.log('type', child,child.nodeName)
-                m = 'poster'
-              } else if (child.matches(native)) {
-                // CSS 3D
-                m = 'native'
-              }
-
-              mpos.add.box(child, layers - depth, { m: m })
-            }
-          }
-        }
       }
 
       struct(sel, layers)
