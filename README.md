@@ -37,10 +37,8 @@ native-->CSS3DRenderer
 ```
 
 ### structure 
-- `blacklist` (block) -- `.ignore, style, script, link, meta, base, keygen, canvas[data-engine], param, source, track, area, br, wbr`
-- `whitelist` (allow) -- `div, span, main, section, article, nav, header, footer, aside, figure, details, li, ul, ol`
+- `allow` (whitelist) -- `.allow,div,span,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`
+- `block` (blacklist) -- `.block,canvas[data-engine],head,style,script,link,meta,param,map,br,wbr,template`
 ### interactive
-- `poster` (html2image) -- `canvas, img, svg, h1, h2, h3, h4, h5, h6, p, li, ul, ol, dt, dd`
-- `native` (CSS3DRenderer) -- `iframe, frame, embed, object, table, form, details, video, audio`
-- `mixed-content` (test resource) -- `canvas, svg, object, embed, audio`
-- `dimensions` (track, crash) -- `1>n<3840`
+- `native` (CSS3DRenderer) -- `.native,iframe,frame,embed,object,table,details,form,video,audio,a,dialog`
+- `poster` (html-to-image) -- `.poster,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,th,td,caption,dt,dd,.text`
