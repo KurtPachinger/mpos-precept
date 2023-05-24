@@ -103,12 +103,12 @@ const mpos = {
 
       // structure
       const precept = {
-        allow: '.allow,div,span,main,section,article,nav,header,footer,aside,thead,tfoot,tbody,tr,th,td,figure,li,ul,ol'.split(','),
-        block: '.block,head,style,script,link,meta,base,keygen,canvas[data-engine],param,source,track,area,br,wbr'.split(','),
-        native: '.native,iframe,frame,embed,object,table,details,form,video,audio,a'.split(','),
+        allow: '.allow,div,span,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address'.split(','),
+        block: '.block,canvas[data-engine],head,style,script,link,meta,param,map,br,wbr,template'.split(','),
+        native: '.native,iframe,frame,embed,object,table,details,form,video,audio,a,dialog'.split(','),
         poster: '.poster,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,th,td,caption,dt,dd,.text'.split(','),
         grade: {
-          max: 4096,
+          max: 2048,
           softmax: 0,
           els: [],
           interactive: 0
@@ -163,7 +163,8 @@ const mpos = {
             if (node.nodeName === '#comment') {
               return
             }
-            //node.compareDocumentPosition(temp2)
+
+            //node.compareDocumentPosition(temp2) === 0
             if (!node.checkVisibility()) {
               //return
             }
