@@ -108,12 +108,13 @@ const mpos = {
         native: '.native,iframe,frame,embed,object,table,details,form,video,audio,a,dialog'.split(','),
         poster: '.poster,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,th,td,caption,dt,dd,.text'.split(','),
         grade: {
-          max: 4096,
+          max: 8192,
           softmax: 0,
           els: [],
           txt: [],
           interactive: 0,
-          idx: new Date().getTime()
+          idx: new Date().getTime(),
+          canvas: document.createElement('canvas')
         }
       }
 
@@ -121,11 +122,12 @@ const mpos = {
       const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
       let node = ni.nextNode()
       while (node) {
-        const idx = [precept.grade.idx, precept.grade.softmax].join('_')
         const empty = !node.tagName && !node.textContent.trim()
         if (!empty) {
-          let name = node.tagName
-          if (name && node.checkVisibility()) {
+          const idx = [precept.grade.idx, precept.grade.softmax].join('_')
+
+          let tag = node.tagName
+          if (tag && node.checkVisibility()) {
             precept.grade.els.push(node)
             if (node.matches([precept.native, precept.poster])) {
               precept.grade.interactive++
@@ -152,12 +154,16 @@ const mpos = {
             }
           }
           node.idx = idx
+          precept.grade.softmax++
         }
-        precept.grade.softmax++
+
         node = ni.nextNode()
       }
 
-      console.log(precept.grade)
+      precept.grade.canvas.width = precept.grade.canvas.height = precept.grade.max
+      precept.grade.canvas.id = precept.grade.idx
+      const SPRITE_SIZE = Math.floor(precept.grade.max / precept.grade.interactive)
+      console.log(precept.grade, SPRITE_SIZE)
 
       function struct(sel, layer, softmax) {
         //console.log('struct', layer, sel.nodeName)
@@ -168,6 +174,14 @@ const mpos = {
         // CHILD
         sel.childNodes.forEach(function (node) {
           //const empty = !node.tagName && !node.textContent.trim()
+
+          //let vis = false;
+          //if(node.tagName){
+          //var rect = node.getBoundingClientRect();
+          //var viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight);
+          //vis = !(rect.bottom < 0 || rect.top - viewHeight >= 0);
+          //}
+
           if (node.tagName) {
             // CLASSIFY
             const block = node.matches(precept.block)
