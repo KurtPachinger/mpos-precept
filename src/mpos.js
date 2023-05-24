@@ -103,45 +103,63 @@ const mpos = {
 
       // structure
       const precept = {
-        allow: '.allow,div,span,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address'.split(','),
+        allow: '.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address'.split(','),
         block: '.block,canvas[data-engine],head,style,script,link,meta,param,map,br,wbr,template'.split(','),
         native: '.native,iframe,frame,embed,object,table,details,form,video,audio,a,dialog'.split(','),
         poster: '.poster,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,th,td,caption,dt,dd,.text'.split(','),
         grade: {
-          max: 2048,
+          max: 4096,
           softmax: 0,
           els: [],
-          interactive: 0
+          txt: [],
+          interactive: 0,
+          idx: new Date().getTime()
         }
       }
 
-      // todo: grade, filter
+      // filter, grade, sanitize
       const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
-      let node
-      while ((node = ni.nextNode())) {
+      let node = ni.nextNode()
+      while (node) {
+        const idx = [precept.grade.idx, precept.grade.softmax].join('_')
         const empty = !node.tagName && !node.textContent.trim()
         if (!empty) {
           let name = node.tagName
           if (name && node.checkVisibility()) {
-            name = name.toLowerCase()
             precept.grade.els.push(node)
-            if (precept.native.indexOf(name) > -1 || precept.poster.indexOf(name) > -1) {
+            if (node.matches([precept.native, precept.poster])) {
               precept.grade.interactive++
             }
+          } else if (
+            node.nodeName === '#text' &&
+            node.parentNode.matches([precept.allow]) &&
+            !node.parentNode.matches([precept.native, precept.poster])
+          ) {
+            // text orphan with parent visible
+            // ...potentially another type (#comment, xml, php)
+            let parentView = precept.grade.els.every(function (tag) {
+              return node.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_PRECEDING
+            })
+            if (parentView) {
+              precept.grade.txt.push(node)
+              // sanitize, block-level required for width
+              let wrap = document.createElement('div')
+              wrap.classList.add('text')
+              node.parentNode.insertBefore(wrap, node)
+              wrap.appendChild(node)
+              precept.grade.els.push(wrap)
+              wrap.idx = idx
+            }
           }
-          precept.grade.softmax++
+          node.idx = idx
         }
+        precept.grade.softmax++
+        node = ni.nextNode()
       }
+
       console.log(precept.grade)
 
-      const generic = new THREE.InstancedMesh(vars.geo, vars.mat, precept.grade.max)
-      //generic.count = precept.grade.els.length - precept.grade.interactive
-      generic.count = precept.grade.softmax
-      generic.userData.el = sel
-      generic.name = selector
-      vars.group.add(generic)
-
-      function struct(sel, layer) {
+      function struct(sel, layer, softmax) {
         //console.log('struct', layer, sel.nodeName)
 
         // SELF
@@ -149,42 +167,24 @@ const mpos = {
 
         // CHILD
         sel.childNodes.forEach(function (node) {
-          const empty = !node.tagName && !node.textContent.trim()
-          if (!empty) {
-            // SANITIZE
-            if (node.nodeName === '#text') {
-              // needs box size
-              let wrap = document.createElement('div')
-              wrap.classList.add('text')
-              node.parentNode.insertBefore(wrap, node)
-              wrap.appendChild(node)
-              node = wrap
-            }
-            if (node.nodeName === '#comment') {
-              return
-            }
-
-            //node.compareDocumentPosition(temp2) === 0
-            if (!node.checkVisibility()) {
-              //return
-            }
-
+          //const empty = !node.tagName && !node.textContent.trim()
+          if (node.tagName) {
             // CLASSIFY
             const block = node.matches(precept.block)
-            if (block) {
-              console.log('blacklist', node.nodeName)
-            } else if (--precept.grade.softmax < 1) {
-              console.log('MAX_SELF', node.nodeName, sel.id)
+            const abort = softmax < 1
+            if (block || abort) {
+              console.log('END', node.nodeName)
             } else {
-              const poster = node.classList.contains('poster')
-              const native = node.classList.contains('native')
-              const allow = node.matches(precept.allow)
-              const empty = node.children.length === 0 //
+              softmax--
 
-              if (layer >= 1 && allow && !empty && !poster && !native) {
+              const allow = node.matches(precept.allow)
+              const manual = node.matches('.poster, .native')
+              const empty = node.children.length === 0
+
+              if (layer >= 1 && allow && !manual && !empty) {
                 // child structure
                 let depth = layer - 1
-                struct(node, depth)
+                struct(node, depth, softmax)
               } else {
                 // child interactive
                 let m = 'child'
@@ -201,8 +201,17 @@ const mpos = {
         })
       }
 
-      struct(sel, layers)
+      struct(sel, layers, precept.grade.softmax)
 
+      // InstancedMesh with Texture Atlas
+      const generic = new THREE.InstancedMesh(vars.geo, vars.mat, precept.grade.max)
+      //generic.count = precept.grade.els.length - precept.grade.interactive
+      generic.count = precept.grade.softmax
+      generic.userData.el = sel
+      generic.name = selector
+      vars.group.add(generic)
+
+      // OUTPUT
       vars.group.scale.multiplyScalar(1 / vars.fov.max)
       vars.scene.add(vars.group)
     },
