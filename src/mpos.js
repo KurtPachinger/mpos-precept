@@ -3,7 +3,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { toSvg } from 'html-to-image'
-import { DstAlphaFactor } from 'three'
 
 const mpos = {
   var: {
@@ -62,14 +61,33 @@ const mpos = {
   },
   old: function (selector) {
     // Mesh
-    let old
-    if (!selector || typeof selector !== 'string') {
-      old = mpos.var.scene.getObjectsByProperty('type', 'Group')
-    } else {
-      old = mpos.var.scene.getObjectsByProperty('name', selector)
+    let groups
+    if (selector) {
+      groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
     }
-    for (let i = 0; i < old.length; i++) {
-      old[i].removeFromParent()
+    //var i = arr.length - 1; i >= 0; i--
+    if (groups && groups.length) {
+      for (let g = groups.length - 1; g >= 0; g--) {
+        let group = groups[g].children || []
+        for (let o = group.length - 1; o >= 0; o--) {
+          let obj = group[o]
+          if (obj.type === 'Mesh') {
+            obj.geometry.dispose()
+            let material = obj.material
+            for (let m = material.length - 1; m >= 0; m--) {
+              let mat = material[m]
+              if (mat) {
+                mat.canvas && (mat.canvas = null)
+                mat.map && mat.map.dispose()
+                mat.dispose()
+              }
+            }
+            !material.length && material.dispose()
+          }
+          obj.removeFromParent()
+        }
+        groups[g].removeFromParent()
+      }
     }
 
     // CSS
@@ -93,7 +111,7 @@ const mpos = {
       }
 
       // THREE housekeeping
-      let dispose = vars.opt.dispose ? false : selector
+      let dispose = vars.opt.dispose ? selector : false
       if (!update) {
         mpos.old(dispose)
         // new THREE group
@@ -237,12 +255,8 @@ const mpos = {
       struct(sel, layers, grade)
 
       // Texture Atlas
-
       grade.canvas.width = grade.canvas.height = grade.MAX_TEXTURE_SIZE
-      console.log(grade.canvas.width, grade.softmax)
       grade.canvas.id = grade.idx
-
-      // Texture Atlas...
       for (const el of Object.values(grade.els)) {
         //todo: matrix slot for: self, child?
         if (el.mat) {
@@ -262,9 +276,13 @@ const mpos = {
           })
         }
       }
+      let texAtlas = new THREE.CanvasTexture(grade.canvas)
+      let texStep = 1 / grade.softmax
+      let shader = mpos.add.shader(texAtlas, texStep)
 
       // Instanced Mesh
-      const generic = new THREE.InstancedMesh(vars.geo, vars.mat, grade.MAX_TEXTURE_SIZE)
+      const generic = new THREE.InstancedMesh(vars.geo, shader, grade.MAX_TEXTURE_SIZE)
+      generic.instanceMatrix.setUsage(THREE.StaticDrawUsage)
       generic.count = grade.softmax
       generic.userData.el = sel
       generic.name = [grade.idx, selector].join('_')
@@ -378,6 +396,41 @@ const mpos = {
       }
 
       vars.group.add(...types)
+    },
+    shader: function (image, step) {
+      let texAtlas = new THREE.TextureLoader().load(image)
+      let m = new THREE.MeshLambertMaterial({
+        onBeforeCompile: (shader) => {
+          shader.uniforms.texAtlas = { value: texAtlas }
+          shader.vertexShader = `
+        attribute float texIdx;
+        varying float vTexIdx;
+        ${shader.vertexShader}
+      `.replace(
+            `void main() {`,
+            `void main() {
+          vTexIdx = texIdx;
+        `
+          )
+          //console.log(shader.vertexShader);
+          shader.fragmentShader = `
+        uniform sampler2D texAtlas;
+        varying float vTexIdx;
+        ${shader.fragmentShader}
+      `.replace(
+            `#include <map_fragment>`,
+            `#include <map_fragment>
+          
+           vec2 blockUv = ${step} * (floor(vTexIdx + 0.1) + vUv); 
+          vec4 blockColor = texture(texAtlas, blockUv);
+          diffuseColor *= blockColor;
+        `
+          )
+          //console.log(shader.fragmentShader)
+        }
+      })
+      m.defines = { USE_UV: '' }
+      return m
     }
   },
   ux: function (vars) {
@@ -413,7 +466,7 @@ const mpos = {
 
     function animate() {
       requestAnimationFrame(animate)
-      const body = vars.scene.getObjectsByProperty('name', '-1_BODY')
+      const body = vars.group.getObjectsByProperty('name', '-1_wire_BODY')
       if (body) {
         let time = new Date().getTime() / 100
         for (let i = 0; i < body.length; i++) {
