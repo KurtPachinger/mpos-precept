@@ -99,7 +99,7 @@ const mpos = {
         vars.group = new THREE.Group(selector)
         vars.group.name = selector
         // root DOM node (viewport)
-        mpos.add.box(document.body, -1, { m: 'wire' })
+        mpos.add.box(document.body, -1, { mat: 'wire' })
       }
 
       // structure
@@ -114,22 +114,46 @@ const mpos = {
           interactive: 0,
           els: {},
           txt: [],
+          MAX_TEXTURE_SIZE: 8192,
           canvas: document.createElement('canvas')
         }
       }
+      // Texture Atlas
+      const grade = precept.grade
+      grade.canvas.width = grade.canvas.height = grade.MAX_TEXTURE_SIZE
+      grade.canvas.id = grade.idx
 
-      // filter, grade, sanitize
-      const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
+      function inPolar(node, control = 0) {
+        let vis = node.tagName || node.textContent.trim()
+        // -1: node not empty
+        if (control > -1) {
+          // 0: node is tag
+          vis = node.tagName
+          if (vis && control > 0) {
+            // 1: node not hidden
+            vis = node.checkVisibility()
+            if (control > 1) {
+              // 2: node in viewport
+              let rect = node.getBoundingClientRect()
+              let viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
+              vis = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
+            }
+          }
+        }
+        return vis
+      }
+
+      // flat-grade: filter, grade, sanitize
+      let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
       let node = ni.nextNode()
       while (node) {
-        const empty = !node.tagName && !node.textContent.trim()
-        if (!empty) {
-          const idx = [precept.grade.softmax, precept.grade.idx].join('_')
+        if (inPolar(node, -1)) {
+          const idx = [grade.softmax, grade.idx].join('_')
 
-          if (node.tagName && node.checkVisibility()) {
-            precept.grade.els[idx] = { el: node }
+          if (inPolar(node, 1)) {
+            grade.els[idx] = { el: node }
             if (node.matches([precept.native, precept.poster])) {
-              precept.grade.interactive++
+              grade.interactive++
             }
           } else if (
             node.nodeName === '#text' &&
@@ -138,8 +162,8 @@ const mpos = {
           ) {
             // text orphan with parent visible
             // ...potentially another type (#comment, xml, php)
-            let parentView = Object.keys(precept.grade.els).some(function (tag) {
-              return node.compareDocumentPosition(precept.grade.els[tag].el) & Node.DOCUMENT_POSITION_PRECEDING
+            let parentView = Object.keys(grade.els).some(function (tag) {
+              return node.compareDocumentPosition(grade.els[tag].el) & Node.DOCUMENT_POSITION_PRECEDING
             })
 
             if (parentView) {
@@ -148,45 +172,35 @@ const mpos = {
               wrap.classList.add('text')
               node.parentNode.insertBefore(wrap, node)
               wrap.appendChild(node)
-              precept.grade.els[idx] = { el: wrap }
-              precept.grade.txt[idx] = { el: node }
+              grade.els[idx] = { el: wrap }
+              grade.txt[idx] = { el: node }
               wrap.idx = idx
-              precept.grade.interactive++
+              grade.interactive++
             }
           }
           node.idx = idx
-          precept.grade.softmax++
+          grade.softmax++
         }
 
         node = ni.nextNode()
       }
 
-      const MAX_TEXTURE_SIZE = 8192
-      precept.grade.canvas.width = precept.grade.canvas.height = MAX_TEXTURE_SIZE
-      precept.grade.canvas.id = precept.grade.idx
-      const STEP = Math.floor(MAX_TEXTURE_SIZE / precept.grade.interactive)
-
+      // deep-grade: type, count
       function struct(sel, layer, grade) {
         //console.log('struct', layer, sel.nodeName)
 
         // SELF
-        let m = 'self'
-        mpos.add.box(sel, layers - layer, { m: m })
-        grade.els[sel.idx].m = m
+        let mat = 'self'
+        let el = grade.els[sel.idx]
+        if (el) {
+          el.mat = mat
+          el.z = layers - layer
+        }
 
         // CHILD
         sel.childNodes.forEach(function (node) {
-          //const empty = !node.tagName && !node.textContent.trim()
-
-          //let vis = false;
-          //if(node.tagName){
-          //var rect = node.getBoundingClientRect();
-          //var viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight);
-          //vis = !(rect.bottom < 0 || rect.top - viewHeight >= 0);
-          //}
-
-          if (node.tagName) {
-            // CLASSIFY
+          if (inPolar(node, 2)) {
+            // CLASSIFY TYPE
             const block = node.matches(precept.block)
             const abort = grade.softmax < 1
             if (block || abort) {
@@ -204,64 +218,67 @@ const mpos = {
                 struct(node, depth, grade)
               } else {
                 // child interactive
-                m = 'child'
+                mat = 'child'
                 if (node.matches(precept.poster)) {
-                  m = 'poster'
+                  mat = 'poster'
                 } else if (node.matches(precept.native)) {
-                  m = 'native'
+                  mat = 'native'
                 }
 
-                grade.els[node.idx].m = m
-                mpos.add.box(node, layers - layer, { m: m })
+                el = grade.els[node.idx]
+                if (el) {
+                  el.mat = mat
+                  el.z = layers - layer
+                }
               }
             }
           }
         })
       }
 
-      struct(sel, layers, precept.grade)
+      struct(sel, layers, grade)
 
-      //
+      const STEP = Math.floor(grade.MAX_TEXTURE_SIZE / grade.softmax)
+      // Texture Atlas...
+
       // Instanced Mesh
-      // with Texture Atlas
-      const generic = new THREE.InstancedMesh(vars.geo, vars.mat, precept.grade.max)
-      //generic.count = precept.grade.els.length - precept.grade.interactive
-      generic.count = precept.grade.softmax
+      const generic = new THREE.InstancedMesh(vars.geo, vars.mat, grade.MAX_TEXTURE_SIZE)
+      generic.count = grade.softmax
       generic.userData.el = sel
-      generic.name = selector
+      generic.name = [grade.idx, selector].join('_')
       vars.group.add(generic)
 
-      console.log('idx1', precept.grade.els)
-      for (const [idx, el] of Object.entries(precept.grade.els)) {
+      // Meshes
+      for (const el of Object.values(grade.els)) {
         //todo: matrix slot for: self, child?
-        console.log(idx, el)
-        if (el.m) {
-          mpos.add.box(el.el, 0, {
-            m: el.m,
-            ctx: precept.grade.canvas.getContext('2d'),
-            max: MAX_TEXTURE_SIZE,
+        if (el.mat) {
+          mpos.add.box(el.el, el.z, {
+            mat: el.mat,
+            ctx: grade.canvas.getContext('2d'),
+            max: grade.MAX_TEXTURE_SIZE,
             step: STEP
           })
         }
       }
 
+      // Output
       let output = document.querySelector('#output')
       output.innerHTML = ''
-      output.appendChild(precept.grade.canvas)
-      console.log(precept.grade, STEP)
+      output.appendChild(grade.canvas)
+      console.log(grade, STEP)
 
-      // OUTPUT
+      // Output
       vars.group.scale.multiplyScalar(1 / vars.fov.max)
       vars.scene.add(vars.group)
     },
 
-    box: function (element, layer = 0, opt = {}) {
+    box: function (element, z = 0, opt = {}) {
       const vars = mpos.var
       //const geo = mpos.var.geo.clone()
       const mat = vars.mat
       const mesh = new THREE.Mesh(vars.geo, mat)
       mesh.userData.el = element
-      mesh.name = [layer, opt.m, element.nodeName].join('_')
+      mesh.name = [z, opt.mat, element.nodeName].join('_')
 
       const rect = element.getBoundingClientRect()
       // scale
@@ -272,12 +289,12 @@ const mpos = {
       // position
       const x = rect.width / 2 + rect.left
       const y = -(rect.height / 2) - rect.top
-      const z = d * layer
+      z = z * d
       mesh.position.set(x, y, z)
 
       // static or dynamic
       let types = [mesh]
-      if (opt.m === 'wire') {
+      if (opt.mat === 'wire') {
         mat.color.setStyle('cyan')
         mat.opacity = 0.5
       } else {
@@ -286,7 +303,7 @@ const mpos = {
         map.name = element.tagName
         mesh.material = map
         // todo: data-taxonomy...
-        if (opt.m === 'poster') {
+        if (opt.mat === 'poster') {
           mesh.material = [mat, mat, mat, mat, map, null]
           toSvg(element).then(function (dataUrl) {
             if (opt.ctx) {
@@ -300,7 +317,7 @@ const mpos = {
             map.map = new THREE.TextureLoader().load(dataUrl)
             map.needsUpdate = true
           })
-        } else if (opt.m === 'native') {
+        } else if (opt.mat === 'native') {
           const el = element.cloneNode(true)
           const css3d = new CSS3DObject(el)
           css3d.position.set(x, y, z + d / 2)
