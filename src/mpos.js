@@ -6,6 +6,7 @@ import { toSvg } from 'html-to-image'
 
 const mpos = {
   var: {
+    batch: 0,
     opt: {
       dispose: true,
       selector: 'main',
@@ -106,14 +107,13 @@ const mpos = {
         allow: '.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address'.split(','),
         block: '.block,canvas[data-engine],head,style,script,link,meta,param,map,br,wbr,template'.split(','),
         native: '.native,iframe,frame,embed,object,table,details,form,video,audio,a,dialog'.split(','),
-        poster: '.poster,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,th,td,caption,dt,dd,.text'.split(','),
+        poster: '.poster,.text,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,li,ul,ol,th,td,caption,dt,dd'.split(','),
         grade: {
-          max: 8192,
+          idx: mpos.var.batch++,
           softmax: 0,
-          els: [],
-          txt: [],
           interactive: 0,
-          idx: new Date().getTime(),
+          els: {},
+          txt: [],
           canvas: document.createElement('canvas')
         }
       }
@@ -124,11 +124,10 @@ const mpos = {
       while (node) {
         const empty = !node.tagName && !node.textContent.trim()
         if (!empty) {
-          const idx = [precept.grade.idx, precept.grade.softmax].join('_')
+          const idx = [precept.grade.softmax, precept.grade.idx].join('_')
 
-          let tag = node.tagName
-          if (tag && node.checkVisibility()) {
-            precept.grade.els.push(node)
+          if (node.tagName && node.checkVisibility()) {
+            precept.grade.els[idx] = { el: node }
             if (node.matches([precept.native, precept.poster])) {
               precept.grade.interactive++
             }
@@ -139,18 +138,20 @@ const mpos = {
           ) {
             // text orphan with parent visible
             // ...potentially another type (#comment, xml, php)
-            let parentView = precept.grade.els.every(function (tag) {
-              return node.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_PRECEDING
+            let parentView = Object.keys(precept.grade.els).some(function (tag) {
+              return node.compareDocumentPosition(precept.grade.els[tag].el) & Node.DOCUMENT_POSITION_PRECEDING
             })
+
             if (parentView) {
-              precept.grade.txt.push(node)
               // sanitize, block-level required for width
               let wrap = document.createElement('div')
               wrap.classList.add('text')
               node.parentNode.insertBefore(wrap, node)
               wrap.appendChild(node)
-              precept.grade.els.push(wrap)
+              precept.grade.els[idx] = { el: wrap }
+              precept.grade.txt[idx] = { el: node }
               wrap.idx = idx
+              precept.grade.interactive++
             }
           }
           node.idx = idx
@@ -160,16 +161,18 @@ const mpos = {
         node = ni.nextNode()
       }
 
-      precept.grade.canvas.width = precept.grade.canvas.height = precept.grade.max
+      const MAX_TEXTURE_SIZE = 8192
+      precept.grade.canvas.width = precept.grade.canvas.height = MAX_TEXTURE_SIZE
       precept.grade.canvas.id = precept.grade.idx
-      const SPRITE_SIZE = Math.floor(precept.grade.max / precept.grade.interactive)
-      console.log(precept.grade, SPRITE_SIZE)
+      const STEP = Math.floor(MAX_TEXTURE_SIZE / precept.grade.interactive)
 
-      function struct(sel, layer, softmax) {
+      function struct(sel, layer, grade) {
         //console.log('struct', layer, sel.nodeName)
 
         // SELF
-        mpos.add.box(sel, layers - layer, { m: 'self' })
+        let m = 'self'
+        mpos.add.box(sel, layers - layer, { m: m })
+        grade.els[sel.idx].m = m
 
         // CHILD
         sel.childNodes.forEach(function (node) {
@@ -185,11 +188,11 @@ const mpos = {
           if (node.tagName) {
             // CLASSIFY
             const block = node.matches(precept.block)
-            const abort = softmax < 1
+            const abort = grade.softmax < 1
             if (block || abort) {
               console.log('END', node.nodeName)
             } else {
-              softmax--
+              grade.softmax--
 
               const allow = node.matches(precept.allow)
               const manual = node.matches('.poster, .native')
@@ -198,16 +201,17 @@ const mpos = {
               if (layer >= 1 && allow && !manual && !empty) {
                 // child structure
                 let depth = layer - 1
-                struct(node, depth, softmax)
+                struct(node, depth, grade)
               } else {
                 // child interactive
-                let m = 'child'
+                m = 'child'
                 if (node.matches(precept.poster)) {
                   m = 'poster'
                 } else if (node.matches(precept.native)) {
                   m = 'native'
                 }
 
+                grade.els[node.idx].m = m
                 mpos.add.box(node, layers - layer, { m: m })
               }
             }
@@ -215,15 +219,36 @@ const mpos = {
         })
       }
 
-      struct(sel, layers, precept.grade.softmax)
+      struct(sel, layers, precept.grade)
 
-      // InstancedMesh with Texture Atlas
+      //
+      // Instanced Mesh
+      // with Texture Atlas
       const generic = new THREE.InstancedMesh(vars.geo, vars.mat, precept.grade.max)
       //generic.count = precept.grade.els.length - precept.grade.interactive
       generic.count = precept.grade.softmax
       generic.userData.el = sel
       generic.name = selector
       vars.group.add(generic)
+
+      console.log('idx1', precept.grade.els)
+      for (const [idx, el] of Object.entries(precept.grade.els)) {
+        //todo: matrix slot for: self, child?
+        console.log(idx, el)
+        if (el.m) {
+          mpos.add.box(el.el, 0, {
+            m: el.m,
+            ctx: precept.grade.canvas.getContext('2d'),
+            max: MAX_TEXTURE_SIZE,
+            step: STEP
+          })
+        }
+      }
+
+      let output = document.querySelector('#output')
+      output.innerHTML = ''
+      output.appendChild(precept.grade.canvas)
+      console.log(precept.grade, STEP)
 
       // OUTPUT
       vars.group.scale.multiplyScalar(1 / vars.fov.max)
@@ -264,6 +289,14 @@ const mpos = {
         if (opt.m === 'poster') {
           mesh.material = [mat, mat, mat, mat, map, null]
           toSvg(element).then(function (dataUrl) {
+            if (opt.ctx) {
+              var img = new Image()
+              img.src = dataUrl
+              // Texture Atlas
+              let idx = element.idx.split('_')[0]
+              let tile = idx * opt.step
+              opt.ctx.drawImage(img, 0 + tile, -opt.max + tile, tile, tile)
+            }
             map.map = new THREE.TextureLoader().load(dataUrl)
             map.needsUpdate = true
           })

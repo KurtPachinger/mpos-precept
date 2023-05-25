@@ -20,7 +20,7 @@ h2 { border-top: var(--u1) solid var(--sup); }
 .sup, h2 span { background-color: var(--sup); }
 .sub { background-color: var(--sub); }
 
-#canvas canvas {
+#output canvas {
   background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=");
 }
 
@@ -49,8 +49,9 @@ address{ z-index: -1; visibility: hidden; }
 
 
 /* STRUCTURE */
-#tools, main, img, .w100 {
+#tools, main, .w100, img {
   width: 100%;
+  height: auto;
   max-width: var(--width);
 }
 
@@ -93,9 +94,21 @@ ul { padding-left: 1.75em; }
 }
 
 
+// DEBUG
 summary,tr,li{
   &:hover{
     background-color: var(--sub); }
+}
+#output{
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  z-index: 9;
+  width: calc(var(--width) /2);
+  canvas{
+    width: 100%;
+    height: auto;
+  }
 }
 
 
