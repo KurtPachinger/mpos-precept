@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { toSvg } from 'html-to-image'
+import { DstAlphaFactor } from 'three'
 
 const mpos = {
   var: {
@@ -118,10 +119,7 @@ const mpos = {
           canvas: document.createElement('canvas')
         }
       }
-      // Texture Atlas
       const grade = precept.grade
-      grade.canvas.width = grade.canvas.height = grade.MAX_TEXTURE_SIZE
-      grade.canvas.id = grade.idx
 
       function inPolar(node, control = 0) {
         let vis = node.tagName || node.textContent.trim()
@@ -238,8 +236,32 @@ const mpos = {
 
       struct(sel, layers, grade)
 
-      const STEP = Math.floor(grade.MAX_TEXTURE_SIZE / grade.softmax)
+      // Texture Atlas
+
+      grade.canvas.width = grade.canvas.height = grade.MAX_TEXTURE_SIZE
+      console.log(grade.canvas.width, grade.softmax)
+      grade.canvas.id = grade.idx
+
       // Texture Atlas...
+      for (const el of Object.values(grade.els)) {
+        //todo: matrix slot for: self, child?
+        if (el.mat) {
+          toSvg(el.el).then(function (dataUrl) {
+            var img = new Image()
+            img.src = dataUrl
+            // transforms
+            const max = grade.canvas.width
+            const step = max / grade.softmax
+            let ratio = Math.max(img.width, img.height) / step
+            let idx = Number(el.el.idx.split('_')[0])
+            let x = idx * step
+            let y = max - step * idx - step
+            // output
+            const ctx = grade.canvas.getContext('2d')
+            ctx.drawImage(img, x, y, img.width * ratio, img.height * ratio)
+          })
+        }
+      }
 
       // Instanced Mesh
       const generic = new THREE.InstancedMesh(vars.geo, vars.mat, grade.MAX_TEXTURE_SIZE)
@@ -252,12 +274,7 @@ const mpos = {
       for (const el of Object.values(grade.els)) {
         //todo: matrix slot for: self, child?
         if (el.mat) {
-          mpos.add.box(el.el, el.z, {
-            mat: el.mat,
-            ctx: grade.canvas.getContext('2d'),
-            max: grade.MAX_TEXTURE_SIZE,
-            step: STEP
-          })
+          mpos.add.box(el.el, el.z, { mat: el.mat })
         }
       }
 
@@ -265,7 +282,7 @@ const mpos = {
       let output = document.querySelector('#output')
       output.innerHTML = ''
       output.appendChild(grade.canvas)
-      console.log(grade, STEP)
+      console.log(grade)
 
       // Output
       vars.group.scale.multiplyScalar(1 / vars.fov.max)
@@ -277,6 +294,7 @@ const mpos = {
       //const geo = mpos.var.geo.clone()
       const mat = vars.mat
       const mesh = new THREE.Mesh(vars.geo, mat)
+
       mesh.userData.el = element
       mesh.name = [z, opt.mat, element.nodeName].join('_')
 
@@ -305,14 +323,22 @@ const mpos = {
         // todo: data-taxonomy...
         if (opt.mat === 'poster') {
           mesh.material = [mat, mat, mat, mat, map, null]
+
           toSvg(element).then(function (dataUrl) {
-            if (opt.ctx) {
+            const grade = opt.grade
+            if (grade) {
               var img = new Image()
               img.src = dataUrl
-              // Texture Atlas
-              let idx = element.idx.split('_')[0]
-              let tile = idx * opt.step
-              opt.ctx.drawImage(img, 0 + tile, -opt.max + tile, tile, tile)
+              // transforms
+              const max = grade.canvas.width
+              const step = max / grade.softmax
+              let ratio = Math.max(img.width, img.height) / step
+              let idx = Number(element.idx.split('_')[0])
+              let x = idx * step
+              let y = max - step * idx - step
+              // output
+              const ctx = grade.canvas.getContext('2d')
+              ctx.drawImage(img, x, y, img.width * ratio, img.height * ratio)
             }
             map.map = new THREE.TextureLoader().load(dataUrl)
             map.needsUpdate = true
