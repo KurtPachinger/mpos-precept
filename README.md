@@ -12,19 +12,16 @@ subgraph selector
  parent--depth-->child
 end
 
-
-grade("Pre-grade. Classify ancestors to hide node.")
+grade("Pre-grade. Sanitize.")
   
 
-grade-.-b
-selector--userData-->Box3-->a
 
-
+selector---grade-->a
 
 subgraph type
   direction TB
 
-  a("1x: semantic, viewport, hardmax")
+  a("1x: structure, viewport")
   a-.-tag{blacklist}
   a-->b{interactive}
   b--no---poster("2x: img, text")
