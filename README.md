@@ -15,14 +15,15 @@ end
 grade("Pre-grade. Sanitize.")
   
 
-
-selector---grade-->a
+  
+selector-->grade-->a
 
 subgraph type
   direction TB
 
   a("1x: structure, viewport")
-  a-.-tag{blacklist}
+  grade-.-tag{blacklist}
+
   a-->b{interactive}
   b--no---poster("2x: img, text")
   b--yes---native("3x: form, video")
