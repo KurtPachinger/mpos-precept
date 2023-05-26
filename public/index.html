@@ -1,6 +1,9 @@
 <details id="tools" class="allow" open>
   <main>
     TEST1\n
+    <span style="position: relative; z-index: auto;">z-auto</span>
+    <span style="position: relative; z-index: 1;">z-1</span>
+    <span style="position: relative; z-index: 999;">z999</span>
     <h2><span>main</span></h2>
     <form onSubmit="return false;" class="w">
       <fieldset class="sub">
@@ -78,7 +81,7 @@
             <td>charmap</td>
             <td>&bigotimes;🐧</td>
           </tr>
-          <tr>
+          <tr class="ignore">
             <td>iframe video</td>
             <td>
               <div class="yt poster">
@@ -86,7 +89,7 @@
               </div>
             </td>
           </tr>
-          <tr>
+          <tr class="ignore">
             <td>svg</td>
             <td class="poster">
               <object data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg"></object>
@@ -106,7 +109,7 @@
 <!--address-->
 <address class="full"><object></object></address>
 
-<div id="output"></div>
+<div id="atlas"></div>
 
 <!--CSSObject3D-->
 <div id="css3d" class="full ignore"></div>

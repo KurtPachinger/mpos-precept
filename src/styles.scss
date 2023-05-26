@@ -20,7 +20,7 @@ h2 { border-top: var(--u1) solid var(--sup); }
 .sup, h2 span { background-color: var(--sup); }
 .sub { background-color: var(--sub); }
 
-#output canvas {
+#atlas canvas {
   background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=");
 }
 
@@ -70,9 +70,9 @@ aside {
 
 table {
   border-collapse: collapse;
- text-align: left; 
- tr:nth-child( 2n+1 ) { background-color: var(--med); }
- td, th { padding: var(--u1); }
+  text-align: left; 
+  tr:nth-child(2n+1) { background-color: var(--med); }
+  td, th { padding: var(--u1); }
 }
 ul { padding-left: 1.75em; }
 
@@ -95,11 +95,11 @@ ul { padding-left: 1.75em; }
 
 
 // DEBUG
-summary,tr,li{
+summary, tr, li {
   &:hover{
     background-color: var(--sub); }
 }
-#output{
+#atlas {
   image-rendering: pixelated;
 
   position: fixed;
@@ -107,7 +107,7 @@ summary,tr,li{
   right: 0;
   z-index: 9;
   width: calc(var(--width) * 0.75);
-  canvas{
+  canvas {
     width: 100%;
     height: auto;
   }
