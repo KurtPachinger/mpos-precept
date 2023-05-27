@@ -82,6 +82,9 @@ const mpos = {
               if (mat) {
                 mat.canvas && (mat.canvas = null)
                 mat.map && mat.map.dispose()
+                // shader
+                mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
+                mat.userData.t && mat.userData.t.dispose()
                 mat.dispose()
               }
             }
@@ -147,20 +150,27 @@ const mpos = {
       }
       const grade = precept.grade
 
-      function inPolar(node, control = 0) {
+      function inPolar(node, control) {
         let vis = node.tagName || node.textContent.trim()
-        // -1: node not empty
-        if (control > -1) {
-          // 0: node is tag
-          vis = node.tagName
-          if (vis && control > 0) {
-            // 1: node not hidden
-            vis = node.checkVisibility()
-            if (control > 1) {
-              // 2: node in viewport
-              let rect = node.getBoundingClientRect()
-              let viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-              vis = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
+        if (typeof control === 'object') {
+          // node relative in control plot
+          vis = Object.keys(control).some(function (tag) {
+            return node.compareDocumentPosition(control[tag].el) & Node.DOCUMENT_POSITION_PRECEDING
+          })
+        } else {
+          // -1: node not empty
+          if (control >= 0) {
+            // 0: node is tag
+            vis = node.tagName
+            if (vis && control >= 1) {
+              // 1: tag not hidden
+              vis = node.checkVisibility()
+              if (control >= 2) {
+                // 2: tag in viewport
+                let rect = node.getBoundingClientRect()
+                let viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
+                vis = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
+              }
             }
           }
         }
@@ -172,66 +182,75 @@ const mpos = {
       let node = ni.nextNode()
       while (node) {
         if (inPolar(node, -1)) {
-          const idx = grade.softmax
-
+          let el = false
           if (inPolar(node, 1)) {
-            grade.els[idx] = { el: node }
+            el = node
             if (node.matches([precept.native, precept.poster])) {
-              // this would give a ballpark...
-              //grade.media++
+              // ...ballpark
             }
           } else if (
             node.nodeName === '#text' &&
             node.parentNode.matches([precept.allow]) &&
-            !node.parentNode.matches([precept.native, precept.poster])
+            !node.parentNode.matches([precept.native, precept.poster]) &&
+            inPolar(node, grade.els)
           ) {
-            // text orphan with parent visible
-            // ...potentially another type (#comment, xml, php)
-            let parentView = Object.keys(grade.els).some(function (tag) {
-              return node.compareDocumentPosition(grade.els[tag].el) & Node.DOCUMENT_POSITION_PRECEDING
-            })
+            // #text orphan with parent visible
+            // sanitize, block-level required for width
+            let wrap = document.createElement('div')
+            wrap.classList.add('pstr')
+            node.parentNode.insertBefore(wrap, node)
+            wrap.appendChild(node)
 
-            if (parentView) {
-              // sanitize, block-level required for width
-              let wrap = document.createElement('div')
-              wrap.classList.add('pstr')
-              node.parentNode.insertBefore(wrap, node)
-              wrap.appendChild(node)
-              grade.els[idx] = { el: wrap }
-              grade.txt.push(node)
-              wrap.idx = idx
-            }
+            el = wrap
+            grade.txt.push(node)
           }
-          node.idx = idx
-          grade.softmax++
+
+          if (el) {
+            // static list
+            const idx = grade.softmax
+            el.idx = idx
+            grade.els[idx] = { el: el }
+
+            grade.softmax++
+          }
         }
 
         node = ni.nextNode()
       }
 
       // deep-grade: type, count
+      function report(el, z, mat) {
+        el.mat = mat
+        el.z = z
+        grade.softmax--
+
+        // shader
+        if (el.mat === 'poster') {
+          el.atlas = grade.atlas
+          grade.atlas++
+        }
+      }
       function struct(sel, layer, grade) {
         //console.log('struct', layer, sel.nodeName)
+        const z = layers - layer
 
         // SELF
-        let mat = 'self'
         let el = grade.els[sel.idx]
-        if (el) {
-          el.mat = mat
-          el.z = layers - layer
-        }
+        let mat = 'self'
+        el && report(el, z, mat)
 
         // CHILD
         sel.childNodes.forEach(function (node) {
+          let el = grade.els[node.idx]
+
           if (inPolar(node, 2)) {
             // CLASSIFY TYPE
             const block = node.matches(precept.block)
-            const abort = grade.softmax < 1
+            const abort = grade.atlas >= grade.hardmax
             if (block || abort) {
+              // ...or (#comment, xml, php)
               console.log('END', node.nodeName)
-            } else {
-              grade.softmax--
-
+            } else if (el) {
               const allow = node.matches(precept.allow)
               const manual = node.matches('.poster, .native')
               const empty = node.children.length === 0
@@ -249,15 +268,7 @@ const mpos = {
                   mat = 'poster'
                 }
 
-                el = grade.els[node.idx]
-                if (el) {
-                  el.mat = mat
-                  el.z = layers - layer
-                }
-                if (el.mat === 'poster') {
-                  el.atlas = grade.atlas
-                  grade.atlas++
-                }
+                report(el, z, mat)
               }
             }
           }
@@ -285,16 +296,13 @@ const mpos = {
       let loading = grade.atlas
       for (const el of Object.values(grade.els)) {
         //todo: matrix slot for: self, child?
-        if (el.mat && el.mat === 'poster') {
+        if (typeof el.atlas === 'number') {
           toSvg(el.el).then(function (dataUrl) {
-            var img = new Image()
+            let img = new Image()
             img.onload = function () {
               // transform atlas
-              let idx = el.atlas
-              let block = step * idx
-              //console.log(el, el.el.innerText, idx, step, block)
-              //ctx.drawImage(img, 0, block, step, img.height * (step / img.width))
-              ctx.drawImage(img, 0, block, step, step)
+              let block = el.atlas * step
+              ctx.drawImage(img, 0, grade.canvas.height - step - block, step, step)
               if (--loading < 1) {
                 transforms()
               }
@@ -312,24 +320,25 @@ const mpos = {
         // Instanced Mesh
         const generic = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, null], grade.hardmax)
         generic.instanceMatrix.setUsage(THREE.StaticDrawUsage)
-        generic.count = grade.softmax
+        generic.count = grade.softmax - grade.atlas - 1
         generic.userData.el = sel
         generic.name = [grade.idx, selector].join('_')
         vars.group.add(generic)
 
         // Meshes
 
-        let i = 0
+        let i = grade.atlas
         let dummy = new THREE.Object3D()
         for (const el of Object.values(grade.els)) {
           //todo: matrix slot for: self, child?
           if (el.mat) {
+            let which = typeof el.atlas === 'number' ? el.atlas : ++i
             dummy = mpos.add.box(el.el, el.z, { dummy: dummy })
-            generic.setMatrixAt(el.atlas || i, dummy.matrix)
+            generic.setMatrixAt(which, dummy.matrix)
             if (el.mat === 'poster') {
               texIdx[el.atlas] = el.atlas
             }
-            i++
+
             //mpos.add.box(el.el, el.z, { mat: el.mat })
           }
         }
@@ -362,11 +371,20 @@ const mpos = {
       zIndex = zIndex > 0 ? 1 - 1 / zIndex : 0
       z = z * d + zIndex
       z = +z.toFixed(6)
+      // rotation
+      const damp = 0.5
+      const mid = vars.fov.w / 2
+      const rad = (mid - x) / mid
+      const pos = mid * Math.abs(rad)
 
       // Instanced Mesh
       if (opt.dummy) {
-        opt.dummy.position.set(x, y, z)
         opt.dummy.scale.set(w, h, d)
+        opt.dummy.position.set(x, y, z)
+        if (vars.opt.arc) {
+          opt.dummy.rotation.set(0, rad * damp * 2, 0)
+          opt.dummy.position.setZ(z + pos * damp)
+        }
         opt.dummy.updateMatrix()
         return opt.dummy
       }
@@ -420,10 +438,6 @@ const mpos = {
 
       // rotation
       if (vars.opt.arc) {
-        const damp = 0.5
-        const mid = vars.fov.w / 2
-        const rad = (mid - x) / mid
-        const pos = mid * Math.abs(rad)
         types.forEach((el) => {
           el.rotateY(rad * damp * 2)
           el.position.setZ(z + pos * damp)
@@ -438,6 +452,7 @@ const mpos = {
       let m = new THREE.MeshBasicMaterial({
         transparent: true,
         onBeforeCompile: (shader) => {
+          m.userData.s = shader
           shader.uniforms.texAtlas = { value: texAtlas }
           shader.vertexShader = `
         attribute float texIdx;
@@ -469,6 +484,7 @@ const mpos = {
         }
       })
       m.defines = { USE_UV: '' }
+      m.userData.t = texAtlas
       return m
     }
   },
