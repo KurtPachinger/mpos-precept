@@ -267,19 +267,20 @@ const mpos = {
       struct(sel, layers, grade)
 
       // Shader Atlas
-      grade.canvas.width = grade.canvas.height = grade.atlas * grade.hardmax
+      grade.canvas.width = grade.hardmax
+      grade.canvas.height = grade.atlas * grade.hardmax
       grade.canvas.id = grade.idx
       const ctx = grade.canvas.getContext('2d')
 
-      ctx.fillStyle = 'rgba(0, 0, 255, 0.25)'
-      ctx.fillRect(0, grade.canvas.height * 0.0, grade.canvas.width, grade.canvas.height * 0.33)
-      ctx.fillStyle = 'rgba(255, 255, 0, 0.25)'
-      ctx.fillRect(0, grade.canvas.height * 0.33, grade.canvas.width, grade.canvas.height * 0.33)
-      ctx.fillStyle = 'rgba(255, 0, 0, 0.25)'
-      ctx.fillRect(0, grade.canvas.height * 0.66, grade.canvas.width, grade.canvas.height * 0.33)
+      // test gradient
+      let grd = ctx.createLinearGradient(0, grade.canvas.height, 0, 0)
+      grd.addColorStop(1, 'rgba(0, 0, 255, 0.25)')
+      grd.addColorStop(0, 'rgba(0, 255, 255, 0.25)')
+      ctx.fillStyle = grd
+      ctx.fillRect(0, 0, grade.canvas.width, grade.canvas.height)
+
       // scaling
-      const height = grade.canvas.height
-      const step = height / grade.atlas
+      const step = grade.canvas.height / grade.atlas
 
       let loading = grade.atlas
       for (const el of Object.values(grade.els)) {
@@ -292,8 +293,8 @@ const mpos = {
               let idx = el.atlas
               let block = step * idx
               //console.log(el, el.el.innerText, idx, step, block)
-              ctx.drawImage(img, block, height - step - block, step, img.height * (step / img.width))
-
+              //ctx.drawImage(img, 0, block, step, img.height * (step / img.width))
+              ctx.drawImage(img, 0, block, step, step)
               if (--loading < 1) {
                 transforms()
               }
@@ -457,11 +458,13 @@ const mpos = {
             `#include <map_fragment>`,
             `#include <map_fragment>
           
-        vec2 blockUv =  ${texStep} * (floor(vTexIdx + 0.1) + vUv); 
-        vec4 blockColor = texture(texAtlas, blockUv);
+            vec2 end = (${texStep} * (floor(vTexIdx + 0.1) + vUv), vUv );
+            vec4 blockColor = texture(texAtlas, end);
+        
         diffuseColor *= blockColor;
         `
           )
+
           //console.log(shader.fragmentShader)
         }
       })
