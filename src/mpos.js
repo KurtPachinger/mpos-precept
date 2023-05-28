@@ -136,7 +136,7 @@ const mpos = {
       const precept = {
         allow: '.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address'.split(','),
         block: '.block,canvas[data-engine],head,style,script,link,meta,param,map,br,wbr,template'.split(','),
-        native: '.native,iframe,frame,embed,object,table,details,form,video,audio,a,dialog'.split(','),
+        native: '.native,iframe,frame,embed,object,model-viewer,a-scene,StandardReality,table,details,form,video,audio,a,dialog'.split(','),
         poster: '.poster,.pstr,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd'.split(','),
         grade: {
           idx: mpos.var.batch++,
@@ -326,7 +326,6 @@ const mpos = {
         vars.group.add(generic)
 
         // Meshes
-
         let i = grade.atlas
         let dummy = new THREE.Object3D()
         for (const el of Object.values(grade.els)) {
@@ -337,9 +336,9 @@ const mpos = {
             generic.setMatrixAt(which, dummy.matrix)
             if (el.mat === 'poster') {
               texIdx[el.atlas] = el.atlas
+            } else if (el.mat === 'native') {
+              mpos.add.box(el.el, el.z, { mat: el.mat })
             }
-
-            //mpos.add.box(el.el, el.z, { mat: el.mat })
           }
         }
         vars.geo.setAttribute('texIdx', new THREE.InstancedBufferAttribute(texIdx, 1))
@@ -347,8 +346,9 @@ const mpos = {
         generic.computeBoundingSphere()
 
         // Output
-        document.getElementById('atlas').appendChild(grade.canvas)
+        //generic.userData.grade = grade
         console.log(grade)
+        document.getElementById('atlas').appendChild(grade.canvas)
 
         // Output
         vars.group.scale.multiplyScalar(1 / vars.fov.max)
@@ -358,20 +358,38 @@ const mpos = {
 
     box: function (element, z = 0, opt = {}) {
       const vars = mpos.var
-
       const rect = element.getBoundingClientRect()
+      const style = window.getComputedStyle(element)
+
+      // css transform matrix (scale, angle)
+
+      let transform = style.transform
+      let scale = 1
+      let rotate = 0
+      if (transform !== 'none') {
+        transform = transform
+          .slice(transform.indexOf('(') + 1, transform.indexOf(')'))
+          .replaceAll(' ', '')
+          .split(',')
+        const a = transform[0]
+        const b = transform[1]
+        scale = Math.sqrt(a * a + b * b)
+        rotate = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+        rotate = rotate * (Math.PI / 180)
+      }
+
       // scale
-      const w = rect.width
-      const h = rect.height
+      const w = rect.width * scale
+      const h = rect.height * scale
       const d = vars.fov.z
       // position
       const x = rect.width / 2 + rect.left
       const y = -(rect.height / 2) - rect.top
-      let zIndex = window.getComputedStyle(element).zIndex
+      let zIndex = style.zIndex
       zIndex = zIndex > 0 ? 1 - 1 / zIndex : 0
       z = z * d + zIndex
       z = +z.toFixed(6)
-      // rotation
+      // arc
       const damp = 0.5
       const mid = vars.fov.w / 2
       const rad = (mid - x) / mid
@@ -382,9 +400,11 @@ const mpos = {
         opt.dummy.scale.set(w, h, d)
         opt.dummy.position.set(x, y, z)
         if (vars.opt.arc) {
-          opt.dummy.rotation.set(0, rad * damp * 2, 0)
+          opt.dummy.rotation.y = rad * damp * 2
           opt.dummy.position.setZ(z + pos * damp)
         }
+        opt.dummy.rotation.z = -rotate
+
         opt.dummy.updateMatrix()
         return opt.dummy
       }
@@ -416,12 +436,16 @@ const mpos = {
           })
         } else if (opt.mat === 'native') {
           const el = element.cloneNode(true)
+          el.style.width = w
+          el.style.height = h
           const css3d = new CSS3DObject(el)
+          //css3d.scale.set(w, h, d)
+          //css3d.scale.multiplyScalar(1 / vars.fov.max)
           css3d.position.set(x, y, z + d / 2)
           css3d.name = ['CSS', element.nodeName].join('_')
           types.push(css3d)
         }
-        let style = window.getComputedStyle(element)
+
         let bg = style.backgroundColor
         let alpha = bg.replace(/[rgba()]/g, '').split(',')[3]
         //console.log('alpha', alpha, element.nodeName)

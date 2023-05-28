@@ -101,13 +101,14 @@ summary, tr, li {
 }
 #atlas {
   image-rendering: pixelated;
+  canvas{background-size: 100% auto;}
 
-  background-color:rgba( 255, 255, 255, 0.75 );
+  background-color: rgba( 255, 255, 255, 0.75 );
   position: fixed;
   bottom: 0;
   left: 0;
   z-index: 9;
-  width: calc(var(--width) * 0.75);
+  width: calc(var(--width) * 0.5);
   height: 100%;
   overflow: hidden;
   overflow-y: auto;
