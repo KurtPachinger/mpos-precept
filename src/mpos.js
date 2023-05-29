@@ -226,8 +226,7 @@ const mpos = {
 
         // shader
         if (el.mat === 'poster') {
-          el.atlas = grade.atlas
-          grade.atlas++
+          el.atlas = grade.atlas++
         }
       }
       function struct(sel, layer, grade) {
@@ -304,6 +303,8 @@ const mpos = {
               let block = el.atlas * step
               ctx.drawImage(img, 0, grade.canvas.height - step - block, step, step)
               if (--loading < 1) {
+                grade.els = Object.values(grade.els).filter((el) => el.mat)
+                grade.softmax = grade.els.length
                 transforms()
               }
             }
@@ -314,29 +315,30 @@ const mpos = {
 
       function transforms() {
         // shader atlas
-        let texIdx = new Float32Array(grade.atlas).fill(0)
+        let texIdx = new Float32Array(grade.softmax).fill(0)
         let shader = mpos.add.shader(grade.canvas, grade.atlas)
 
         // Instanced Mesh
         const generic = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, null], grade.hardmax)
         generic.instanceMatrix.setUsage(THREE.StaticDrawUsage)
-        generic.count = grade.softmax - grade.atlas - 1
+        generic.count = grade.softmax
         generic.userData.el = sel
         generic.name = [grade.idx, selector].join('_')
         vars.group.add(generic)
 
         // Meshes
-        let i = grade.atlas
+
         let dummy = new THREE.Object3D()
-        for (const el of Object.values(grade.els)) {
+        for (const [index, el] of Object.entries(grade.els)) {
           //todo: matrix slot for: self, child?
           if (el.mat) {
-            let which = typeof el.atlas === 'number' ? el.atlas : ++i
+            console.log(index, el.mat, el.atlas, el.el.innerText)
             dummy = mpos.add.box(el.el, el.z, { dummy: dummy })
-            generic.setMatrixAt(which, dummy.matrix)
-            if (el.mat === 'poster') {
-              texIdx[el.atlas] = el.atlas
-            } else if (el.mat === 'native') {
+            generic.setMatrixAt(index, dummy.matrix)
+
+            texIdx[index] = typeof el.atlas === 'number' ? el.atlas : grade.atlas
+
+            if (el.mat === 'native') {
               mpos.add.box(el.el, el.z, { mat: el.mat })
             }
           }
@@ -497,8 +499,8 @@ const mpos = {
             `#include <map_fragment>`,
             `#include <map_fragment>
           
-            vec2 end = (${texStep} * (floor(vTexIdx + 0.1) + vUv), vUv );
-            vec4 blockColor = texture(texAtlas, end);
+            vec2 blockUv = (vUv , ${texStep} * (floor(vTexIdx + 0.1) + vUv) );
+            vec4 blockColor = texture(texAtlas, blockUv);
         
         diffuseColor *= blockColor;
         `
