@@ -100,16 +100,20 @@ summary, tr, li {
     background-color: var(--sub); }
 }
 #atlas {
-  image-rendering: pixelated;
-  canvas{background-size: 100% auto;}
+  &:hover { 
+    transform: scale(4);
+    transform-origin: bottom right; 
+  }
+  canvas { background-size: 50% auto; }
 
+  image-rendering: pixelated;
   background-color: rgba( 255, 255, 255, 0.75 );
   position: fixed;
   bottom: 0;
-  left: 0;
+  right: 0;
   z-index: 9;
-  width: calc(var(--width) * 0.5);
-  height: 100%;
+  width: calc(var(--width) / 4 );
+  height: auto;
   overflow: hidden;
   overflow-y: auto;
   canvas {

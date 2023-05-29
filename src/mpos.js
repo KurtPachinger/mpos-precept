@@ -104,8 +104,8 @@ const mpos = {
     })
 
     // Texture Atlas
-    let atlas = document.querySelector('#atlas canvas')
-    atlas && atlas.parentNode.removeChild(atlas)
+    let atlas = document.getElementById('atlas')
+    atlas.childNodes.forEach((c) => c.parentNode.removeChild(c))
   },
   add: {
     dom: function (selector, layers = 8, update) {
@@ -277,17 +277,19 @@ const mpos = {
       struct(sel, layers, grade)
 
       // Shader Atlas
-      grade.canvas.width = grade.hardmax
-      grade.canvas.height = grade.atlas * grade.hardmax
+
+      grade.canvas.width = grade.canvas.height = grade.atlas * grade.hardmax
       grade.canvas.id = grade.idx
       const ctx = grade.canvas.getContext('2d')
 
       // test gradient
+      /*
       let grd = ctx.createLinearGradient(0, grade.canvas.height, 0, 0)
       grd.addColorStop(1, 'rgba(0, 0, 255, 0.25)')
       grd.addColorStop(0, 'rgba(0, 255, 255, 0.25)')
       ctx.fillStyle = grd
       ctx.fillRect(0, 0, grade.canvas.width, grade.canvas.height)
+      */
 
       // scaling
       const step = grade.canvas.height / grade.atlas
@@ -301,7 +303,7 @@ const mpos = {
             img.onload = function () {
               // transform atlas
               let block = el.atlas * step
-              ctx.drawImage(img, 0, grade.canvas.height - step - block, step, step)
+              ctx.drawImage(img, block, grade.canvas.height - step - block, step, step)
               if (--loading < 1) {
                 grade.els = Object.values(grade.els).filter((el) => el.mat)
                 grade.softmax = grade.els.length
@@ -316,7 +318,7 @@ const mpos = {
       function transforms() {
         // shader atlas
         let texIdx = new Float32Array(grade.softmax).fill(0)
-        let shader = mpos.add.shader(grade.canvas, grade.atlas)
+        let shader = mpos.add.shader(grade.canvas, grade.atlas, grade.hardmax)
 
         // Instanced Mesh
         const generic = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, null], grade.hardmax)
@@ -332,7 +334,6 @@ const mpos = {
         for (const [index, el] of Object.entries(grade.els)) {
           //todo: matrix slot for: self, child?
           if (el.mat) {
-            console.log(index, el.mat, el.atlas, el.el.innerText)
             dummy = mpos.add.box(el.el, el.z, { dummy: dummy })
             generic.setMatrixAt(index, dummy.matrix)
 
@@ -389,8 +390,7 @@ const mpos = {
       const y = -(rect.height / 2) - rect.top
       let zIndex = style.zIndex
       zIndex = zIndex > 0 ? 1 - 1 / zIndex : 0
-      z = z * d + zIndex
-      z = +z.toFixed(6)
+      z = (z * d + zIndex).toFixed(6)
       // arc
       const damp = 0.5
       const mid = vars.fov.w / 2
@@ -472,8 +472,9 @@ const mpos = {
 
       vars.group.add(...types)
     },
-    shader: function (canvas, texStep) {
+    shader: function (canvas, texStep, hardmax) {
       let texAtlas = new THREE.CanvasTexture(canvas)
+      texAtlas.minFilter = THREE.NearestFilter
       texStep = 1 / texStep
       let m = new THREE.MeshBasicMaterial({
         transparent: true,
@@ -499,7 +500,7 @@ const mpos = {
             `#include <map_fragment>`,
             `#include <map_fragment>
           
-            vec2 blockUv = (vUv , ${texStep} * (floor(vTexIdx + 0.1) + vUv) );
+            vec2 blockUv = ${texStep} * (floor(vTexIdx + 0.1) + vUv);
             vec4 blockColor = texture(texAtlas, blockUv);
         
         diffuseColor *= blockColor;
