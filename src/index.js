@@ -1,5 +1,10 @@
 import './styles.scss'
 import mpos from './mpos.js'
 
-window.onload = mpos.init()
-window.mpos = mpos
+mpos.init()
+window.onload = mpos.add.dom().then((res) => {
+  console.log(res)
+  mpos.var.animate()
+  //
+  mpos.gen(8)
+})
