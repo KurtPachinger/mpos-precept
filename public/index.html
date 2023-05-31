@@ -2,7 +2,7 @@
   <main>
     TEST1\n
     <script></script>
-    <!--comment-->
+
     <span style="position: relative; z-index: auto;">z-auto</span>
     <span style="position: relative; z-index: 1;">z-1</span>
     <span style="position: relative; z-index: 999;">z999</span>
@@ -98,9 +98,33 @@
             </td>
           </tr>
           <tr>
-            <td>XML</td>
+            <td>comment</td>
             <td>
-              <!---->
+              <!--comment-->
+              <![CDATA[ XML? ]]>
+              <?php echo('hello world') ?>
+              <?xml version="1.0" encoding="UTF-8"?>
+              <xml>XML</xml>
+            </td>
+          </tr>
+          <tr>
+            <td>model-viewer</td>
+            <td>
+              <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.1.1/model-viewer.min.js"></script>
+              <model-viewer
+                ar
+                camera-controls
+                touch-action="pan-y"
+                src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+                alt="A 3D model of an astronaut"
+              >
+                <button
+                  slot="ar-button"
+                  style="background-color: white; border-radius: 4px; border: none; position: absolute; top: 16px; right: 16px;"
+                >
+                  👋 Activate AR
+                </button>
+              </model-viewer>
             </td>
           </tr>
         </table>

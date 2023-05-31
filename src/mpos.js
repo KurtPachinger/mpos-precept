@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
-import { toSvg } from 'html-to-image'
+import { toPng } from 'html-to-image'
 
 const mpos = {
   var: {
@@ -14,10 +14,15 @@ const mpos = {
       depth: 8,
       arc: false,
       update: function () {
-        mpos.add.dom(mpos.var.opt.selector, mpos.var.opt.depth).then((res) => {
-          console.log(res)
-          mpos.var.animate()
-        })
+        mpos.add
+          .dom(mpos.var.opt.selector, mpos.var.opt.depth)
+          .then((res) => {
+            console.log(res)
+            mpos.var.animate()
+          })
+          .catch((e) => {
+            console.log('err', e) // "oh, no!"
+          })
       }
     },
     fov: {
@@ -135,11 +140,13 @@ const mpos = {
       }
 
       // structure
+
       const precept = {
-        allow: '.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address'.split(','),
-        block: '.block,canvas[data-engine],head,style,script,link,meta,param,map,br,wbr,template'.split(','),
-        native: '.native,iframe,frame,embed,object,model-viewer,a-scene,StandardReality,table,details,form,video,audio,a,dialog'.split(','),
-        poster: '.poster,.pstr,canvas,img,svg,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd'.split(','),
+        allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
+        block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,param,map,br,wbr,template`.split(','),
+        native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
+        poster: `.poster,.pstr,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd`.split(','),
+        native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
         grade: {
           idx: mpos.var.batch++,
           hardmax: 256,
@@ -150,6 +157,10 @@ const mpos = {
           canvas: document.createElement('canvas')
         }
       }
+      //let estimate = sel.querySelectorAll([precept.allow, precept.native, precept.poster]).length / 3
+      // texture unit, relative to viewport resolution
+      precept.grade.hardmax = Math.pow(2, Math.ceil(Math.max(mpos.var.fov.w, mpos.var.fov.h) / mpos.var.fov.max)) * 64
+      //
       const grade = precept.grade
 
       let promise = new Promise((resolve, reject) => {
@@ -158,7 +169,8 @@ const mpos = {
           if (typeof control === 'object') {
             // node relative in control plot
             vis = Object.values(control).some(function (tag) {
-              return node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
+              let pe = node.parentElement.checkVisibility()
+              return pe && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
             })
           } else {
             // -1: node not empty
@@ -181,16 +193,20 @@ const mpos = {
         }
 
         // flat-grade: filter, grade, sanitize
-        let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
+        let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
         let node = ni.nextNode()
         while (node) {
-          if (inPolar(node, -1)) {
+          if (node.nodeName === '#comment') {
+            // CDATA, php
+            console.log('#comment', node.textContent)
+          } else if (inPolar(node, -1)) {
             let el = false
-            if (inPolar(node, 1)) {
+
+            if (inPolar(node, 0)) {
               el = node
-              if (node.matches([precept.native, precept.poster])) {
-                // ...ballpark
-              }
+              //if (node.matches([precept.native, precept.poster])) {
+              // ...estimate
+              //}
             } else if (
               node.nodeName === '#text' &&
               node.parentNode.matches([precept.allow]) &&
@@ -245,13 +261,13 @@ const mpos = {
           sel.childNodes.forEach(function (node) {
             let el = grade.els[node.idx]
 
-            if (inPolar(node, 2)) {
+            if (inPolar(node, 1)) {
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
               const abort = grade.atlas >= grade.hardmax
               if (block || abort) {
                 // ...or (#comment, xml, php)
-                console.log('END', node.nodeName)
+                console.log('omit', node.nodeName)
               } else if (el) {
                 const allow = node.matches(precept.allow)
                 const manual = node.matches('.poster, .native')
@@ -264,8 +280,12 @@ const mpos = {
                 } else {
                   // child interactive
                   mat = 'child'
-                  if (node.matches(precept.native)) {
+                  if (node.matches([precept.native, precept.native3d])) {
                     mat = 'native'
+                    // todo: test internal type
+                    // node.tagName [iframe,object,embed,svg...] attribute [src,data]
+                    // native: ==100%, [html,swf,pdf]
+                    // poster: <=512, [jpg]
                   } else if (node.matches(precept.poster)) {
                     mat = 'poster'
                   }
@@ -280,8 +300,8 @@ const mpos = {
         struct(sel, layers, grade)
 
         // Shader Atlas
-
-        grade.canvas.width = grade.canvas.height = grade.atlas * grade.hardmax
+        const MAX_TEXTURE_SIZE = Math.min(grade.atlas * grade.hardmax, 16_384)
+        grade.canvas.width = grade.canvas.height = MAX_TEXTURE_SIZE
         grade.canvas.id = grade.idx
         const ctx = grade.canvas.getContext('2d')
 
@@ -297,28 +317,38 @@ const mpos = {
         // scaling
         const step = grade.canvas.height / grade.atlas
 
-        let loading = grade.atlas
+        let load = grade.atlas
         for (const el of Object.values(grade.els)) {
           //todo: matrix slot for: self, child?
           if (typeof el.atlas === 'number') {
-            toSvg(el.el).then(function (dataUrl) {
-              let img = new Image()
-              img.onload = function () {
-                // transform atlas
-                let block = el.atlas * step
-                ctx.drawImage(img, block, grade.canvas.height - step - block, step, step)
-                if (--loading < 1) {
-                  grade.els = Object.values(grade.els).filter((el) => el.mat)
-                  grade.softmax = grade.els.length
+            toPng(el.el)
+              .then(function (dataUrl) {
+                let img = new Image()
+                img.onload = function () {
+                  // transform atlas
+                  let block = el.atlas * step
+                  ctx.drawImage(img, block, grade.canvas.height - step - block, step, step)
+                  if (load && --load < 1) {
+                    transforms()
+                  }
+                }
+
+                img.src = dataUrl
+              })
+              .catch(function (e) {
+                // some box problem
+                console.log('error', e, el.el, e.target.classList)
+                if (load) {
+                  load = false
                   transforms()
                 }
-              }
-              img.src = dataUrl
-            })
+              })
           }
         }
 
         function transforms() {
+          grade.els = Object.values(grade.els).filter((el) => el.mat)
+          grade.softmax = grade.els.length
           // shader atlas
           let texIdx = new Float32Array(grade.softmax).fill(0)
           let shader = mpos.add.shader(grade.canvas, grade.atlas, grade.hardmax)
@@ -354,7 +384,12 @@ const mpos = {
           // Output
           //generic.userData.grade = grade
           //console.log(grade)
-          document.getElementById('atlas').appendChild(grade.canvas)
+          let link = document.createElement('a')
+          let name = ['atlas', grade.idx, grade.atlas, MAX_TEXTURE_SIZE].join('_')
+          link.title = link.download = name
+          link.href = grade.canvas.toDataURL()
+          link.appendChild(grade.canvas)
+          document.getElementById('atlas').appendChild(link)
 
           // Output
           vars.group.scale.multiplyScalar(1 / vars.fov.max)
@@ -362,6 +397,7 @@ const mpos = {
           resolve(grade)
         }
       })
+
       return promise
     },
 
@@ -390,7 +426,7 @@ const mpos = {
       const y = -(rect.height / 2) - rect.top
       let zIndex = style.zIndex
       zIndex = zIndex > 0 ? 1 - 1 / zIndex : 0
-      z = (z * d + zIndex).toFixed(6)
+      z = Number((z * d + zIndex).toFixed(6))
       // arc
       const damp = 0.5
       const mid = vars.fov.w / 2
@@ -568,19 +604,36 @@ const mpos = {
 
 mpos.gen = function (num = 4, selector = 'main') {
   //img,ul,embed
-  let lipsum = 'Lorem ipsum dolor sit amet. '
+  let lipsum = [
+    'Lorem ipsum dolor sit amet. ',
+    'Consectetur adipiscing elit. ',
+    'Integer nec vulputate lacus. ',
+    'Nunc at dolor lacus. ',
+    'Vivamus eget magna quis nisi ultrices faucibus. ',
+    'Phasellus eu sapien tellus. '
+  ]
 
   function fill(element, length) {
     length = Math.floor(length) + 1
     let el = document.createElement(element)
     let len = Math.floor(Math.random() * length)
     for (let i = 0; i < len; i++) {
-      el.innerText = lipsum
+      el.innerText = lipsum[Math.floor(Math.random() * (lipsum.length - 1))]
     }
     return el
   }
+  function color() {
+    // talk-over upper-lower
+    let TCOV = '#'
+    const URLR = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'a', 'b', 'c', 'd', 'e', 'f']
+    for (let i = 0; i < 6; i++) {
+      TCOV += URLR[Math.round(Math.random() * (URLR.length - 1))]
+    }
+    return TCOV
+  }
 
   let section = document.createElement('details')
+  section.classList.add('allow')
   let fragment = document.createDocumentFragment()
   for (let i = 0; i < num; i++) {
     // container
@@ -594,7 +647,8 @@ mpos.gen = function (num = 4, selector = 'main') {
     let img = fill('img', -1)
     img.classList.add(i % 2 === 0 ? 'w50' : 'w100')
     img.style.height = '8em'
-    img.style.backgroundColor = '#808080'
+    img.style.backgroundColor = color()
+    //img.src = './OIG.jpg'
     el.appendChild(img)
     // list
     let ul = fill('ul', num / 2)

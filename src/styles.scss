@@ -20,11 +20,8 @@ h2 { border-top: var(--u1) solid var(--sup); }
 .sup, h2 span { background-color: var(--sup); }
 .sub { background-color: var(--sub); }
 
-#atlas canvas {
-  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=");
-}
 
-main, section, aside, fieldset { padding: var(--u2); }
+main, section, article, aside, fieldset { padding: var(--u2); }
 section, aside, h2, p, ul, ol, form, table { 
   margin-bottom: var(--u2);
 }
@@ -45,7 +42,7 @@ body, .w { overflow: hidden; overflow-y: auto; }
   }
 }
 
-address{ z-index: -1; visibility: hidden; }
+address { z-index: -1; visibility: hidden; }
 
 
 /* STRUCTURE */
@@ -71,7 +68,7 @@ aside {
 table {
   border-collapse: collapse;
   text-align: left; 
-  tr:nth-child(2n+1) { background-color: var(--med); }
+  tr:nth-child(odd) { background-color: var(--med); }
   td, th { padding: var(--u1); }
 }
 ul { padding-left: 1.75em; }
@@ -96,16 +93,25 @@ ul { padding-left: 1.75em; }
 
 // DEBUG
 summary, tr, li {
-  &:hover{
-    background-color: var(--sub); }
+  &:hover {
+    background-color: var(--sub)!important; }
 }
+
+model-viewer { display: block; width:100%; height:6em;position:absolute; display: block;
+  position: relative;
+  contain: strict; }
+
 #atlas {
   &:hover { 
     transform: scale(4);
     transform-origin: bottom right; 
   }
-  canvas { background-size: 50% auto; }
-
+  a { display: block; }
+  canvas {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
+    background-size: 50% auto;
+  }
+  
   image-rendering: pixelated;
   background-color: rgba( 255, 255, 255, 0.75 );
   position: fixed;
