@@ -133,7 +133,7 @@ const mpos = {
         vars.group.name = selector
         vars.group.userData.batch = vars.batch
         // root DOM node (viewport)
-        let mesh = mpos.add.box(document.body, 0, { mat: 'wire' })
+        let mesh = mpos.add.box({ el: document.body, z: 0, mat: 'wire' })
         vars.group.add(...mesh)
       }
 
@@ -190,7 +190,7 @@ const mpos = {
           return vis
         }
 
-        // flat-grade: filter, grade, sanitize
+        // FLAT-GRADE: filter, grade, sanitize
         let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
         let node = ni.nextNode()
         while (node) {
@@ -202,9 +202,8 @@ const mpos = {
 
             if (inPolar(node, 0)) {
               el = node
-              //if (node.matches([precept.native, precept.poster])) {
               // ...estimate
-              //}
+              //if (node.matches([precept.native, precept.poster])) {}
             } else if (
               node.nodeName === '#text' &&
               node.parentNode.matches([precept.allow]) &&
@@ -227,7 +226,6 @@ const mpos = {
               const idx = grade.softmax
               el.idx = idx
               grade.els[idx] = { el: el }
-
               grade.softmax++
             }
           }
@@ -235,19 +233,18 @@ const mpos = {
           node = ni.nextNode()
         }
 
-        // deep-grade: type, count
+        // DEEP-GRADE: type, count
         function report(el, z, mat) {
           el.mat = mat
           el.z = z
           grade.softmax--
-
           // shader
           if (el.mat === 'poster') {
             el.atlas = grade.atlas++
           }
         }
-        function struct(sel, layer, grade) {
-          //console.log('struct', layer, sel.nodeName)
+
+        function struct(sel, layer) {
           const z = layers - layer
 
           // SELF
@@ -272,11 +269,11 @@ const mpos = {
                 const empty = node.children.length === 0
 
                 if (layer >= 1 && allow && !manual && !empty) {
-                  // child structure
+                  // selector structure output depth
                   let depth = layer - 1
-                  struct(node, depth, grade)
+                  struct(node, depth)
                 } else {
-                  // child interactive
+                  // element type output quality
                   mat = 'child'
                   if (node.matches([precept.native, precept.native3d])) {
                     mat = 'native'
@@ -295,26 +292,16 @@ const mpos = {
           })
         }
 
-        struct(sel, layers, grade)
+        struct(sel, layers)
 
-        // Shader Atlas
+        // TEXTURE shader atlas
         const MAX_TEXTURE_SIZE = Math.min(grade.atlas * grade.hardmax, 16_384)
         grade.canvas.width = grade.canvas.height = MAX_TEXTURE_SIZE
         grade.canvas.id = grade.idx
         const ctx = grade.canvas.getContext('2d')
 
-        // test gradient
-        /*
-      let grd = ctx.createLinearGradient(0, grade.canvas.height, 0, 0)
-      grd.addColorStop(1, 'rgba(0, 0, 255, 0.25)')
-      grd.addColorStop(0, 'rgba(0, 255, 255, 0.25)')
-      ctx.fillStyle = grd
-      ctx.fillRect(0, 0, grade.canvas.width, grade.canvas.height)
-      */
-
         // scaling
         const step = grade.canvas.height / grade.atlas
-
         let load = grade.atlas
         for (const el of Object.values(grade.els)) {
           //todo: matrix slot for: self, child?
@@ -324,13 +311,12 @@ const mpos = {
                 let img = new Image()
                 img.onload = function () {
                   // transform atlas
-                  let block = el.atlas * step
+                  const block = el.atlas * step
                   ctx.drawImage(img, block, grade.canvas.height - step - block, step, step)
                   if (load && --load < 1) {
                     transforms()
                   }
                 }
-
                 img.src = dataUrl
               })
               .catch(function (e) {
@@ -342,6 +328,28 @@ const mpos = {
                 }
               })
           }
+        }
+
+        function matrix(el) {
+          // css style transforms
+          const matrix = { scale: 1, rotate: 0 }
+          var els = []
+          while (el && el !== document) {
+            // inherit all ancestors
+            const style = window.getComputedStyle(el)
+            const transform = style.transform.replace(/[matrix( )]/g, '')
+            if (transform !== 'none') {
+              const [a, b] = transform.split(',')
+              matrix.scale *= Math.sqrt(a * a + b * b)
+              let degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+              matrix.rotate += degree * (Math.PI / 180)
+            }
+
+            els.unshift(el)
+            el = el.parentNode
+          }
+
+          return matrix
         }
 
         function transforms() {
@@ -360,29 +368,28 @@ const mpos = {
           vars.group.add(generic)
 
           // Meshes
-
           let dummy = new THREE.Object3D()
           for (const [index, el] of Object.entries(grade.els)) {
-            //todo: matrix slot for: self, child?
             if (el.mat) {
-              dummy = mpos.add.box(el.el, el.z, { dummy: dummy })
+              el.matrix = matrix(el.el)
+              dummy = mpos.add.box(el, { dummy: dummy })
               generic.setMatrixAt(index, dummy.matrix)
 
+              // shader uv
               texIdx[index] = typeof el.atlas === 'number' ? el.atlas : grade.atlas
 
               if (el.mat === 'native') {
-                let mesh = mpos.add.box(el.el, el.z, { mat: el.mat })
+                let mesh = mpos.add.box(el)
                 vars.group.add(mesh[1])
               }
             }
           }
+
           vars.geo.setAttribute('texIdx', new THREE.InstancedBufferAttribute(texIdx, 1))
           generic.instanceMatrix.needsUpdate = true
           generic.computeBoundingSphere()
 
-          // Output
-          //generic.userData.grade = grade
-          //console.log(grade)
+          // UI texture
           let link = document.createElement('a')
           let name = ['atlas', grade.idx, grade.atlas, MAX_TEXTURE_SIZE].join('_')
           link.title = link.download = name
@@ -390,7 +397,7 @@ const mpos = {
           link.appendChild(grade.canvas)
           document.getElementById('atlas').appendChild(link)
 
-          // Output
+          // OUTPUT
           vars.group.scale.multiplyScalar(1 / vars.fov.max)
           vars.scene.add(vars.group)
 
@@ -403,21 +410,17 @@ const mpos = {
       return promise
     },
 
-    box: function (element, z = 0, opt = {}) {
+    box: function (el, opt = {}) {
       const vars = mpos.var
+      const element = el.el
       const rect = element.getBoundingClientRect()
       const style = window.getComputedStyle(element)
 
       // css transform (scale, angle)
-      let scale = 1
-      let rotate = 0
-      const matrix = style.transform.replace(/[matrix( )]/g, '')
-      if (matrix !== 'none') {
-        const [a, b] = matrix.split(',')
-        scale = Math.sqrt(a * a + b * b)
-        rotate = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-        rotate = rotate * (Math.PI / 180)
-      }
+
+      const matrix = el.matrix ? el.matrix : { scale: 1, rotate: 0 }
+      const scale = matrix.scale
+      const rotate = matrix.rotate
 
       // scale
       const w = rect.width * scale
@@ -426,6 +429,7 @@ const mpos = {
       // position
       const x = rect.width / 2 + rect.left
       const y = -(rect.height / 2) - rect.top
+      let z = el.z
       let zIndex = style.zIndex
       zIndex = zIndex > 0 ? 1 - 1 / zIndex : 0
       z = Number((z * d + zIndex).toFixed(6))
@@ -460,14 +464,14 @@ const mpos = {
         types = opt.dummy
       } else {
         // Mesh Singleton
-        const name = [z, opt.mat, element.nodeName].join('_')
+        const name = [el.z, el.mat, element.nodeName].join('_')
         const mesh = new THREE.Mesh(vars.geo, vars.mat)
         mesh.scale.set(w, h, d)
         mesh.userData.el = element
         mesh.name = name
 
         types.push(mesh)
-        if (opt.mat === 'wire') {
+        if (el.mat === 'wire') {
           mesh.material.color.setStyle('cyan')
           mesh.animations = true
         } else {
@@ -485,7 +489,7 @@ const mpos = {
                 map.needsUpdate = true
               })
               .catch((e) => console.log('err', e))
-          } else if (opt.mat === 'native') {
+          } else if (el.mat === 'native') {
             const el = element.cloneNode(true)
             el.style.width = w
             el.style.height = h
@@ -569,6 +573,8 @@ const mpos = {
 
         vars.renderer.setSize(vars.fov.w, vars.fov.h)
         vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+
+        vars.animate()
       }, 250)
     }
     window.addEventListener('resize', resize, false)
