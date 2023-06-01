@@ -17,12 +17,9 @@ const mpos = {
         mpos.add
           .dom(mpos.var.opt.selector, mpos.var.opt.depth)
           .then((res) => {
-            console.log(res)
             mpos.var.animate()
           })
-          .catch((e) => {
-            console.log('err', e) // "oh, no!"
-          })
+          .catch((e) => console.log('err', e))
       }
     },
     fov: {
@@ -136,14 +133,15 @@ const mpos = {
         vars.group.name = selector
         vars.group.userData.batch = vars.batch
         // root DOM node (viewport)
-        mpos.add.box(document.body, 0, { mat: 'wire' })
+        let mesh = mpos.add.box(document.body, 0, { mat: 'wire' })
+        vars.group.add(...mesh)
       }
 
       // structure
 
       const precept = {
         allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
-        block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,param,map,br,wbr,template`.split(','),
+        block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
         native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
         poster: `.poster,.pstr,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd`.split(','),
         native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
@@ -337,7 +335,7 @@ const mpos = {
               })
               .catch(function (e) {
                 // some box problem
-                console.log('error', e, el.el, e.target.classList)
+                console.log('err', e, el.el, e.target.classList)
                 if (load) {
                   load = false
                   transforms()
@@ -373,7 +371,8 @@ const mpos = {
               texIdx[index] = typeof el.atlas === 'number' ? el.atlas : grade.atlas
 
               if (el.mat === 'native') {
-                mpos.add.box(el.el, el.z, { mat: el.mat })
+                let mesh = mpos.add.box(el.el, el.z, { mat: el.mat })
+                vars.group.add(mesh[1])
               }
             }
           }
@@ -394,6 +393,9 @@ const mpos = {
           // Output
           vars.group.scale.multiplyScalar(1 / vars.fov.max)
           vars.scene.add(vars.group)
+
+          grade.group = vars.group
+          console.log(grade)
           resolve(grade)
         }
       })
@@ -409,9 +411,9 @@ const mpos = {
       // css transform (scale, angle)
       let scale = 1
       let rotate = 0
-      let transform = style.transform.replace(/[matrix( )]/g, '')
-      if (transform !== 'none') {
-        const [a, b] = transform.split(',')
+      const matrix = style.transform.replace(/[matrix( )]/g, '')
+      if (matrix !== 'none') {
+        const [a, b] = matrix.split(',')
         scale = Math.sqrt(a * a + b * b)
         rotate = Math.round(Math.atan2(b, a) * (180 / Math.PI))
         rotate = rotate * (Math.PI / 180)
@@ -433,78 +435,81 @@ const mpos = {
       const rad = (mid - x) / mid
       const pos = mid * Math.abs(rad)
 
-      // Instanced Mesh
-      if (opt.dummy) {
-        opt.dummy.scale.set(w, h, d)
-        opt.dummy.position.set(x, y, z)
-        if (vars.opt.arc) {
-          opt.dummy.rotation.y = rad * damp * 2
-          opt.dummy.position.setZ(z + pos * damp)
-        }
-        opt.dummy.rotation.z = -rotate
+      function transform(objects) {
+        objects.forEach((obj) => {
+          if (!obj.isCSS3DObject) {
+            obj.scale.set(w, h, d)
+          }
+          obj.rotation.z = -rotate
+          obj.position.set(x, y, z)
 
-        opt.dummy.updateMatrix()
-        return opt.dummy
-      }
-
-      // Mesh One-Off
-      const mesh = new THREE.Mesh(vars.geo, vars.mat)
-      mesh.userData.el = element
-      mesh.name = [z, opt.mat, element.nodeName].join('_')
-      mesh.scale.set(w, h, d)
-      mesh.position.set(x, y, z)
-
-      // static or dynamic
-      let types = [mesh]
-      if (opt.mat === 'wire') {
-        mesh.material.color.setStyle('cyan')
-        mesh.material.opacity = 0.5
-        mesh.animations = true
-      } else {
-        const map = vars.mat.clone()
-        map.wireframe = false
-        map.name = element.tagName
-        mesh.material = map
-        // todo: data-taxonomy...
-        if (opt.mat === 'poster') {
-          mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, map, null]
-          toSvg(element).then(function (dataUrl) {
-            map.map = new THREE.TextureLoader().load(dataUrl)
-            map.needsUpdate = true
-          })
-        } else if (opt.mat === 'native') {
-          const el = element.cloneNode(true)
-          el.style.width = w
-          el.style.height = h
-          const css3d = new CSS3DObject(el)
-          css3d.position.set(x, y, z + d / 2)
-          css3d.name = ['CSS', element.nodeName].join('_')
-          types.push(css3d)
-        }
-
-        let bg = style.backgroundColor
-        let alpha = Number(bg.replace(/[rgba( )]/g, '').split(',')[3])
-        //console.log('alpha', alpha, element.nodeName)'
-        map.opacity = alpha
-        if (alpha <= 0) {
-          bg = null
-          //map.blending = THREE.MultiplyBlending
-        }
-
-        map.color.setStyle(bg)
-
-        //console.log(element, opt.m, mesh.material)
-      }
-
-      // rotation
-      if (vars.opt.arc) {
-        types.forEach((el) => {
-          el.rotateY(rad * damp * 2)
-          el.position.setZ(z + pos * damp)
+          if (vars.opt.arc) {
+            obj.rotation.y = rad * damp * 2
+            obj.position.setZ(z + pos * damp)
+          }
         })
       }
 
-      vars.group.add(...types)
+      let types = []
+
+      if (opt.dummy) {
+        // Instanced Mesh
+        types.push(opt.dummy)
+        transform(types)
+        opt.dummy.updateMatrix()
+        types = opt.dummy
+      } else {
+        // Mesh Singleton
+        const name = [z, opt.mat, element.nodeName].join('_')
+        const mesh = new THREE.Mesh(vars.geo, vars.mat)
+        mesh.scale.set(w, h, d)
+        mesh.userData.el = element
+        mesh.name = name
+
+        types.push(mesh)
+        if (opt.mat === 'wire') {
+          mesh.material.color.setStyle('cyan')
+          mesh.animations = true
+        } else {
+          const map = vars.mat.clone()
+          map.wireframe = false
+          map.name = element.tagName
+          mesh.material = map
+
+          // static or dynamic
+          if (opt.mat === 'poster') {
+            mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, map, null]
+            toPng(element)
+              .then(function (dataUrl) {
+                map.map = new THREE.TextureLoader().load(dataUrl)
+                map.needsUpdate = true
+              })
+              .catch((e) => console.log('err', e))
+          } else if (opt.mat === 'native') {
+            const el = element.cloneNode(true)
+            el.style.width = w
+            el.style.height = h
+            const css3d = new CSS3DObject(el)
+            css3d.name = name
+            types.push(css3d)
+          }
+
+          let bg = style.backgroundColor
+          let alpha = Number(bg.replace(/[rgba( )]/g, '').split(',')[3])
+          //console.log('alpha', alpha, element.nodeName)'
+          map.opacity = alpha
+          if (alpha <= 0) {
+            bg = null
+            //map.blending = THREE.MultiplyBlending
+          }
+          map.color.setStyle(bg)
+          //console.log(element, opt.m, mesh.material)
+        }
+
+        transform(types)
+      }
+
+      return types
     },
     shader: function (canvas, texStep) {
       let texAtlas = new THREE.CanvasTexture(canvas)
