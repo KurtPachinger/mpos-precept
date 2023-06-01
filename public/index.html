@@ -1,10 +1,10 @@
 <details id="tools" class="allow" open>
   <main>
     <h2><span>main</span></h2>
-    <form onSubmit="return false;" class="w">
+    <form onSubmit="return false;" class="w" style="transform: scale(0.75) rotate(-7.5deg);">
       <fieldset class="sub">
         <legend>form</legend>
-        <input class="w75" type="url" value="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg" />
+        <input class="w75" type="url" placeholder="touches" />
         <input class="w25" type="button" value="Submit" />
         <input class="w75" type="range" />
         <input class="w25" type="reset" />
@@ -18,7 +18,7 @@
       <h2>section<span>#text</span></h2>
       \n TEXT NODE \n
       <h3>deep list</h3>
-      <ul>
+      <ul style="transform: scale(0.5) rotate(45deg);">
         <li>
           A. AAAAAAAA
           <ul>
@@ -41,7 +41,7 @@
     <section id="media">
       <h2>section<span>#media</span></h2>
       <img src="./OIG.jpg" />
-      <div id="im">
+      <article id="nest">
         <div>
           <div>
             <div>1</div>
@@ -65,8 +65,8 @@
             <div>8</div>
           </div>
         </div>
-      </div>
-      <details open class="">
+      </article>
+      <details open class="" style="transform: rotate(-90deg) scale(0.75);">
         <summary>types</summary>
         <table class="w100">
           <tr>
@@ -144,10 +144,8 @@
     </section>
   </main>
 </details>
-<!--address-->
-<address class="full"><object></object></address>
 
-<div id="atlas"></div>
+<address class="tool offscreen"><object></object></address>
+<div class="tool" id="atlas"></div>
 
-<!--CSSObject3D-->
 <div id="css3d" class="full ignore"></div>

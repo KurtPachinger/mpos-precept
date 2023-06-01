@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
-import { toPng } from 'html-to-image'
+import { toSvg, toPng } from 'html-to-image'
 
 const mpos = {
   var: {
@@ -10,15 +10,13 @@ const mpos = {
     opt: {
       dispose: true,
       selector: 'main',
-      address: '',
+      address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 8,
       arc: false,
       update: function () {
         mpos.add
           .dom(mpos.var.opt.selector, mpos.var.opt.depth)
-          .then((res) => {
-            mpos.var.animate()
-          })
+          .then(mpos.var.animate)
           .catch((e) => console.log('err', e))
       }
     },
@@ -113,6 +111,34 @@ const mpos = {
     }
   },
   add: {
+    css: function (el, unset) {
+      // css style transforms
+      const matrix = { scale: 1, rotate: 0 }
+      var els = []
+      while (el && el !== document) {
+        if (unset === undefined) {
+          // inherit all ancestors
+          const style = window.getComputedStyle(el)
+          const transform = style.transform.replace(/[matrix( )]/g, '')
+          if (transform !== 'none') {
+            const [a, b] = transform.split(',')
+            matrix.scale *= Math.sqrt(a * a + b * b)
+            let degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+            matrix.rotate += degree * (Math.PI / 180)
+          }
+        } else {
+          if (unset) {
+            el.classList.add('unset')
+          } else {
+            el.classList.remove('unset')
+          }
+        }
+        els.unshift(el)
+        el = el.parentNode
+      }
+
+      return matrix
+    },
     dom: async function (selector, layers = 8, update) {
       const vars = mpos.var
       // get DOM node
@@ -121,7 +147,7 @@ const mpos = {
       if (sel === null) {
         return
       } else if (selector === 'address') {
-        sel.querySelector('object').setAttribute('data', vars.opt.address)
+        document.querySelector(selector + ' object').setAttribute('data', vars.opt.address)
       }
 
       // THREE housekeeping
@@ -302,11 +328,12 @@ const mpos = {
 
         // scaling
         const step = grade.canvas.height / grade.atlas
-        let load = grade.atlas
+        let load = grade.atlas > 0 ? grade.atlas : transforms()
+        //let reset = { transform: 'initial!important' }
         for (const el of Object.values(grade.els)) {
           //todo: matrix slot for: self, child?
           if (typeof el.atlas === 'number') {
-            toPng(el.el)
+            toSvg(el.el)
               .then(function (dataUrl) {
                 let img = new Image()
                 img.onload = function () {
@@ -330,28 +357,6 @@ const mpos = {
           }
         }
 
-        function matrix(el) {
-          // css style transforms
-          const matrix = { scale: 1, rotate: 0 }
-          var els = []
-          while (el && el !== document) {
-            // inherit all ancestors
-            const style = window.getComputedStyle(el)
-            const transform = style.transform.replace(/[matrix( )]/g, '')
-            if (transform !== 'none') {
-              const [a, b] = transform.split(',')
-              matrix.scale *= Math.sqrt(a * a + b * b)
-              let degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-              matrix.rotate += degree * (Math.PI / 180)
-            }
-
-            els.unshift(el)
-            el = el.parentNode
-          }
-
-          return matrix
-        }
-
         function transforms() {
           grade.els = Object.values(grade.els).filter((el) => el.mat)
           grade.softmax = grade.els.length
@@ -371,7 +376,8 @@ const mpos = {
           let dummy = new THREE.Object3D()
           for (const [index, el] of Object.entries(grade.els)) {
             if (el.mat) {
-              el.matrix = matrix(el.el)
+              el.matrix = mpos.add.css(el.el)
+
               dummy = mpos.add.box(el, { dummy: dummy })
               generic.setMatrixAt(index, dummy.matrix)
 
@@ -413,7 +419,9 @@ const mpos = {
     box: function (el, opt = {}) {
       const vars = mpos.var
       const element = el.el
+      mpos.add.css(el.el, true)
       const rect = element.getBoundingClientRect()
+      mpos.add.css(el.el, false)
       const style = window.getComputedStyle(element)
 
       // css transform (scale, angle)
@@ -481,9 +489,10 @@ const mpos = {
           mesh.material = map
 
           // static or dynamic
+          //let reset = { transform: 'initial!important;' }
           if (opt.mat === 'poster') {
             mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, map, null]
-            toPng(element)
+            toSvg(element)
               .then(function (dataUrl) {
                 map.map = new THREE.TextureLoader().load(dataUrl)
                 map.needsUpdate = true
