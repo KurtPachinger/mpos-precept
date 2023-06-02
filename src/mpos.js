@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
-import { toSvg, toPng } from 'html-to-image'
+import { toSvg } from 'html-to-image'
 
 const mpos = {
   var: {
@@ -16,7 +16,7 @@ const mpos = {
       update: function () {
         mpos.add
           .dom(mpos.var.opt.selector, mpos.var.opt.depth)
-          .then(mpos.var.animate)
+          .then(mpos.ux.render)
           .catch((e) => console.log('err', e))
       }
     },
@@ -31,14 +31,24 @@ const mpos = {
       transparent: true,
       wireframe: true,
       side: THREE.FrontSide
-    })
+    }),
+    mat_line: new THREE.MeshBasicMaterial({
+      transparent: true,
+      wireframe: true,
+      side: THREE.FrontSide
+    }),
+    raycaster: new THREE.Raycaster(),
+    pointer: new THREE.Vector2(),
+    carot: document.getElementById('carot')
   },
   init: function () {
-    let vars = mpos.var
+    const vars = mpos.var
     // THREE
     vars.scene = new THREE.Scene()
     vars.camera = new THREE.PerspectiveCamera(60, vars.fov.w / vars.fov.h, 0.01, 1000)
+    vars.camera.layers.enableAll()
     vars.camera.position.z = 1
+
     vars.renderer = new THREE.WebGLRenderer()
     vars.renderer.setSize(vars.fov.w, vars.fov.h)
     document.body.appendChild(vars.renderer.domElement)
@@ -55,90 +65,129 @@ const mpos = {
     vars.rendererCSS = new CSS3DRenderer()
     vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
     css3d.appendChild(vars.rendererCSS.domElement)
-    css3d.querySelectorAll('div').forEach(function (el) {
-      el.classList.add('transform')
-    })
+    css3d.querySelectorAll('div').forEach((el) => el.classList.add('block'))
     vars.controls = new OrbitControls(vars.camera, vars.rendererCSS.domElement)
+    vars.controls.target.setY(-(vars.fov.h * (1 / vars.fov.max)))
+    vars.controls.update()
 
-    //
-    mpos.ux(vars)
+    // live
+    window.addEventListener('resize', mpos.ux.resize, false)
+    vars.controls.addEventListener('change', mpos.ux.render, false)
+    window.addEventListener('pointermove', mpos.ux.raycast, false)
+    vars.raycaster.layers.set(0)
+    mpos.ux.render()
+
+    const gui = new GUI()
+    Object.keys(vars.opt).forEach(function (key) {
+      let param = []
+      if (key === 'selector') param = [['body', 'main', '#media', '#text', '#transform', 'address']]
+      if (key === 'depth') param = [0, 24, 1]
+
+      gui.add(vars.opt, key, ...param)
+    })
   },
-  old: function (selector) {
-    // Mesh
-    let groups
-    if (selector) {
-      groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
-    }
+  ux: {
+    resize: function () {
+      const vars = mpos.var
+      // throttle
+      clearTimeout(vars.resize)
+      vars.resize = setTimeout(function () {
+        vars.fov.w = window.innerWidth
+        vars.fov.h = window.innerHeight
 
-    if (groups && groups.length) {
-      for (let g = groups.length - 1; g >= 0; g--) {
-        let group = groups[g].children || []
-        for (let o = group.length - 1; o >= 0; o--) {
-          let obj = group[o]
-          if (obj.type === 'Mesh') {
-            obj.geometry.dispose()
-            let material = obj.material
-            for (let m = material.length - 1; m >= 0; m--) {
-              let mat = material[m]
-              if (mat) {
-                mat.canvas && (mat.canvas = null)
-                mat.map && mat.map.dispose()
-                // shader
-                mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
-                mat.userData.t && mat.userData.t.dispose()
-                mat.dispose()
-              }
-            }
-            !material.length && material.dispose()
-          }
-          obj.removeFromParent()
+        vars.camera.aspect = vars.fov.w / vars.fov.h
+        vars.camera.updateProjectionMatrix()
+
+        vars.renderer.setSize(vars.fov.w, vars.fov.h)
+        vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+
+        mpos.ux.render()
+      }, 250)
+    },
+    render: function () {
+      const vars = mpos.var
+      //requestAnimationFrame(vars.animate)
+      const time = new Date().getTime() / 100
+      vars.scene.traverseVisible(function (obj) {
+        // in frustum... in viewport?
+        // ...upsample, animate, or ux.
+        let animate = obj.animations === true
+        if (animate) {
+          obj.rotation.x = Math.sin(time) / 10
+          obj.rotation.y = Math.cos(time) / 10
         }
-        groups[g].removeFromParent()
+      })
+      vars.renderer.render(vars.scene, vars.camera)
+      vars.rendererCSS.render(vars.scene, vars.camera)
+    },
+    raycast: function (event) {
+      const vars = mpos.var
+      vars.pointer.x = (event.clientX / window.innerWidth) * 2 - 1
+      vars.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1
+
+      if (vars.group) {
+        vars.raycaster.setFromCamera(vars.pointer, vars.camera)
+        const intersects = vars.raycaster.intersectObjects(vars.group.children, false)
+
+        if (intersects.length) {
+          const hit = intersects[0]
+          const obj = hit.object
+
+          if (obj) {
+            const idx = hit.instanceId
+            let el
+            if (obj.isInstancedMesh) {
+              el = obj.userData.grade.els[idx]
+            } else if (obj.isMesh || obj.isCSS3DObject) {
+              el = obj.userData.el
+            }
+            let carot = mpos.precept.inPolar(el.el, 2)
+            let block = 100 * (1 / vars.group.userData.atlas)
+            vars.carot.style.width = vars.carot.style.height = block + '%'
+            vars.carot.style.left = vars.carot.style.bottom = el.atlas * block + '%'
+
+            vars.carot.style.backgroundColor = carot ? 'green' : 'red'
+          }
+        }
       }
     }
-
-    // CSS
-    let css3d = mpos.var.rendererCSS.domElement
-    let clones = css3d.querySelectorAll(':not(.transform)')
-    clones.forEach(function (el) {
-      el.parentElement.removeChild(el)
-    })
-
-    // Texture Atlas
-    let atlas = document.getElementById('atlas').children
-    for (let c = atlas.length - 1; c >= 0; c--) {
-      atlas[c].parentElement.removeChild(atlas[c])
+  },
+  precept: {
+    batch: 0,
+    allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
+    block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
+    native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
+    poster: `.poster,.pstr,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd`.split(','),
+    native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
+    inPolar: function (node, control) {
+      let vis = node.tagName || node.textContent.trim()
+      if (typeof control === 'object') {
+        // node relative in control plot
+        vis = Object.values(control).some(function (tag) {
+          const unlist = node.parentElement.checkVisibility()
+          return unlist && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
+        })
+      } else {
+        // -1: node not empty
+        if (control >= 0) {
+          // 0: node is tag
+          vis = node.tagName
+          if (vis && control >= 1) {
+            // 1: tag not hidden
+            vis = node.checkVisibility()
+            if (control >= 2) {
+              // 2: tag in viewport
+              const rect = node.getBoundingClientRect()
+              const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
+              vis = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
+            }
+          }
+        }
+      }
+      return vis
     }
   },
   add: {
-    css: function (el, unset) {
-      // css style transforms
-      const matrix = { scale: 1, rotate: 0 }
-      var els = []
-      while (el && el !== document) {
-        if (unset === undefined) {
-          // inherit all ancestors
-          const style = window.getComputedStyle(el)
-          const transform = style.transform.replace(/[matrix( )]/g, '')
-          if (transform !== 'none') {
-            const [a, b] = transform.split(',')
-            matrix.scale *= Math.sqrt(a * a + b * b)
-            let degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-            matrix.rotate += degree * (Math.PI / 180)
-          }
-        } else {
-          if (unset) {
-            el.classList.add('unset')
-          } else {
-            el.classList.remove('unset')
-          }
-        }
-        els.unshift(el)
-        el = el.parentNode
-      }
-
-      return matrix
-    },
     dom: async function (selector, layers = 8, update) {
       const vars = mpos.var
       // get DOM node
@@ -147,75 +196,39 @@ const mpos = {
       if (sel === null) {
         return
       } else if (selector === 'address') {
-        document.querySelector(selector + ' object').setAttribute('data', vars.opt.address)
+        let obj = document.querySelector(selector + ' object')
+        await mpos.add.src(obj, vars.opt.address, 'data')
       }
 
-      // THREE housekeeping
+      // THREE cleanup
       let dispose = vars.opt.dispose ? selector : false
       if (!update) {
-        mpos.old(dispose)
+        mpos.add.old(dispose)
         // new THREE group
         vars.group = new THREE.Group()
         vars.group.name = selector
-        vars.group.userData.batch = vars.batch
+        vars.group.userData.batch = mpos.precept.batch
         // root DOM node (viewport)
-        let mesh = mpos.add.box({ el: document.body, z: 0, mat: 'wire' })
+        const mesh = mpos.add.box({ el: document.body, z: 0, mat: 'wire' })
         vars.group.add(...mesh)
       }
 
       // structure
-
-      const precept = {
-        allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
-        block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
-        native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
-        poster: `.poster,.pstr,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd`.split(','),
-        native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
-        grade: {
-          idx: mpos.var.batch++,
-          hardmax: 256,
-          softmax: 0,
-          atlas: 0,
-          els: {},
-          txt: [],
-          canvas: document.createElement('canvas')
-        }
+      const precept = mpos.precept
+      const grade = {
+        idx: precept.batch++,
+        hardmax: 256,
+        softmax: 0,
+        atlas: 0,
+        els: {},
+        txt: [],
+        canvas: document.querySelector('#atlas canvas')
       }
-      //let estimate = sel.querySelectorAll([precept.allow, precept.native, precept.poster]).length / 3
       // texture unit, relative to viewport resolution
-      precept.grade.hardmax = Math.pow(2, Math.ceil(Math.max(mpos.var.fov.w, mpos.var.fov.h) / mpos.var.fov.max)) * 64
-      //
-      const grade = precept.grade
+      grade.hardmax = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 64
+      //let estimate = sel.querySelectorAll([precept.allow, precept.native, precept.poster]).length / 3
 
-      let promise = new Promise((resolve, reject) => {
-        function inPolar(node, control) {
-          let vis = node.tagName || node.textContent.trim()
-          if (typeof control === 'object') {
-            // node relative in control plot
-            vis = Object.values(control).some(function (tag) {
-              let pe = node.parentElement.checkVisibility()
-              return pe && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
-            })
-          } else {
-            // -1: node not empty
-            if (control >= 0) {
-              // 0: node is tag
-              vis = node.tagName
-              if (vis && control >= 1) {
-                // 1: tag not hidden
-                vis = node.checkVisibility()
-                if (control >= 2) {
-                  // 2: tag in viewport
-                  let rect = node.getBoundingClientRect()
-                  let viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-                  vis = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
-                }
-              }
-            }
-          }
-          return vis
-        }
-
+      const promise = new Promise((resolve, reject) => {
         // FLAT-GRADE: filter, grade, sanitize
         let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
         let node = ni.nextNode()
@@ -223,10 +236,10 @@ const mpos = {
           if (node.nodeName === '#comment') {
             // CDATA, php
             console.log('#comment', node.textContent)
-          } else if (inPolar(node, -1)) {
+          } else if (precept.inPolar(node, -1)) {
             let el = false
 
-            if (inPolar(node, 0)) {
+            if (precept.inPolar(node, 0)) {
               el = node
               // ...estimate
               //if (node.matches([precept.native, precept.poster])) {}
@@ -234,7 +247,7 @@ const mpos = {
               node.nodeName === '#text' &&
               node.parentNode.matches([precept.allow]) &&
               !node.parentNode.matches([precept.native, precept.poster]) &&
-              inPolar(node, grade.els)
+              precept.inPolar(node, grade.els)
             ) {
               // #text orphan with parent visible
               // sanitize, block-level required for width
@@ -282,13 +295,13 @@ const mpos = {
           sel.childNodes.forEach(function (node) {
             let el = grade.els[node.idx]
 
-            if (inPolar(node, 1)) {
+            if (precept.inPolar(node, 1)) {
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
               const abort = grade.atlas >= grade.hardmax
               if (block || abort) {
                 // ...or (#comment, xml, php)
-                console.log('omit', node.nodeName)
+                console.log('skip', node.nodeName)
               } else if (el) {
                 const allow = node.matches(precept.allow)
                 const manual = node.matches('.poster, .native')
@@ -365,10 +378,11 @@ const mpos = {
           let shader = mpos.add.shader(grade.canvas, grade.atlas, grade.hardmax)
 
           // Instanced Mesh
-          const generic = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, null], grade.hardmax)
+          const generic = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line], grade.hardmax)
           generic.instanceMatrix.setUsage(THREE.StaticDrawUsage)
           generic.count = grade.softmax
           generic.userData.el = sel
+          generic.userData.grade = grade
           generic.name = [grade.idx, selector].join('_')
           vars.group.add(generic)
 
@@ -396,26 +410,27 @@ const mpos = {
           generic.computeBoundingSphere()
 
           // UI texture
-          let link = document.createElement('a')
+          let link = document.querySelector('#atlas a')
           let name = ['atlas', grade.idx, grade.atlas, MAX_TEXTURE_SIZE].join('_')
           link.title = link.download = name
           link.href = grade.canvas.toDataURL()
-          link.appendChild(grade.canvas)
-          document.getElementById('atlas').appendChild(link)
+          //link.appendChild(grade.canvas)
+          //document.getElementById('atlas').appendChild(link)
 
           // OUTPUT
+          vars.group.userData.atlas = grade.atlas
           vars.group.scale.multiplyScalar(1 / vars.fov.max)
           vars.scene.add(vars.group)
 
           grade.group = vars.group
           console.log(grade)
           resolve(grade)
+          reject(grade)
         }
       })
 
       return promise
     },
-
     box: function (el, opt = {}) {
       const vars = mpos.var
       const element = el.el
@@ -475,13 +490,14 @@ const mpos = {
         const name = [el.z, el.mat, element.nodeName].join('_')
         const mesh = new THREE.Mesh(vars.geo, vars.mat)
         mesh.scale.set(w, h, d)
-        mesh.userData.el = element
+        mesh.userData.el = el
         mesh.name = name
 
         types.push(mesh)
         if (el.mat === 'wire') {
           mesh.material.color.setStyle('cyan')
           mesh.animations = true
+          mesh.layers.set(1)
         } else {
           const map = vars.mat.clone()
           map.wireframe = false
@@ -491,7 +507,7 @@ const mpos = {
           // static or dynamic
           //let reset = { transform: 'initial!important;' }
           if (opt.mat === 'poster') {
-            mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, map, null]
+            mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, map, vars.mat_line]
             toSvg(element)
               .then(function (dataUrl) {
                 map.map = new THREE.TextureLoader().load(dataUrl)
@@ -503,6 +519,7 @@ const mpos = {
             el.style.width = w
             el.style.height = h
             const css3d = new CSS3DObject(el)
+            css3d.userData.el = el
             css3d.name = name
             types.push(css3d)
           }
@@ -524,12 +541,37 @@ const mpos = {
 
       return types
     },
-    shader: function (canvas, texStep) {
-      let texAtlas = new THREE.CanvasTexture(canvas)
+    css: function (el, unset) {
+      // css style transforms
+      const matrix = { scale: 1, rotate: 0 }
+      var els = []
+      while (el && el !== document) {
+        if (unset === undefined) {
+          // ancestors cumulative matrix
+          const style = window.getComputedStyle(el)
+          const transform = style.transform.replace(/[matrix( )]/g, '')
+          if (transform !== 'none') {
+            const [a, b] = transform.split(',')
+            matrix.scale *= Math.sqrt(a * a + b * b)
+            const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+            matrix.rotate += degree * (Math.PI / 180)
+          }
+        } else {
+          // style override
+          unset ? el.classList.add('unset') : el.classList.remove('unset')
+        }
 
+        els.unshift(el)
+        el = el.parentNode
+      }
+
+      return matrix
+    },
+    shader: function (canvas, texStep) {
+      const texAtlas = new THREE.CanvasTexture(canvas)
       texAtlas.minFilter = THREE.NearestFilter
       texStep = 1 / texStep
-      let m = new THREE.MeshBasicMaterial({
+      const m = new THREE.MeshBasicMaterial({
         transparent: true,
         color: 'cyan',
         onBeforeCompile: (shader) => {
@@ -567,58 +609,61 @@ const mpos = {
       m.defines = { USE_UV: '' }
       m.userData.t = texAtlas
       return m
-    }
-  },
-  ux: function (vars) {
-    // resize throttle
-    function resize() {
-      clearTimeout(vars.resize)
-      vars.resize = setTimeout(function () {
-        vars.fov.w = window.innerWidth
-        vars.fov.h = window.innerHeight
+    },
+    src: function (el, url, attr) {
+      return new Promise((resolve, reject) => {
+        el.onload = () => resolve(el)
+        el.onerror = () => reject(el)
+        el.setAttribute(attr, url)
+      })
+    },
+    old: function (selector) {
+      // Mesh
+      let groups
+      if (selector) {
+        groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
+      }
 
-        vars.camera.aspect = vars.fov.w / vars.fov.h
-        vars.camera.updateProjectionMatrix()
-
-        vars.renderer.setSize(vars.fov.w, vars.fov.h)
-        vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
-
-        vars.animate()
-      }, 250)
-    }
-    window.addEventListener('resize', resize, false)
-
-    // CSS3D interactive
-
-    // RENDER LOOP
-    mpos.var.animate = function () {
-      //requestAnimationFrame(mpos.var.animate)
-      const body = vars.group?.getObjectsByProperty('animations', true)
-      if (body) {
-        let time = new Date().getTime() / 100
-        for (let i = 0; i < body.length; i++) {
-          let wiggle = body[i]
-          wiggle.rotation.x = Math.sin(time) / 10
-          wiggle.rotation.y = Math.cos(time) / 10
+      if (groups && groups.length) {
+        for (let g = groups.length - 1; g >= 0; g--) {
+          let group = groups[g].children || []
+          for (let o = group.length - 1; o >= 0; o--) {
+            let obj = group[o]
+            if (obj.type === 'Mesh') {
+              obj.geometry.dispose()
+              let material = obj.material
+              for (let m = material.length - 1; m >= 0; m--) {
+                let mat = material[m]
+                if (mat) {
+                  mat.canvas && (mat.canvas = null)
+                  mat.map && mat.map.dispose()
+                  // shader
+                  mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
+                  mat.userData.t && mat.userData.t.dispose()
+                  mat.dispose()
+                }
+              }
+              !material.length && material.dispose()
+            }
+            obj.removeFromParent()
+          }
+          groups[g].removeFromParent()
         }
       }
 
-      vars.renderer.render(vars.scene, vars.camera)
-      vars.rendererCSS.render(vars.scene, vars.camera)
+      // CSS3D
+      const css3d = mpos.var.rendererCSS.domElement
+      const clones = css3d.querySelectorAll(':not(.block)')
+      clones.forEach(function (el) {
+        el.parentElement.removeChild(el)
+      })
+
+      // Shader Atlas
+      //let atlas = document.getElementById('atlas').children
+      //for (let c = atlas.length - 1; c >= 0; c--) {
+      // atlas[c].parentElement.removeChild(atlas[c])
+      //}
     }
-    mpos.var.animate()
-    vars.controls.addEventListener('change', mpos.var.animate)
-
-    // GUI
-    const gui = new GUI()
-
-    Object.keys(vars.opt).forEach(function (key) {
-      let p = []
-      if (key === 'selector') p = [['body', 'main', '#media', '#text', '#transform', 'address']]
-      if (key === 'depth') p = [0, 24, 1]
-
-      gui.add(vars.opt, key, ...p)
-    })
   }
 }
 
