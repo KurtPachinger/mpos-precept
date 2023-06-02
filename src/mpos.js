@@ -81,7 +81,7 @@ const mpos = {
     Object.keys(vars.opt).forEach(function (key) {
       let param = []
       if (key === 'selector') param = [['body', 'main', '#media', '#text', '#transform', 'address']]
-      if (key === 'depth') param = [0, 24, 1]
+      if (key === 'depth') param = [0, 32, 1]
 
       gui.add(vars.opt, key, ...param)
     })
@@ -133,6 +133,7 @@ const mpos = {
           const hit = intersects[0]
           const obj = hit.object
 
+          let carot = vars.carot.style
           if (obj) {
             const idx = hit.instanceId
             let el
@@ -141,12 +142,17 @@ const mpos = {
             } else if (obj.isMesh || obj.isCSS3DObject) {
               el = obj.userData.el
             }
-            let carot = mpos.precept.inPolar(el.el, 2)
+            const vis = mpos.precept.inPolar(el.el, 2)
+            const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
+            carot.backgroundColor = color
             let block = 100 * (1 / vars.group.userData.atlas)
-            vars.carot.style.width = vars.carot.style.height = block + '%'
-            vars.carot.style.left = vars.carot.style.bottom = el.atlas * block + '%'
-
-            vars.carot.style.backgroundColor = carot ? 'green' : 'red'
+            carot.width = carot.height = block + '%'
+            if (el.atlas) {
+              carot.left = carot.bottom = el.atlas * block + '%'
+            } else {
+              carot.width = '100%'
+              carot.left = carot.bottom = 0
+            }
           }
         }
       }
@@ -234,7 +240,7 @@ const mpos = {
         let node = ni.nextNode()
         while (node) {
           if (node.nodeName === '#comment') {
-            // CDATA, php
+            // #comment... (or CDATA, xml, php)
             console.log('#comment', node.textContent)
           } else if (precept.inPolar(node, -1)) {
             let el = false
@@ -263,7 +269,7 @@ const mpos = {
             if (el) {
               // static list
               const idx = grade.softmax
-              el.idx = idx
+              el.setAttribute('data-idx', idx)
               grade.els[idx] = { el: el }
               grade.softmax++
             }
@@ -287,20 +293,20 @@ const mpos = {
           const z = layers - layer
 
           // SELF
-          let el = grade.els[sel.idx]
+          let el = grade.els[sel.getAttribute('data-idx')]
           let mat = 'self'
           el && report(el, z, mat)
 
           // CHILD
-          sel.childNodes.forEach(function (node) {
-            let el = grade.els[node.idx]
-
+          let children = sel.children
+          for (let i = 0; i < children.length; i++) {
+            let node = children[i]
             if (precept.inPolar(node, 1)) {
+              let el = grade.els[node.getAttribute('data-idx')]
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
               const abort = grade.atlas >= grade.hardmax
               if (block || abort) {
-                // ...or (#comment, xml, php)
                 console.log('skip', node.nodeName)
               } else if (el) {
                 const allow = node.matches(precept.allow)
@@ -328,7 +334,7 @@ const mpos = {
                 }
               }
             }
-          })
+          }
         }
 
         struct(sel, layers)
@@ -343,6 +349,9 @@ const mpos = {
         const step = grade.canvas.height / grade.atlas
         let load = grade.atlas > 0 ? grade.atlas : transforms()
         //let reset = { transform: 'initial!important' }
+
+        function atlas(idx) {}
+
         for (const el of Object.values(grade.els)) {
           //todo: matrix slot for: self, child?
           if (typeof el.atlas === 'number') {
@@ -667,7 +676,7 @@ const mpos = {
   }
 }
 
-mpos.gen = function (num = 4, selector = 'main') {
+mpos.gen = function (num = 6, selector = 'main') {
   //img,ul,embed
   let lipsum = [
     'Lorem ipsum dolor sit amet. ',
@@ -703,8 +712,6 @@ mpos.gen = function (num = 4, selector = 'main') {
   for (let i = 0; i < num; i++) {
     // container
     let el = document.createElement('article')
-    el.classList.add(i % 2 === 0 ? 'w25' : 'w50')
-    el.classList.add('w')
     // heading
     el.appendChild(fill('h2', num))
     el.appendChild(fill('p', num * 2))
@@ -717,10 +724,10 @@ mpos.gen = function (num = 4, selector = 'main') {
     el.appendChild(img)
     // list
     let ul = fill('ul', num / 2)
-    el.appendChild(ul)
     ul.appendChild(fill('li', num * 3))
     ul.appendChild(fill('li', num * 6))
     ul.appendChild(fill('li', num * 2))
+    el.appendChild(ul)
 
     fragment.appendChild(el)
   }
