@@ -56,7 +56,7 @@ tr, li, summary {
 
 #tools, main {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   margin: var(--u2);
 }
 
@@ -99,6 +99,11 @@ model-viewer {
   contain: strict;
 }
 
+#css3d{ z-index: 2; }
+#css3d, canvas[data-engine~='three.js'] {
+  position: fixed;
+}
+
 .tool {
   width: calc(var(--unit) / 2);
   position: fixed;
@@ -111,7 +116,6 @@ model-viewer {
   }
 }
 
-address.offscreen {z-index:-99;bottom:calc(var(--unit) / 2);}
 #atlas {
   background-color: rgba( 255, 255, 255, 0.75 );
   overflow: hidden;
@@ -124,21 +128,35 @@ address.offscreen {z-index:-99;bottom:calc(var(--unit) / 2);}
     background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
     background-size: 50% auto;
   }
+  #carot {
+    // index and inPolar
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 0.01em solid transparent;
+    transition: all 0.25s;
+  }
 }
 
-#carot {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: 0.01em solid transparent;
-  transition: all 0.25s;
+address.offscreen {
+  z-index: -2; 
+  bottom: calc(var(--unit) / 2); 
 }
+
 .unset {
-  &.offscreen{position:absolute;top:0;left:0;width:100%;height:100%;}
+  // toggle CSS during transform
+  // toSvg needs ClientRect without transforms
   transform: initial!important;
+  &.offscreen{
+    // full-size box
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
 }
-
 
 main { line-height: 1; }

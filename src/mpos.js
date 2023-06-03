@@ -74,7 +74,7 @@ const mpos = {
     window.addEventListener('resize', mpos.ux.resize, false)
     vars.controls.addEventListener('change', mpos.ux.render, false)
     window.addEventListener('pointermove', mpos.ux.raycast, false)
-    vars.raycaster.layers.set(0)
+    vars.raycaster.layers.set(2)
     mpos.ux.render()
 
     const gui = new GUI()
@@ -127,31 +127,42 @@ const mpos = {
 
       if (vars.group) {
         vars.raycaster.setFromCamera(vars.pointer, vars.camera)
-        const intersects = vars.raycaster.intersectObjects(vars.group.children, false)
+        let intersects = vars.raycaster.intersectObjects(vars.group.children, false)
 
         if (intersects.length) {
-          const hit = intersects[0]
-          const obj = hit.object
+          intersects = intersects.filter(function (hit) {
+            let idx = hit.instanceId
+            let ray = hit.object.userData.grade.ray
+            let keep = ray.indexOf(idx) > -1
 
-          let carot = vars.carot.style
-          if (obj) {
-            const idx = hit.instanceId
-            let el
-            if (obj.isInstancedMesh) {
-              el = obj.userData.grade.els[idx]
-            } else if (obj.isMesh || obj.isCSS3DObject) {
-              el = obj.userData.el
-            }
-            const vis = mpos.precept.inPolar(el.el, 2)
-            const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
-            carot.backgroundColor = color
-            let block = 100 * (1 / vars.group.userData.atlas)
-            carot.width = carot.height = block + '%'
-            if (el.atlas) {
-              carot.left = carot.bottom = el.atlas * block + '%'
-            } else {
-              carot.width = '100%'
-              carot.left = carot.bottom = 0
+            return keep
+          })
+
+          if (intersects.length) {
+            //console.log('intersects', intersects)
+            const hit = intersects[0]
+            const obj = hit.object
+
+            let carot = vars.carot.style
+            if (obj) {
+              const idx = hit.instanceId
+              let el
+              if (obj.isInstancedMesh) {
+                el = obj.userData.grade.els[idx]
+              } else if (obj.isMesh || obj.isCSS3DObject) {
+                el = obj.userData.el
+              }
+              const vis = mpos.precept.inPolar(el.el, 2)
+              const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
+              carot.backgroundColor = color
+              let block = 100 * (1 / vars.group.userData.atlas)
+              carot.width = carot.height = block + '%'
+              if (el.atlas) {
+                carot.left = carot.bottom = el.atlas * block + '%'
+              } else {
+                carot.width = '100%'
+                carot.left = carot.bottom = 0
+              }
             }
           }
         }
@@ -202,7 +213,7 @@ const mpos = {
       if (sel === null) {
         return
       } else if (selector === 'address') {
-        let obj = document.querySelector(selector + ' object')
+        const obj = document.querySelector(selector + ' object')
         await mpos.add.src(obj, vars.opt.address, 'data')
       }
 
@@ -398,6 +409,7 @@ const mpos = {
 
         function transforms(grade) {
           console.log('transforms', grade)
+          grade.ray = []
 
           // shader atlas
           let texIdx = new Float32Array(grade.softmax).fill(0)
@@ -411,6 +423,7 @@ const mpos = {
           generic.userData.grade = grade
           generic.name = [grade.idx, selector].join('_')
           vars.group.add(generic)
+          generic.layers.set(2)
 
           // Meshes
           let dummy = new THREE.Object3D()
@@ -427,11 +440,14 @@ const mpos = {
               if (el.mat === 'native') {
                 let mesh = mpos.add.box(el)
                 vars.group.add(mesh[1])
+              } else if (el.mat === 'poster') {
+                grade.ray.push(Number(index))
               }
             }
           }
 
           vars.geo.setAttribute('texIdx', new THREE.InstancedBufferAttribute(texIdx, 1))
+
           generic.instanceMatrix.needsUpdate = true
           generic.computeBoundingSphere()
 
@@ -523,7 +539,6 @@ const mpos = {
         if (el.mat === 'wire') {
           mesh.material.color.setStyle('cyan')
           mesh.animations = true
-          mesh.layers.set(1)
         } else {
           const map = vars.mat.clone()
           map.wireframe = false
