@@ -80,7 +80,7 @@ const mpos = {
     const gui = new GUI()
     Object.keys(vars.opt).forEach(function (key) {
       let param = []
-      if (key === 'selector') param = [['body', 'main', '#media', '#text', '#transform', 'address']]
+      if (key === 'selector') param = [['body', 'main', '#text', '#media', '#transform', 'address']]
       if (key === 'depth') param = [0, 32, 1]
 
       gui.add(vars.opt, key, ...param)
@@ -275,15 +275,15 @@ const mpos = {
             }
           }
 
-          node = ni.nextNode()
+          node = ni.nextNode() || (grade.softmax = 0)
         }
 
         // DEEP-GRADE: type, count
         function report(el, z, mat) {
           el.mat = mat
           el.z = z
-          grade.softmax--
           // shader
+          grade.softmax++
           if (el.mat === 'poster') {
             el.atlas = grade.atlas++
           }
@@ -301,8 +301,9 @@ const mpos = {
           let children = sel.children
           for (let i = 0; i < children.length; i++) {
             let node = children[i]
+            let el = grade.els[node.getAttribute('data-idx')]
+
             if (precept.inPolar(node, 1)) {
-              let el = grade.els[node.getAttribute('data-idx')]
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
               const abort = grade.atlas >= grade.hardmax
@@ -333,7 +334,10 @@ const mpos = {
                   report(el, z, mat)
                 }
               }
+              //
             }
+
+            //
           }
         }
 
@@ -343,45 +347,58 @@ const mpos = {
         const MAX_TEXTURE_SIZE = Math.min(grade.atlas * grade.hardmax, 16_384)
         grade.canvas.width = grade.canvas.height = MAX_TEXTURE_SIZE
         grade.canvas.id = grade.idx
-        const ctx = grade.canvas.getContext('2d')
 
         // scaling
-        const step = grade.canvas.height / grade.atlas
-        let load = grade.atlas > 0 ? grade.atlas : transforms()
-        //let reset = { transform: 'initial!important' }
+        function atlas(grade, idx = 0, opts = {}) {
+          //opts: slice, filter, retry, step
+          if (opts.run === undefined) {
+            opts.run = opts.slice || Object.keys(grade.els).length
+            opts.ctx = opts.ctx || grade.canvas.getContext('2d')
+            opts.step = opts.step || grade.canvas.height / grade.atlas
+            // keep unused references?
+            opts.trim = !(opts.trim === false) || true
+          }
 
-        function atlas(idx) {}
+          function next() {
+            idx++
+            if (idx < opts.run) {
+              atlas(grade, idx)
+            } else {
+              if (opts.trim) {
+                grade.els = Object.values(grade.els).filter((el) => el.mat)
+              }
+              transforms(grade)
+            }
+          }
 
-        for (const el of Object.values(grade.els)) {
-          //todo: matrix slot for: self, child?
-          if (typeof el.atlas === 'number') {
+          let el = grade.els[idx]
+          if (el && typeof el.atlas === 'number') {
+            //let reset = { transform: 'initial!important' }
             toSvg(el.el)
               .then(function (dataUrl) {
                 let img = new Image()
                 img.onload = function () {
-                  // transform atlas
-                  const block = el.atlas * step
-                  ctx.drawImage(img, block, grade.canvas.height - step - block, step, step)
-                  if (load && --load < 1) {
-                    transforms()
-                  }
+                  // Instanced Mesh shader atlas
+                  const block = el.atlas * opts.step
+                  opts.ctx.drawImage(img, block, grade.canvas.height - opts.step - block, opts.step, opts.step)
+                  next()
                 }
                 img.src = dataUrl
               })
               .catch(function (e) {
-                // some box problem
+                // some box problem... error retry count?
                 console.log('err', e, el.el, e.target.classList)
-                if (load) {
-                  load = false
-                  transforms()
-                }
+                next()
               })
+          } else {
+            next()
           }
         }
+        atlas(grade)
 
-        function transforms() {
-          grade.els = Object.values(grade.els).filter((el) => el.mat)
-          grade.softmax = grade.els.length
+        function transforms(grade) {
+          console.log('transforms', grade)
+
           // shader atlas
           let texIdx = new Float32Array(grade.softmax).fill(0)
           let shader = mpos.add.shader(grade.canvas, grade.atlas, grade.hardmax)
