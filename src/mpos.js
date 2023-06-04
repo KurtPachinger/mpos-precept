@@ -432,7 +432,10 @@ const mpos = {
                     let type = file.match(/\.[0-9a-z]+$/i)
                     type = type ? type[0] : false
                     if (type === '.svg') {
-                      mpos.add.loader(file)
+                      let dummy = new THREE.Object3D()
+                      dummy = mpos.add.box(el, { dummy: dummy })
+
+                      mpos.add.loader(file, dummy)
                     }
                   }
                   // Instanced Mesh shader atlas
@@ -753,7 +756,7 @@ const mpos = {
       // atlas[c].parentElement.removeChild(atlas[c])
       //}
     },
-    loader: function (file) {
+    loader: function (file, dummy) {
       let promise = new Promise((resolve, reject) => {
         // instantiate a loader
         const loader = new SVGLoader()
@@ -787,6 +790,9 @@ const mpos = {
               }
             }
 
+            group.position.set(dummy.position.x / 2, dummy.position.y + dummy.scale.y / 2, dummy.position.z)
+            let invMax = Math.max(mpos.var.fov.w, mpos.var.fov.h)
+            group.scale.set(dummy.scale.x / invMax, dummy.scale.y / invMax, 1)
             group.scale.y *= -1
             group.name = 'SVG'
             mpos.var.group.add(group)
