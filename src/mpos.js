@@ -32,9 +32,10 @@ const mpos = {
       transparent: true,
       wireframe: true,
       side: THREE.FrontSide,
+      color: 'cyan',
       depthWrite: false
     }),
-    mat_line: new THREE.MeshBasicMaterial({
+    mat_line: new THREE.LineBasicMaterial({
       transparent: true,
       wireframe: true,
       side: THREE.FrontSide
@@ -54,7 +55,7 @@ const mpos = {
     vars.renderer = new THREE.WebGLRenderer()
     vars.renderer.setSize(vars.fov.w, vars.fov.h)
     document.body.appendChild(vars.renderer.domElement)
-    vars.renderer.setClearColor(0x000000, 0)
+    vars.renderer.setClearColor(0x00ff00, 0)
     // helpers
     let axes = new THREE.AxesHelper(0.5)
     vars.scene.add(axes)
@@ -78,6 +79,22 @@ const mpos = {
     window.addEventListener('pointermove', mpos.ux.raycast, false)
     vars.raycaster.layers.set(2)
     mpos.ux.render()
+
+    // Intersection Observer
+    const callback = function (entries, observer) {
+      requestIdleCallback(
+        function () {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              console.log('entry', entry.target, entry.boundingClientRect)
+              observer.unobserve(entry.target)
+            }
+          })
+        },
+        { time: 1000 }
+      )
+    }
+    mpos.ux.observer = new IntersectionObserver(callback)
 
     const gui = new GUI()
     Object.keys(vars.opt).forEach(function (key) {
@@ -154,7 +171,7 @@ const mpos = {
               } else if (obj.isMesh || obj.isCSS3DObject) {
                 el = obj.userData.el
               }
-              const vis = mpos.precept.inPolar(el.el, 2)
+              const vis = mpos.precept.inPolar(el.el) >= 2
               const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
               carot.backgroundColor = color
               let block = 100 * (1 / vars.group.userData.atlas)
@@ -176,10 +193,10 @@ const mpos = {
     allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
-    poster: `.poster,.pstr,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd`.split(','),
+    poster: `.poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
-      let vis = node.tagName || node.textContent.trim()
+      let vis = node.tagName || node.textContent.trim() ? -1 : false
       if (typeof control === 'object') {
         // node relative in control plot
         vis = Object.values(control).some(function (tag) {
@@ -188,17 +205,18 @@ const mpos = {
         })
       } else {
         // -1: node not empty
-        if (control >= 0) {
+        if (node.tagName) {
           // 0: node is tag
-          vis = node.tagName
-          if (vis && control >= 1) {
+          vis++
+          if (true || node.checkVisibility()) {
             // 1: tag not hidden
-            vis = node.checkVisibility()
-            if (control >= 2) {
-              // 2: tag in viewport
-              const rect = node.getBoundingClientRect()
-              const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-              vis = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
+            vis++
+            const rect = node.getBoundingClientRect()
+            const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
+            const scroll = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
+            if (scroll) {
+              // 2: tag in viewportinPolar
+              vis++
             }
           }
         }
@@ -255,36 +273,38 @@ const mpos = {
           if (node.nodeName === '#comment') {
             // #comment... (or CDATA, xml, php)
             console.log('#comment', node.textContent)
-          } else if (precept.inPolar(node, -1)) {
-            let el = false
+          } else {
+            let vis = precept.inPolar(node)
+            if (vis) {
+              let el = false
+              if (vis >= 0) {
+                el = node
+                // ...estimate
+                //if (node.matches([precept.native, precept.poster])) {}
+              } else if (
+                node.nodeName === '#text' &&
+                node.parentNode.matches([precept.allow]) &&
+                !node.parentNode.matches([precept.native, precept.poster]) &&
+                precept.inPolar(node, grade.els)
+              ) {
+                // #text orphan with parent visible
+                // sanitize, block-level required for width
+                let wrap = document.createElement('div')
+                wrap.classList.add('poster')
+                node.parentNode.insertBefore(wrap, node)
+                wrap.appendChild(node)
 
-            if (precept.inPolar(node, 0)) {
-              el = node
-              // ...estimate
-              //if (node.matches([precept.native, precept.poster])) {}
-            } else if (
-              node.nodeName === '#text' &&
-              node.parentNode.matches([precept.allow]) &&
-              !node.parentNode.matches([precept.native, precept.poster]) &&
-              precept.inPolar(node, grade.els)
-            ) {
-              // #text orphan with parent visible
-              // sanitize, block-level required for width
-              let wrap = document.createElement('div')
-              wrap.classList.add('pstr')
-              node.parentNode.insertBefore(wrap, node)
-              wrap.appendChild(node)
+                el = wrap
+                grade.txt.push(node)
+              }
 
-              el = wrap
-              grade.txt.push(node)
-            }
-
-            if (el) {
-              // static list
-              const idx = grade.softmax
-              el.setAttribute('data-idx', idx)
-              grade.els[idx] = { el: el }
-              grade.softmax++
+              if (el) {
+                // static list
+                const idx = grade.softmax
+                el.setAttribute('data-idx', idx)
+                grade.els[idx] = { el: el }
+                grade.softmax++
+              }
             }
           }
 
@@ -307,22 +327,25 @@ const mpos = {
 
           // SELF
           let el = grade.els[sel.getAttribute('data-idx')]
-          let mat = 'self'
-          el && report(el, z, mat)
+
+          el && report(el, z, 'self')
 
           // CHILD
           let children = sel.children
           for (let i = 0; i < children.length; i++) {
+            let mat = 'child'
+
             let node = children[i]
             let el = grade.els[node.getAttribute('data-idx')]
 
-            if (precept.inPolar(node, 1)) {
+            let vis = precept.inPolar(node)
+            if (vis >= 1) {
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
               const abort = grade.atlas >= grade.hardmax
               if (block || abort) {
                 console.log('skip', node.nodeName)
-              } else if (el) {
+              } else if (vis >= 2) {
                 const allow = node.matches(precept.allow)
                 const manual = node.matches('.poster, .native, .loader')
                 const empty = node.children.length === 0
@@ -333,7 +356,6 @@ const mpos = {
                   struct(node, depth)
                 } else {
                   // element type output quality
-                  mat = 'child'
 
                   if (manual) {
                     if (node.matches('.loader')) {
@@ -341,7 +363,7 @@ const mpos = {
                     } else if (node.matches('.poster')) {
                       mat = 'poster'
                     } else if (node.matches('.native')) {
-                      mat = 'nativeoader'
+                      mat = 'native'
                     }
                   } else if (node.matches([precept.native, precept.native3d])) {
                     mat = 'native'
@@ -352,10 +374,13 @@ const mpos = {
                   } else if (node.matches(precept.poster)) {
                     mat = 'poster'
                   }
-
-                  report(el, z, mat)
                 }
+                report(el, z, mat)
+              } else {
+                console.log('observe', el.el)
+                mpos.ux.observer.observe(el.el)
               }
+
               //
             }
 
@@ -365,7 +390,8 @@ const mpos = {
 
         struct(sel, layers)
 
-        // TEXTURE shader atlas
+        // TEXTURE shader atlas (+1 for transparent slot)
+        grade.atlas += 1
         const MAX_TEXTURE_SIZE = Math.min(grade.atlas * grade.hardmax, 16_384)
         grade.canvas.width = grade.canvas.height = MAX_TEXTURE_SIZE
         grade.canvas.id = grade.idx
@@ -437,7 +463,11 @@ const mpos = {
           let shader = mpos.add.shader(grade.canvas, grade.atlas, grade.hardmax)
 
           // Instanced Mesh
-          const generic = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line], grade.hardmax)
+          const generic = new THREE.InstancedMesh(
+            vars.geo.clone(),
+            [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
+            grade.hardmax
+          )
           generic.instanceMatrix.setUsage(THREE.StaticDrawUsage)
           generic.count = grade.softmax
           generic.userData.el = sel
@@ -467,7 +497,7 @@ const mpos = {
             }
           }
 
-          vars.geo.setAttribute('texIdx', new THREE.InstancedBufferAttribute(texIdx, 1))
+          generic.geometry.setAttribute('texIdx', new THREE.InstancedBufferAttribute(texIdx, 1))
 
           generic.instanceMatrix.needsUpdate = true
           generic.computeBoundingSphere()
@@ -551,6 +581,7 @@ const mpos = {
       } else {
         // Mesh Singleton
         const name = [el.z, el.mat, element.nodeName].join('_')
+
         const mesh = new THREE.Mesh(vars.geo, vars.mat)
         mesh.scale.set(w, h, d)
         mesh.userData.el = el
@@ -558,22 +589,20 @@ const mpos = {
 
         types.push(mesh)
         if (el.mat === 'wire') {
-          mesh.material.color.setStyle('cyan')
           mesh.animations = true
         } else {
-          const map = vars.mat.clone()
-          map.wireframe = false
-          map.name = element.tagName
-          mesh.material = map
+          const mat = vars.mat.clone()
+          mat.wireframe = false
+          mat.name = element.tagName
 
           // static or dynamic
           //let reset = { transform: 'initial!important;' }
           if (opt.mat === 'poster') {
-            mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, map, vars.mat_line]
+            mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, mat, vars.mat_line]
             toSvg(element)
               .then(function (dataUrl) {
-                map.map = new THREE.TextureLoader().load(dataUrl)
-                map.needsUpdate = true
+                mat.map = new THREE.TextureLoader().load(dataUrl)
+                mat.needsUpdate = true
               })
               .catch((e) => console.log('err', e))
           } else if (el.mat === 'native') {
@@ -589,12 +618,11 @@ const mpos = {
           let bg = style.backgroundColor
           let alpha = Number(bg.replace(/[rgba( )]/g, '').split(',')[3])
           //console.log('alpha', alpha, element.nodeName)'
-          map.opacity = alpha
-          if (alpha <= 0) {
+
+          if (alpha <= 0.5) {
             bg = null
-            //map.blending = THREE.MultiplyBlending
           }
-          map.color.setStyle(bg)
+          mat.color.setStyle(bg)
           //console.log(element, opt.m, mesh.material)
         }
 
@@ -635,7 +663,6 @@ const mpos = {
       texStep = 1 / texStep
       const m = new THREE.MeshBasicMaterial({
         transparent: true,
-        color: 'cyan',
         onBeforeCompile: (shader) => {
           m.userData.s = shader
           shader.uniforms.texAtlas = { value: texAtlas }
@@ -660,7 +687,7 @@ const mpos = {
           
             vec2 blockUv = ${texStep} * (floor(vTexIdx + 0.1) + vUv);
             vec4 blockColor = texture(texAtlas, blockUv);
-        
+
         diffuseColor *= blockColor;
         `
           )
