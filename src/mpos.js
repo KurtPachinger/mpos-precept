@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { toSvg } from 'html-to-image'
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
 const mpos = {
   var: {
@@ -30,7 +31,8 @@ const mpos = {
     mat: new THREE.MeshBasicMaterial({
       transparent: true,
       wireframe: true,
-      side: THREE.FrontSide
+      side: THREE.FrontSide,
+      depthWrite: false
     }),
     mat_line: new THREE.MeshBasicMaterial({
       transparent: true,
@@ -322,7 +324,7 @@ const mpos = {
                 console.log('skip', node.nodeName)
               } else if (el) {
                 const allow = node.matches(precept.allow)
-                const manual = node.matches('.poster, .native')
+                const manual = node.matches('.poster, .native, .loader')
                 const empty = node.children.length === 0
 
                 if (layer >= 1 && allow && !manual && !empty) {
@@ -332,7 +334,16 @@ const mpos = {
                 } else {
                   // element type output quality
                   mat = 'child'
-                  if (node.matches([precept.native, precept.native3d])) {
+
+                  if (manual) {
+                    if (node.matches('.loader')) {
+                      mat = 'loader'
+                    } else if (node.matches('.poster')) {
+                      mat = 'poster'
+                    } else if (node.matches('.native')) {
+                      mat = 'nativeoader'
+                    }
+                  } else if (node.matches([precept.native, precept.native3d])) {
                     mat = 'native'
                     // todo: test internal type
                     // node.tagName [iframe,object,embed,svg...] attribute [src,data]
@@ -383,17 +394,28 @@ const mpos = {
           }
 
           let el = grade.els[idx]
-          if (el && typeof el.atlas === 'number') {
+          if (el && (typeof el.atlas === 'number' || el.mat === 'loader')) {
             //let reset = { transform: 'initial!important' }
             toSvg(el.el)
               .then(function (dataUrl) {
                 let img = new Image()
                 img.onload = function () {
+                  if (el.mat === 'loader') {
+                    // SVGLoader supports files, but not text...?
+                    let file = el.el.data || el.el.src || el.el.href || ''
+                    let type = file.match(/\.[0-9a-z]+$/i)
+                    type = type ? type[0] : false
+                    if (type === '.svg') {
+                      mpos.add.loader(file)
+                    }
+                  }
                   // Instanced Mesh shader atlas
                   const block = el.atlas * opts.step
                   opts.ctx.drawImage(img, block, grade.canvas.height - opts.step - block, opts.step, opts.step)
+
                   next()
                 }
+
                 img.src = dataUrl
               })
               .catch(function (e) {
@@ -408,7 +430,6 @@ const mpos = {
         atlas(grade)
 
         function transforms(grade) {
-          console.log('transforms', grade)
           grade.ray = []
 
           // shader atlas
@@ -437,11 +458,11 @@ const mpos = {
               // shader uv
               texIdx[index] = typeof el.atlas === 'number' ? el.atlas : grade.atlas
 
-              if (el.mat === 'native') {
+              if (el.mat === 'poster') {
+                grade.ray.push(Number(index))
+              } else if (el.mat === 'native') {
                 let mesh = mpos.add.box(el)
                 vars.group.add(mesh[1])
-              } else if (el.mat === 'poster') {
-                grade.ray.push(Number(index))
               }
             }
           }
@@ -704,6 +725,60 @@ const mpos = {
       //for (let c = atlas.length - 1; c >= 0; c--) {
       // atlas[c].parentElement.removeChild(atlas[c])
       //}
+    },
+    loader: function (file) {
+      let promise = new Promise((resolve, reject) => {
+        // instantiate a loader
+        const loader = new SVGLoader()
+
+        // load a SVG resource
+        loader.load(
+          // resource URL
+          file,
+          // called when the resource is loaded
+          function (data) {
+            console.log('loader', data)
+            const paths = data.paths
+            const group = new THREE.Group()
+
+            for (let i = 0; i < paths.length; i++) {
+              const path = paths[i]
+
+              const material = new THREE.MeshBasicMaterial({
+                color: path.color,
+                side: THREE.FrontSide,
+                depthWrite: false
+              })
+
+              const shapes = SVGLoader.createShapes(path)
+
+              for (let j = 0; j < shapes.length; j++) {
+                const shape = shapes[j]
+                const geometry = new THREE.ShapeGeometry(shape)
+                const mesh = new THREE.Mesh(geometry, material)
+                group.add(mesh)
+              }
+            }
+
+            group.scale.y *= -1
+            group.name = 'SVG'
+            mpos.var.group.add(group)
+
+            resolve(group)
+            reject(group)
+          },
+          // called when loading is in progresses
+          function (xhr) {
+            console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
+          },
+          // called when loading has errors
+          function (error) {
+            console.log('An error happened')
+          }
+        )
+      })
+
+      return promise
     }
   }
 }

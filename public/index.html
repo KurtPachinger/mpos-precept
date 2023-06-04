@@ -38,6 +38,10 @@
         <li>C. CCCCCCCC</li>
       </ul>
     </section>
+    <section id="loader">
+      <h2 class="loader">section<span>#loader</span></h2>
+      <object class="loader w100" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg"></object>
+    </section>
     <section id="media">
       <h2>section<span>#media</span></h2>
       <img src="./OIG.jpg" />
@@ -66,7 +70,7 @@
           </div>
         </div>
       </article>
-      <details open class="" style="transform: rotate(-90deg) scale(0.75);">
+      <details open style="transform: rotate(-90deg) scale(0.75);">
         <summary>types</summary>
         <table class="w100">
           <tr>
@@ -96,28 +100,29 @@
             </td>
           </tr>
           <tr>
-            <td>svg</td>
-            <td class="poster">
-              <object data="https://upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg"></object>
+            <td>object</td>
+            <td>
+              <object data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg"></object>
             </td>
           </tr>
+
           <tr>
             <td>iframe</td>
             <td>
               <div class="yt poster">
-                <iframe src="https://youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media;"></iframe>
+                <iframe src="//youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media;"></iframe>
               </div>
             </td>
           </tr>
           <tr>
             <td>model-viewer</td>
             <td>
-              <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.1.1/model-viewer.min.js"></script>
+              <script type="module" src="//ajax.googleapis.com/ajax/libs/model-viewer/3.1.1/model-viewer.min.js"></script>
               <model-viewer
                 ar
                 camera-controls
                 touch-action="pan-y"
-                src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+                src="//modelviewer.dev/shared-assets/models/Astronaut.glb"
                 alt="A 3D model of an astronaut"
               >
                 <button
