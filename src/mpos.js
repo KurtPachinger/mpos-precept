@@ -59,9 +59,9 @@ const mpos = {
     // helpers
     let axes = new THREE.AxesHelper(0.5)
     vars.scene.add(axes)
-    const pointLight = new THREE.PointLight(0xc0c0c0, 2, 10)
-    pointLight.position.set(0, 2, 5)
-    vars.scene.add(pointLight)
+    //const pointLight = new THREE.PointLight(0xc0c0c0, 2, 10)
+    //pointLight.position.set(0, 2, 5)
+    //vars.scene.add(pointLight)
 
     // CSS3D
     const css3d = document.getElementById('css3d')
@@ -482,12 +482,22 @@ const mpos = {
           generic.layers.set(2)
 
           // Meshes
+
           for (const [index, rect] of Object.entries(grade.els)) {
             if (rect.mat) {
-              rect.matrix = mpos.add.css(rect.el)
               let dummy = new THREE.Object3D()
               dummy = mpos.add.box(rect, { dummy: dummy })
               generic.setMatrixAt(index, dummy.matrix)
+
+              // Styles
+              const color = new THREE.Color()
+              let bg = rect.css.style.backgroundColor
+              const rgba = bg.replace(/(rgba)|[( )]/g, '').split(',')
+              let alpha = Number(rgba[3])
+              if (alpha <= 0.0) {
+                bg = rect.mat === 'child' ? '#00ff00' : null
+              }
+              generic.setColorAt(index, color.setStyle(bg))
 
               // shader uv
               texIdx[index] = typeof rect.atlas === 'number' ? rect.atlas : grade.atlas
@@ -500,6 +510,7 @@ const mpos = {
               }
             }
           }
+          generic.instanceColor.needsUpdate = true
 
           generic.geometry.setAttribute('texIdx', new THREE.InstancedBufferAttribute(texIdx, 1))
 
@@ -531,28 +542,26 @@ const mpos = {
     box: function (rect, opts = {}) {
       const vars = mpos.var
       const element = rect.el
+      // css: unset for normal matrix
       mpos.add.css(rect.el, true)
       const bound = element.getBoundingClientRect()
       mpos.add.css(rect.el, false)
-      const style = window.getComputedStyle(element)
+      // css: cumulative matrix
+      rect.css = mpos.add.css(rect.el)
 
-      // css transform (scale, angle)
-      const matrix = rect.matrix ? rect.matrix : { scale: 1, rotate: 0 }
-      const scale = matrix.scale
-      const rotate = matrix.rotate
       // origin(0,0) follows viewport, not window
       const sX = opts.sX || 0
       const sY = -opts.sY || 0
 
       // scale
-      const w = bound.width * scale
-      const h = bound.height * scale
+      const w = bound.width * rect.css.scale
+      const h = bound.height * rect.css.scale
       const d = vars.fov.z
       // position
       const x = sX + (bound.width / 2 + bound.left)
       const y = sY - bound.height / 2 - bound.top
       let z = rect.z
-      let zIndex = style.zIndex
+      let zIndex = rect.css.zIndex
       zIndex = zIndex > 0 ? 1 - 1 / zIndex : 0
       z = Number((z * d + zIndex).toFixed(6))
       // arc
@@ -563,10 +572,17 @@ const mpos = {
 
       function transform(objects) {
         objects.forEach((obj) => {
+          //
+          //
+          let stencil = obj.isCSS3DObject || rect.mat === 'loader'
+          let extrude = stencil ? vars.fov.z / 2 : 0
+          z += extrude
+
           if (!obj.isCSS3DObject) {
             obj.scale.set(w, h, d)
           }
-          obj.rotation.z = -rotate
+          obj.rotation.z = -rect.css.rotate
+
           obj.position.set(x, y, z)
 
           if (vars.opt.arc) {
@@ -602,7 +618,6 @@ const mpos = {
           mat.name = element.tagName
 
           // static or dynamic
-          //let reset = { transform: 'initial!important;' }
           if (opts.mat === 'poster') {
             mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, mat, vars.mat_line]
             toSvg(element)
@@ -621,15 +636,13 @@ const mpos = {
             types.push(css3d)
           }
 
-          let bg = style.backgroundColor
-          let alpha = Number(bg.replace(/[rgba( )]/g, '').split(',')[3])
-          //console.log('alpha', alpha, element.nodeName)'
-
-          if (alpha <= 0.5) {
+          // styles
+          let bg = rect.css.style.backgroundColor
+          let rgba = bg.replace(/[rgba( )]/g, '').split(',')
+          if (Number(rgba[3]) <= 0.0) {
             bg = null
           }
           mat.color.setStyle(bg)
-          //console.log(element, opt.m, mesh.material)
         }
 
         transform(types)
@@ -639,8 +652,14 @@ const mpos = {
     },
     css: function (el, unset) {
       // css style transforms
-      const matrix = { scale: 1, rotate: 0 }
-      var els = []
+      const css = { scale: 1, rotate: 0 }
+      if (unset === undefined) {
+        // target element original style
+        //console.log('unset style', target)
+        css.style = window.getComputedStyle(el)
+      }
+
+      let els = []
       while (el && el !== document) {
         if (unset === undefined) {
           // ancestors cumulative matrix
@@ -648,9 +667,9 @@ const mpos = {
           const transform = style.transform.replace(/[matrix( )]/g, '')
           if (transform !== 'none') {
             const [a, b] = transform.split(',')
-            matrix.scale *= Math.sqrt(a * a + b * b)
+            css.scale *= Math.sqrt(a * a + b * b)
             const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-            matrix.rotate += degree * (Math.PI / 180)
+            css.rotate += degree * (Math.PI / 180)
           }
         } else {
           // style override
@@ -661,13 +680,15 @@ const mpos = {
         el = el.parentNode
       }
 
-      return matrix
+      return css
     },
     shader: function (canvas, texStep) {
       const texAtlas = new THREE.CanvasTexture(canvas)
       texAtlas.minFilter = THREE.NearestFilter
       texStep = 1 / texStep
       const m = new THREE.MeshBasicMaterial({
+        //side: THREE.FrontSide,
+        //blending: THREE.MultiplyBlending,
         transparent: true,
         onBeforeCompile: (shader) => {
           m.userData.s = shader
