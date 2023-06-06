@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { toSvg } from 'html-to-image'
@@ -25,7 +25,7 @@ const mpos = {
       w: window.innerWidth,
       h: window.innerHeight,
       z: 8,
-      max: 1920
+      max: 1024
     },
     geo: new THREE.BoxBufferGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
@@ -48,8 +48,8 @@ const mpos = {
     const vars = mpos.var
     // THREE
     vars.scene = new THREE.Scene()
-    //vars.camera = new THREE.PerspectiveCamera(60, vars.fov.w / vars.fov.h, 0.01, 1000)
-    vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
+    vars.camera = new THREE.PerspectiveCamera(60, vars.fov.w / vars.fov.h, 0.01, 1000)
+    //vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
     vars.camera.position.z = 1
 
@@ -70,14 +70,18 @@ const mpos = {
     vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
     css3d.appendChild(vars.rendererCSS.domElement)
     css3d.querySelectorAll('div').forEach((el) => el.classList.add('block'))
-    vars.controls = new OrbitControls(vars.camera, vars.rendererCSS.domElement)
+    vars.controls = new MapControls(vars.camera, vars.rendererCSS.domElement)
+    vars.controls.screenSpacePanning = true
+
     vars.controls.target.setY(-(vars.fov.h * (1 / vars.fov.max)))
     vars.controls.update()
 
     // live
+    document.querySelector('#css3d > div > div > div').addEventListener('input', mpos.ux.event, false)
     window.addEventListener('resize', mpos.ux.resize, false)
     vars.controls.addEventListener('change', mpos.ux.render, false)
     window.addEventListener('pointermove', mpos.ux.raycast, false)
+
     vars.raycaster.layers.set(2)
     mpos.ux.render()
 
@@ -187,6 +191,12 @@ const mpos = {
           }
         }
       }
+    },
+    event: function (e) {
+      e.stopPropagation()
+      let idx = e.target.getAttribute('data-idx')
+      let node = document.querySelector('[data-idx="' + idx + '"]')
+      node.value = e.target.value
     }
   },
   precept: {
