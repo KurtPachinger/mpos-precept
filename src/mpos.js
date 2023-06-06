@@ -165,19 +165,19 @@ const mpos = {
             let carot = vars.carot.style
             if (obj) {
               const idx = hit.instanceId
-              let el
+              let rect
               if (obj.isInstancedMesh) {
-                el = obj.userData.grade.els[idx]
+                rect = obj.userData.grade.els[idx]
               } else if (obj.isMesh || obj.isCSS3DObject) {
-                el = obj.userData.el
+                rect = obj.userData.el
               }
-              const vis = mpos.precept.inPolar(el.el) >= 2
+              const vis = mpos.precept.inPolar(rect.el) >= 2
               const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
               carot.backgroundColor = color
               let block = 100 * (1 / vars.group.userData.atlas)
               carot.width = carot.height = block + '%'
-              if (el.atlas) {
-                carot.left = carot.bottom = el.atlas * block + '%'
+              if (rect.atlas) {
+                carot.left = carot.bottom = rect.atlas * block + '%'
               } else {
                 carot.width = '100%'
                 carot.left = carot.bottom = 0
@@ -237,19 +237,6 @@ const mpos = {
         await mpos.add.src(obj, vars.opt.address, 'data')
       }
 
-      // THREE cleanup
-      let dispose = vars.opt.dispose ? selector : false
-      if (!update) {
-        mpos.add.old(dispose)
-        // new THREE group
-        vars.group = new THREE.Group()
-        vars.group.name = selector
-        vars.group.userData.batch = mpos.precept.batch
-        // root DOM node (viewport)
-        const mesh = mpos.add.box({ el: document.body, z: 0, mat: 'wire' })
-        vars.group.add(...mesh)
-      }
-
       // structure
       const precept = mpos.precept
       const grade = {
@@ -259,11 +246,26 @@ const mpos = {
         atlas: 0,
         els: {},
         txt: [],
-        canvas: document.querySelector('#atlas canvas')
+        canvas: document.querySelector('#atlas canvas'),
+        sX: window.scrollX,
+        sY: window.scrollY
       }
       // texture unit, relative to viewport resolution
       grade.hardmax = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 64
       //let estimate = sel.querySelectorAll([precept.allow, precept.native, precept.poster]).length / 3
+
+      // THREE cleanup
+      let dispose = vars.opt.dispose ? selector : false
+      if (!update) {
+        mpos.add.old(dispose)
+        // new THREE group
+        vars.group = new THREE.Group()
+        vars.group.name = selector
+        vars.group.userData.batch = mpos.precept.batch
+        // root DOM node (viewport)
+        const mesh = mpos.add.box({ el: document.body, z: 0, mat: 'wire' }, { sX: grade.sX, sY: grade.sY })
+        vars.group.add(...mesh)
+      }
 
       const promise = new Promise((resolve, reject) => {
         // FLAT-GRADE: filter, grade, sanitize
@@ -312,13 +314,13 @@ const mpos = {
         }
 
         // DEEP-GRADE: type, count
-        function report(el, z, mat) {
-          el.mat = mat
-          el.z = z
+        function report(rect, z, mat) {
+          rect.mat = mat
+          rect.z = z
           // shader
           grade.softmax++
-          if (el.mat === 'poster') {
-            el.atlas = grade.atlas++
+          if (rect.mat === 'poster') {
+            rect.atlas = grade.atlas++
           }
         }
 
@@ -326,9 +328,9 @@ const mpos = {
           const z = layers - layer
 
           // SELF
-          let el = grade.els[sel.getAttribute('data-idx')]
+          let rect = grade.els[sel.getAttribute('data-idx')]
 
-          el && report(el, z, 'self')
+          rect && report(rect, z, 'self')
 
           // CHILD
           let children = sel.children
@@ -336,7 +338,7 @@ const mpos = {
             let mat = 'child'
 
             let node = children[i]
-            let el = grade.els[node.getAttribute('data-idx')]
+            let rect = grade.els[node.getAttribute('data-idx')]
 
             let vis = precept.inPolar(node)
             if (vis >= 1) {
@@ -375,10 +377,10 @@ const mpos = {
                     mat = 'poster'
                   }
                 }
-                report(el, z, mat)
+                report(rect, z, mat)
               } else {
-                console.log('observe', el.el)
-                mpos.ux.observer.observe(el.el)
+                console.log('observe', rect.el)
+                mpos.ux.observer.observe(rect.el)
               }
 
               //
@@ -398,8 +400,8 @@ const mpos = {
 
         // scaling
         function atlas(grade, idx = 0, opts = {}) {
-          //opts: slice, filter, retry, step
           if (opts.run === undefined) {
+            //opts: first-run
             opts.run = opts.slice || Object.keys(grade.els).length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
             opts.step = opts.step || grade.canvas.height / grade.atlas
@@ -413,33 +415,33 @@ const mpos = {
               atlas(grade, idx)
             } else {
               if (opts.trim) {
-                grade.els = Object.values(grade.els).filter((el) => el.mat)
+                grade.els = Object.values(grade.els).filter((rect) => rect.mat)
               }
               transforms(grade)
             }
           }
 
-          let el = grade.els[idx]
-          if (el && (typeof el.atlas === 'number' || el.mat === 'loader')) {
+          let rect = grade.els[idx]
+          if (rect && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
             //let reset = { transform: 'initial!important' }
-            toSvg(el.el)
+            toSvg(rect.el)
               .then(function (dataUrl) {
                 let img = new Image()
                 img.onload = function () {
-                  if (el.mat === 'loader') {
+                  if (rect.mat === 'loader') {
                     // SVGLoader supports files, but not text...?
-                    let file = el.el.data || el.el.src || el.el.href || ''
+                    let file = rect.el.data || rect.el.src || rect.el.href || ''
                     let type = file.match(/\.[0-9a-z]+$/i)
                     type = type ? type[0] : false
                     if (type === '.svg') {
                       let dummy = new THREE.Object3D()
-                      dummy = mpos.add.box(el, { dummy: dummy })
+                      dummy = mpos.add.box(rect, { dummy: dummy })
 
                       mpos.add.loader(file, dummy)
                     }
                   }
                   // Instanced Mesh shader atlas
-                  const block = el.atlas * opts.step
+                  const block = rect.atlas * opts.step
                   opts.ctx.drawImage(img, block, grade.canvas.height - opts.step - block, opts.step, opts.step)
 
                   next()
@@ -449,7 +451,7 @@ const mpos = {
               })
               .catch(function (e) {
                 // some box problem... error retry count?
-                console.log('err', e, el.el, e.target.classList)
+                console.log('err', e, rect.el, e.target.classList)
                 next()
               })
           } else {
@@ -480,21 +482,20 @@ const mpos = {
           generic.layers.set(2)
 
           // Meshes
-          let dummy = new THREE.Object3D()
-          for (const [index, el] of Object.entries(grade.els)) {
-            if (el.mat) {
-              el.matrix = mpos.add.css(el.el)
-
-              dummy = mpos.add.box(el, { dummy: dummy })
+          for (const [index, rect] of Object.entries(grade.els)) {
+            if (rect.mat) {
+              rect.matrix = mpos.add.css(rect.el)
+              let dummy = new THREE.Object3D()
+              dummy = mpos.add.box(rect, { dummy: dummy })
               generic.setMatrixAt(index, dummy.matrix)
 
               // shader uv
-              texIdx[index] = typeof el.atlas === 'number' ? el.atlas : grade.atlas
+              texIdx[index] = typeof rect.atlas === 'number' ? rect.atlas : grade.atlas
 
-              if (el.mat === 'poster') {
+              if (rect.mat === 'poster') {
                 grade.ray.push(Number(index))
-              } else if (el.mat === 'native') {
-                let mesh = mpos.add.box(el)
+              } else if (rect.mat === 'native') {
+                let mesh = mpos.add.box(rect)
                 vars.group.add(mesh[1])
               }
             }
@@ -527,28 +528,30 @@ const mpos = {
 
       return promise
     },
-    box: function (el, opt = {}) {
+    box: function (rect, opts = {}) {
       const vars = mpos.var
-      const element = el.el
-      mpos.add.css(el.el, true)
-      const rect = element.getBoundingClientRect()
-      mpos.add.css(el.el, false)
+      const element = rect.el
+      mpos.add.css(rect.el, true)
+      const bound = element.getBoundingClientRect()
+      mpos.add.css(rect.el, false)
       const style = window.getComputedStyle(element)
 
       // css transform (scale, angle)
-
-      const matrix = el.matrix ? el.matrix : { scale: 1, rotate: 0 }
+      const matrix = rect.matrix ? rect.matrix : { scale: 1, rotate: 0 }
       const scale = matrix.scale
       const rotate = matrix.rotate
+      // origin(0,0) follows viewport, not window
+      const sX = opts.sX || 0
+      const sY = -opts.sY || 0
 
       // scale
-      const w = rect.width * scale
-      const h = rect.height * scale
+      const w = bound.width * scale
+      const h = bound.height * scale
       const d = vars.fov.z
       // position
-      const x = rect.width / 2 + rect.left
-      const y = -(rect.height / 2) - rect.top
-      let z = el.z
+      const x = sX + (bound.width / 2 + bound.left)
+      const y = sY - bound.height / 2 - bound.top
+      let z = rect.z
       let zIndex = style.zIndex
       zIndex = zIndex > 0 ? 1 - 1 / zIndex : 0
       z = Number((z * d + zIndex).toFixed(6))
@@ -575,23 +578,23 @@ const mpos = {
 
       let types = []
 
-      if (opt.dummy) {
+      if (opts.dummy) {
         // Instanced Mesh
-        types.push(opt.dummy)
+        types.push(opts.dummy)
         transform(types)
-        opt.dummy.updateMatrix()
-        types = opt.dummy
+        opts.dummy.updateMatrix()
+        types = opts.dummy
       } else {
         // Mesh Singleton
-        const name = [el.z, el.mat, element.nodeName].join('_')
+        const name = [rect.z, rect.mat, element.nodeName].join('_')
 
         const mesh = new THREE.Mesh(vars.geo, vars.mat)
         mesh.scale.set(w, h, d)
-        mesh.userData.el = el
+        mesh.userData.el = rect
         mesh.name = name
 
         types.push(mesh)
-        if (el.mat === 'wire') {
+        if (rect.mat === 'wire') {
           mesh.animations = true
         } else {
           const mat = vars.mat.clone()
@@ -600,7 +603,7 @@ const mpos = {
 
           // static or dynamic
           //let reset = { transform: 'initial!important;' }
-          if (opt.mat === 'poster') {
+          if (opts.mat === 'poster') {
             mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, mat, vars.mat_line]
             toSvg(element)
               .then(function (dataUrl) {
@@ -608,7 +611,7 @@ const mpos = {
                 mat.needsUpdate = true
               })
               .catch((e) => console.log('err', e))
-          } else if (el.mat === 'native') {
+          } else if (rect.mat === 'native') {
             const el = element.cloneNode(true)
             el.style.width = w
             el.style.height = h
