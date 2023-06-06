@@ -27,7 +27,7 @@ const mpos = {
       z: 8,
       max: 1920
     },
-    geo: new THREE.BoxGeometry(1, 1, 1),
+    geo: new THREE.BoxBufferGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
       transparent: true,
       wireframe: true,
@@ -48,7 +48,8 @@ const mpos = {
     const vars = mpos.var
     // THREE
     vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(60, vars.fov.w / vars.fov.h, 0.01, 1000)
+    //vars.camera = new THREE.PerspectiveCamera(60, vars.fov.w / vars.fov.h, 0.01, 1000)
+    vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
     vars.camera.position.z = 1
 
@@ -176,9 +177,9 @@ const mpos = {
               carot.backgroundColor = color
               let block = 100 * (1 / vars.group.userData.atlas)
               carot.width = carot.height = block + '%'
-              if (rect.atlas) {
-                carot.left = carot.bottom = rect.atlas * block + '%'
-              } else {
+
+              carot.left = carot.bottom = rect.atlas * block + '%'
+              if (!rect.atlas) {
                 carot.width = '100%'
                 carot.left = carot.bottom = 0
               }
@@ -193,7 +194,7 @@ const mpos = {
     allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
-    poster: `.poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,th,td,caption,dt,dd`.split(','),
+    poster: `.poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,caption,dt,dd`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
       let vis = node.tagName || node.textContent.trim() ? -1 : false
@@ -287,6 +288,7 @@ const mpos = {
                 node.nodeName === '#text' &&
                 node.parentNode.matches([precept.allow]) &&
                 !node.parentNode.matches([precept.native, precept.poster]) &&
+                node.parentElement.childNodes !== 1 &&
                 precept.inPolar(node, grade.els)
               ) {
                 // #text orphan with parent visible
@@ -393,7 +395,7 @@ const mpos = {
         struct(sel, layers)
 
         // TEXTURE shader atlas (+1 for transparent slot)
-        grade.atlas += 1
+        grade.atlas += 2
         const MAX_TEXTURE_SIZE = Math.min(grade.atlas * grade.hardmax, 16_384)
         grade.canvas.width = grade.canvas.height = MAX_TEXTURE_SIZE
         grade.canvas.id = grade.idx
@@ -417,6 +419,9 @@ const mpos = {
               if (opts.trim) {
                 grade.els = Object.values(grade.els).filter((rect) => rect.mat)
               }
+              // the atlas ends with 2 blocks: cyan and transparent
+              opts.ctx.fillStyle = 'rgba(0, 255, 255, 0.125)'
+              opts.ctx.fillRect(grade.canvas.width - opts.step * 2, opts.step, opts.step, opts.step)
               transforms(grade)
             }
           }
@@ -464,7 +469,7 @@ const mpos = {
           grade.ray = []
 
           // shader atlas
-          let texIdx = new Float32Array(grade.softmax).fill(0)
+          let texIdx = new Float32Array(grade.softmax).fill(grade.atlas)
           let shader = mpos.add.shader(grade.canvas, grade.atlas, grade.hardmax)
 
           // Instanced Mesh
@@ -485,28 +490,30 @@ const mpos = {
 
           for (const [index, rect] of Object.entries(grade.els)) {
             if (rect.mat) {
+              // Instance Matrix
               let dummy = new THREE.Object3D()
               dummy = mpos.add.box(rect, { dummy: dummy })
               generic.setMatrixAt(index, dummy.matrix)
-
-              // Styles
+              // Instance Color
               const color = new THREE.Color()
               let bg = rect.css.style.backgroundColor
               const rgba = bg.replace(/(rgba)|[( )]/g, '').split(',')
               let alpha = Number(rgba[3])
               if (alpha <= 0.0) {
-                bg = rect.mat === 'child' ? '#00ff00' : null
+                bg = rect.mat === 'child' ? 'cyan' : null
               }
               generic.setColorAt(index, color.setStyle(bg))
 
-              // shader uv
-              texIdx[index] = typeof rect.atlas === 'number' ? rect.atlas : grade.atlas
+              // Shader Atlas: index or dummy slot
+              texIdx[index] = typeof rect.atlas === 'number' ? rect.atlas : grade.atlas - 2
 
               if (rect.mat === 'poster') {
                 grade.ray.push(Number(index))
               } else if (rect.mat === 'native') {
                 let mesh = mpos.add.box(rect)
                 vars.group.add(mesh[1])
+              } else if (rect.mat === 'child') {
+                grade.ray.push(Number(index))
               }
             }
           }
@@ -638,7 +645,7 @@ const mpos = {
 
           // styles
           let bg = rect.css.style.backgroundColor
-          let rgba = bg.replace(/[rgba( )]/g, '').split(',')
+          const rgba = bg.replace(/(rgba)|[( )]/g, '').split(',')
           if (Number(rgba[3]) <= 0.0) {
             bg = null
           }
@@ -664,7 +671,7 @@ const mpos = {
         if (unset === undefined) {
           // ancestors cumulative matrix
           const style = window.getComputedStyle(el)
-          const transform = style.transform.replace(/[matrix( )]/g, '')
+          const transform = style.transform.replace(/(matrix)|[( )]/g, '')
           if (transform !== 'none') {
             const [a, b] = transform.split(',')
             css.scale *= Math.sqrt(a * a + b * b)
