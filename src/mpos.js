@@ -407,7 +407,8 @@ const mpos = {
         // TEXTURE shader atlas (+1 for transparent slot)
         grade.atlas += 2
         const MAX_TEXTURE_SIZE = Math.min(grade.atlas * grade.hardmax, 16_384)
-        grade.canvas.width = grade.canvas.height = MAX_TEXTURE_SIZE
+        grade.canvas.width = MAX_TEXTURE_SIZE
+        grade.canvas.height = MAX_TEXTURE_SIZE
         grade.canvas.id = grade.idx
 
         // scaling
@@ -416,7 +417,7 @@ const mpos = {
             //opts: first-run
             opts.run = opts.slice || Object.keys(grade.els).length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
-            opts.step = opts.step || grade.canvas.height / grade.atlas
+            opts.step = opts.step || grade.canvas.width / grade.atlas
             // keep unused references?
             opts.trim = !(opts.trim === false) || true
           }
@@ -430,8 +431,8 @@ const mpos = {
                 grade.els = Object.values(grade.els).filter((rect) => rect.mat)
               }
               // the atlas ends with 2 blocks: cyan and transparent
-              opts.ctx.fillStyle = 'rgba(0, 255, 255, 0.125)'
-              opts.ctx.fillRect(grade.canvas.width - opts.step * 2, opts.step, opts.step, opts.step)
+              opts.ctx.fillStyle = 'rgba(0, 255, 255, 0.25)'
+              opts.ctx.fillRect(grade.canvas.width - opts.step * 2, 0, opts.step, grade.canvas.height)
               transforms(grade)
             }
           }
@@ -457,8 +458,10 @@ const mpos = {
                   }
                   // Instanced Mesh shader atlas
                   const block = rect.atlas * opts.step
-                  opts.ctx.drawImage(img, block, grade.canvas.height - opts.step - block, opts.step, opts.step)
+                  opts.ctx.drawImage(img, block, grade.canvas.height * 0.5 - opts.step, opts.step, opts.step)
 
+                  rect.x = rect.atlas / grade.atlas
+                  rect.y = 0.5
                   next()
                 }
 
@@ -480,7 +483,9 @@ const mpos = {
 
           // shader atlas
           let texIdx = new Float32Array(grade.softmax).fill(grade.atlas)
-          let shader = mpos.add.shader(grade.canvas, grade.atlas, grade.hardmax)
+          let shader = mpos.add.shader(grade.canvas, grade.atlas)
+
+          let uvOffset = new Float32Array(grade.softmax * 2).fill(-1)
 
           // Instanced Mesh
           const generic = new THREE.InstancedMesh(
@@ -498,6 +503,7 @@ const mpos = {
 
           // Meshes
 
+          const cyan = grade.atlas - 2
           for (const [index, rect] of Object.entries(grade.els)) {
             if (rect.mat) {
               // Instance Matrix
@@ -515,11 +521,18 @@ const mpos = {
               generic.setColorAt(index, color.setStyle(bg))
 
               // Shader Atlas: index or dummy slot
-              texIdx[index] = typeof rect.atlas === 'number' ? rect.atlas : grade.atlas - 2
+              texIdx[index] = rect.atlas !== undefined ? rect.atlas : cyan
 
-              if (rect.mat === 'poster') {
+              let stepSize = index * 2
+              let FPO = cyan / grade.atlas
+              if (rect.atlas !== undefined || rect.mat === 'child') {
                 grade.ray.push(Number(index))
-              } else if (rect.mat === 'native') {
+                // uv coordinate
+                uvOffset[stepSize] = rect.x || FPO
+                uvOffset[stepSize + 1] = rect.y || FPO
+              }
+
+              if (rect.mat === 'native') {
                 let mesh = mpos.add.box(rect)
                 vars.group.add(mesh[1])
               } else if (rect.mat === 'child') {
@@ -530,6 +543,7 @@ const mpos = {
           generic.instanceColor.needsUpdate = true
 
           generic.geometry.setAttribute('texIdx', new THREE.InstancedBufferAttribute(texIdx, 1))
+          generic.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
 
           generic.instanceMatrix.needsUpdate = true
           generic.computeBoundingSphere()
@@ -700,46 +714,54 @@ const mpos = {
       return css
     },
     shader: function (canvas, texStep) {
+      //discourse.threejs.org/t/13221/17
       const texAtlas = new THREE.CanvasTexture(canvas)
       texAtlas.minFilter = THREE.NearestFilter
-      texStep = 1 / texStep
-      const m = new THREE.MeshBasicMaterial({
-        //side: THREE.FrontSide,
-        //blending: THREE.MultiplyBlending,
-        transparent: true,
-        onBeforeCompile: (shader) => {
-          m.userData.s = shader
-          shader.uniforms.texAtlas = { value: texAtlas }
-          shader.vertexShader = `
-        attribute float texIdx;
-        varying float vTexIdx;
-        ${shader.vertexShader}
-      `.replace(
-            `void main() {`,
-            `void main() {
-        vTexIdx = texIdx;
-        `
-          )
-          //console.log(shader.vertexShader);
-          shader.fragmentShader = `
-        uniform sampler2D texAtlas;
-        varying float vTexIdx;
-        ${shader.fragmentShader}
-      `.replace(
-            `#include <map_fragment>`,
-            `#include <map_fragment>
-          
-            vec2 blockUv = ${texStep} * (floor(vTexIdx + 0.1) + vUv);
-            vec4 blockColor = texture(texAtlas, blockUv);
+      const m = new THREE.RawShaderMaterial({
+        uniforms: {
+          map: {
+            type: 't',
+            value: texAtlas
+          },
+          atlasSize: {
+            type: 'f',
+            value: texStep
+          }
+        },
+        vertexShader: `precision highp float;
 
-        diffuseColor *= blockColor;
-        `
-          )
-
-          //console.log(shader.fragmentShader)
+        uniform mat4 modelViewMatrix;
+        uniform mat4 projectionMatrix;
+        
+        attribute vec3 position;
+        attribute vec2 uv;
+        attribute mat4 instanceMatrix;
+        attribute vec2 uvOffset;
+        
+        uniform float atlasSize;
+        
+        varying vec2 vUv;
+        
+        void main()
+        {
+          vUv = uvOffset + (uv / atlasSize);
+          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
         }
+        `,
+        fragmentShader: `precision highp float;
+
+        varying vec2 vUv;
+        
+        uniform sampler2D map;
+        
+        void main()
+        {
+          gl_FragColor = texture2D(map, vUv);
+        }
+        `,
+        transparent: true
       })
-      m.defines = { USE_UV: '' }
+
       m.userData.t = texAtlas
       return m
     },

@@ -21,7 +21,7 @@ h2 { border-top: var(--u1) solid var(--sup); }
 .sup, h2 span { background-color: var(--sup); }
 .sub { background-color: var(--sub); }
 
-main, section, article, aside, fieldset { padding: var(--u2); }
+main, section, article, aside, fieldset { padding: var(--u2); user-select: none; }
 section, aside, h2, p, ul, ol, form, table { 
   margin-bottom: var(--u2);
 }
@@ -111,8 +111,8 @@ model-viewer {
   right: 0;
   z-index: 3;
   &:hover {
-    transform: scale(2);
-    transform-origin: bottom right;
+    //transform: scale(2);
+    //transform-origin: bottom right;
   }
 }
 
@@ -120,6 +120,7 @@ model-viewer {
   background-color: rgba( 255, 255, 255, 0.75 );
   overflow: hidden;
   overflow-y: auto;
+  
 
   a { display: block;  }
   canvas {
@@ -127,7 +128,7 @@ model-viewer {
     height: auto;
     image-rendering: pixelated;
     background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
-    background-size: 50% auto;
+    background-size: auto 100% ;
   }
   #carot {
     // index and inPolar
