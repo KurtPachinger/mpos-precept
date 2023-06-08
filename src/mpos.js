@@ -11,7 +11,7 @@ const mpos = {
       dispose: true,
       selector: 'main',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
-      depth: 8,
+      depth: 16,
       arc: false,
       update: function () {
         mpos.add
@@ -48,10 +48,10 @@ const mpos = {
     const vars = mpos.var
     // THREE
     vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(60, vars.fov.w / vars.fov.h, 0.01, 1000)
+    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, 100)
     //vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
-    vars.camera.position.z = 1
+    vars.camera.position.z = 1.25
 
     vars.renderer = new THREE.WebGLRenderer()
     vars.renderer.setSize(vars.fov.w, vars.fov.h)
@@ -73,7 +73,9 @@ const mpos = {
     vars.controls = new MapControls(vars.camera, vars.rendererCSS.domElement)
     vars.controls.screenSpacePanning = true
 
-    vars.controls.target.setY(-(vars.fov.h * (1 / vars.fov.max)))
+    const helfHeight = -((vars.fov.h / 2) * (1 / vars.fov.max))
+    vars.camera.position.setY(helfHeight + 0.125)
+    vars.controls.target.setY(helfHeight)
     vars.controls.update()
 
     // live
