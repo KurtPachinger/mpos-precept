@@ -405,10 +405,10 @@ const mpos = {
         struct(sel, layers)
 
         // TEXTURE shader atlas (+1 for transparent slot)
-        grade.atlas += 2
-        const MAX_TEXTURE_SIZE = Math.min(grade.atlas * grade.hardmax, 16_384)
-        grade.canvas.width = MAX_TEXTURE_SIZE
-        grade.canvas.height = MAX_TEXTURE_SIZE
+        //grade.atlas += 2
+        grade.cells = Math.ceil(Math.sqrt(grade.softmax))
+        const MAX_TEXTURE_SIZE = Math.min(grade.cells * grade.hardmax, 16_384)
+        grade.canvas.width = grade.canvas.height = MAX_TEXTURE_SIZE
         grade.canvas.id = grade.idx
 
         // scaling
@@ -417,7 +417,7 @@ const mpos = {
             //opts: first-run
             opts.run = opts.slice || Object.keys(grade.els).length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
-            opts.step = opts.step || grade.canvas.width / grade.atlas
+            opts.step = opts.step || grade.canvas.width / grade.cells
             // keep unused references?
             opts.trim = !(opts.trim === false) || true
           }
@@ -432,7 +432,7 @@ const mpos = {
               }
               // the atlas ends with 2 blocks: cyan and transparent
               opts.ctx.fillStyle = 'rgba(0, 255, 255, 0.25)'
-              opts.ctx.fillRect(grade.canvas.width - opts.step * 2, 0, opts.step, grade.canvas.height)
+              opts.ctx.fillRect(grade.canvas.width - opts.step, grade.canvas.height - opts.step, opts.step, opts.step)
               transforms(grade)
             }
           }
@@ -455,13 +455,19 @@ const mpos = {
 
                       mpos.add.loader(file, dummy)
                     }
-                  }
-                  // Instanced Mesh shader atlas
-                  const block = rect.atlas * opts.step
-                  opts.ctx.drawImage(img, block, grade.canvas.height * 0.5 - opts.step, opts.step, opts.step)
+                  } else {
+                    // Instanced Mesh shader atlas
 
-                  rect.x = rect.atlas / grade.atlas
-                  rect.y = 0.5
+                    // canvas xy: from block top
+                    let x = (rect.atlas % grade.cells) * opts.step
+                    let y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * opts.step
+                    opts.ctx.drawImage(img, x, y, opts.step, opts.step)
+                    // shader xy: from block bottom
+                    // avoid 0 edge, so add 0.0001
+                    rect.x = (0.0001 + x) / grade.canvas.width
+                    rect.y = (0.0001 + y + opts.step) / grade.canvas.height
+                  }
+
                   next()
                 }
 
@@ -481,13 +487,8 @@ const mpos = {
         function transforms(grade) {
           grade.ray = []
 
-          // shader atlas
-          let texIdx = new Float32Array(grade.softmax).fill(grade.atlas)
-          let shader = mpos.add.shader(grade.canvas, grade.atlas)
-
-          let uvOffset = new Float32Array(grade.softmax * 2).fill(-1)
-
-          // Instanced Mesh
+          // Instanced Mesh, shader atlas
+          const shader = mpos.add.shader(grade.canvas, grade.cells)
           const generic = new THREE.InstancedMesh(
             vars.geo.clone(),
             [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
@@ -498,12 +499,11 @@ const mpos = {
           generic.userData.el = sel
           generic.userData.grade = grade
           generic.name = [grade.idx, selector].join('_')
-          vars.group.add(generic)
           generic.layers.set(2)
 
           // Meshes
-
-          const cyan = grade.atlas - 2
+          const cyan = { x: 1 - 1 / grade.cells, y: 0.01 }
+          const uvOffset = new Float32Array(grade.softmax * 2).fill(-1)
           for (const [index, rect] of Object.entries(grade.els)) {
             if (rect.mat) {
               // Instance Matrix
@@ -514,41 +514,36 @@ const mpos = {
               const color = new THREE.Color()
               let bg = rect.css.style.backgroundColor
               const rgba = bg.replace(/(rgba)|[( )]/g, '').split(',')
-              let alpha = Number(rgba[3])
+              const alpha = Number(rgba[3])
               if (alpha <= 0.0) {
                 bg = rect.mat === 'child' ? 'cyan' : null
               }
               generic.setColorAt(index, color.setStyle(bg))
 
               // Shader Atlas: index or dummy slot
-              texIdx[index] = rect.atlas !== undefined ? rect.atlas : cyan
-
-              let stepSize = index * 2
-              let FPO = cyan / grade.atlas
+              const stepSize = index * 2
               if (rect.atlas !== undefined || rect.mat === 'child') {
-                grade.ray.push(Number(index))
                 // uv coordinate
-                uvOffset[stepSize] = rect.x || FPO
-                uvOffset[stepSize + 1] = rect.y || FPO
+                uvOffset[stepSize] = rect.x || cyan.x
+                uvOffset[stepSize + 1] = 1 - rect.y || cyan.y
+                // raycast
+                grade.ray.push(Number(index))
               }
 
               if (rect.mat === 'native') {
+                // CSS3D standalone
                 let mesh = mpos.add.box(rect)
                 vars.group.add(mesh[1])
-              } else if (rect.mat === 'child') {
-                grade.ray.push(Number(index))
               }
             }
           }
-          generic.instanceColor.needsUpdate = true
-
-          generic.geometry.setAttribute('texIdx', new THREE.InstancedBufferAttribute(texIdx, 1))
-          generic.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
 
           generic.instanceMatrix.needsUpdate = true
+          generic.instanceColor.needsUpdate = true
           generic.computeBoundingSphere()
+          generic.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
 
-          // UI texture
+          // UI Atlas
           let link = document.querySelector('#atlas a')
           let name = ['atlas', grade.idx, grade.atlas, MAX_TEXTURE_SIZE].join('_')
           link.title = link.download = name
@@ -559,6 +554,7 @@ const mpos = {
           // OUTPUT
           vars.group.userData.atlas = grade.atlas
           vars.group.scale.multiplyScalar(1 / vars.fov.max)
+          vars.group.add(generic)
           vars.scene.add(vars.group)
 
           grade.group = vars.group

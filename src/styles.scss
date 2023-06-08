@@ -111,8 +111,8 @@ model-viewer {
   right: 0;
   z-index: 3;
   &:hover {
-    //transform: scale(2);
-    //transform-origin: bottom right;
+    transform: scale(2);
+    transform-origin: bottom right;
   }
 }
 
