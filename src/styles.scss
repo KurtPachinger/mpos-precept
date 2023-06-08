@@ -17,7 +17,7 @@
 
 
 /* STYLE */
-h2 { border-top: var(--u1) solid var(--sup); }
+h2 { border-top: var(--u1) solid var(--sup); font-style:normal;font-weight:600; }
 .sup, h2 span { background-color: var(--sup); }
 .sub { background-color: var(--sub); }
 

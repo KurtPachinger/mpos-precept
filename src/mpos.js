@@ -7,7 +7,6 @@ import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
 const mpos = {
   var: {
-    batch: 0,
     opt: {
       dispose: true,
       selector: 'main',
@@ -27,6 +26,7 @@ const mpos = {
       z: 8,
       max: 1024
     },
+
     geo: new THREE.BoxBufferGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
       transparent: true,
@@ -150,43 +150,34 @@ const mpos = {
       vars.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1
 
       if (vars.group) {
+        const grade = vars.group.userData.grade
         vars.raycaster.setFromCamera(vars.pointer, vars.camera)
         let intersects = vars.raycaster.intersectObjects(vars.group.children, false)
+        intersects = intersects.filter(function (hit) {
+          return grade.ray.indexOf(hit.instanceId) > -1
+        })
 
         if (intersects.length) {
-          intersects = intersects.filter(function (hit) {
-            let idx = hit.instanceId
-            let ray = hit.object.userData.grade.ray
-            let keep = ray.indexOf(idx) > -1
+          //console.log('intersects', intersects)
+          const hit = intersects[0]
+          const obj = hit.object
 
-            return keep
-          })
-
-          if (intersects.length) {
-            //console.log('intersects', intersects)
-            const hit = intersects[0]
-            const obj = hit.object
-
-            let carot = vars.carot.style
-            if (obj) {
-              const idx = hit.instanceId
-              let rect
-              if (obj.isInstancedMesh) {
-                rect = obj.userData.grade.els[idx]
-              } else if (obj.isMesh || obj.isCSS3DObject) {
-                rect = obj.userData.el
-              }
-              const vis = mpos.precept.inPolar(rect.el) >= 2
-              const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
-              carot.backgroundColor = color
-              let block = 100 * (1 / vars.group.userData.atlas)
-              carot.width = carot.height = block + '%'
-
-              carot.left = carot.bottom = rect.atlas * block + '%'
-              if (!rect.atlas) {
-                carot.width = '100%'
-                carot.left = carot.bottom = 0
-              }
+          if (obj) {
+            const rect = grade.rects[hit.instanceId]
+            const carot = vars.carot.style
+            // visibility
+            const vis = mpos.precept.inPolar(rect.el) >= 2
+            const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
+            carot.backgroundColor = color
+            // location
+            const cell = 100 * (1 / grade.cells)
+            carot.width = carot.height = cell + '%'
+            carot.left = 100 * rect.x + '%'
+            carot.bottom = 100 * (1 - rect.y) + '%'
+            if (!rect.atlas) {
+              // child container
+              carot.width = '100%'
+              carot.left = carot.bottom = 0
             }
           }
         }
@@ -200,7 +191,8 @@ const mpos = {
     }
   },
   precept: {
-    batch: 0,
+    index: 0,
+    canvas: document.querySelector('#atlas canvas'),
     allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
@@ -251,19 +243,17 @@ const mpos = {
       // structure
       const precept = mpos.precept
       const grade = {
-        idx: precept.batch++,
-        hardmax: 256,
-        softmax: 0,
+        index: precept.index++,
+        minRes: 256,
+        maxEls: 0,
+        minEls: 0,
         atlas: 0,
-        els: {},
+        rects: {},
         txt: [],
-        canvas: document.querySelector('#atlas canvas'),
         sX: window.scrollX,
-        sY: window.scrollY
+        sY: window.scrollY,
+        canvas: precept.canvas
       }
-      // texture unit, relative to viewport resolution
-      grade.hardmax = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 64
-      //let estimate = sel.querySelectorAll([precept.allow, precept.native, precept.poster]).length / 3
 
       // THREE cleanup
       let dispose = vars.opt.dispose ? selector : false
@@ -272,7 +262,6 @@ const mpos = {
         // new THREE group
         vars.group = new THREE.Group()
         vars.group.name = selector
-        vars.group.userData.batch = mpos.precept.batch
         // root DOM node (viewport)
         const mesh = mpos.add.box({ el: document.body, z: 0, mat: 'wire' }, { sX: grade.sX, sY: grade.sY })
         vars.group.add(...mesh)
@@ -299,7 +288,7 @@ const mpos = {
                 node.parentNode.matches([precept.allow]) &&
                 !node.parentNode.matches([precept.native, precept.poster]) &&
                 node.parentElement.childNodes !== 1 &&
-                precept.inPolar(node, grade.els)
+                precept.inPolar(node, grade.rects)
               ) {
                 // #text orphan with parent visible
                 // sanitize, block-level required for width
@@ -314,23 +303,30 @@ const mpos = {
 
               if (el) {
                 // static list
-                const idx = grade.softmax
+                const idx = grade.maxEls
                 el.setAttribute('data-idx', idx)
-                grade.els[idx] = { el: el }
-                grade.softmax++
+                grade.rects[idx] = { el: el }
+                grade.maxEls++
               }
             }
           }
 
-          node = ni.nextNode() || (grade.softmax = 0)
+          node = ni.nextNode()
         }
+
+        // Atlas Units: relative device profile
+        grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 64
+        grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 3))
+        grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
+        grade.canvas.width = grade.canvas.height = grade.maxRes
+        grade.canvas.id = grade.index
 
         // DEEP-GRADE: type, count
         function report(rect, z, mat) {
           rect.mat = mat
           rect.z = z
           // shader
-          grade.softmax++
+          grade.minEls++
           if (rect.mat === 'poster') {
             rect.atlas = grade.atlas++
           }
@@ -340,7 +336,7 @@ const mpos = {
           const z = layers - layer
 
           // SELF
-          let rect = grade.els[sel.getAttribute('data-idx')]
+          let rect = grade.rects[sel.getAttribute('data-idx')]
 
           rect && report(rect, z, 'self')
 
@@ -350,13 +346,13 @@ const mpos = {
             let mat = 'child'
 
             let node = children[i]
-            let rect = grade.els[node.getAttribute('data-idx')]
+            let rect = grade.rects[node.getAttribute('data-idx')]
 
             let vis = precept.inPolar(node)
             if (vis >= 1) {
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
-              const abort = grade.atlas >= grade.hardmax
+              const abort = grade.atlas >= grade.minRes
               if (block || abort) {
                 console.log('skip', node.nodeName)
               } else if (vis >= 2) {
@@ -369,9 +365,9 @@ const mpos = {
                   let depth = layer - 1
                   struct(node, depth)
                 } else {
-                  // element type output quality
-
+                  // set box type
                   if (manual) {
+                    // priority score
                     if (node.matches('.loader')) {
                       mat = 'loader'
                     } else if (node.matches('.poster')) {
@@ -380,11 +376,8 @@ const mpos = {
                       mat = 'native'
                     }
                   } else if (node.matches([precept.native, precept.native3d])) {
-                    mat = 'native'
                     // todo: test internal type
-                    // node.tagName [iframe,object,embed,svg...] attribute [src,data]
-                    // native: ==100%, [html,swf,pdf]
-                    // poster: <=512, [jpg]
+                    mat = 'native'
                   } else if (node.matches(precept.poster)) {
                     mat = 'poster'
                   }
@@ -394,30 +387,18 @@ const mpos = {
                 console.log('observe', rect.el)
                 mpos.ux.observer.observe(rect.el)
               }
-
-              //
             }
-
-            //
           }
         }
 
         struct(sel, layers)
 
-        // TEXTURE shader atlas (+1 for transparent slot)
-        //grade.atlas += 2
-        grade.cells = Math.ceil(Math.sqrt(grade.softmax))
-        const MAX_TEXTURE_SIZE = Math.min(grade.cells * grade.hardmax, 16_384)
-        grade.canvas.width = grade.canvas.height = MAX_TEXTURE_SIZE
-        grade.canvas.id = grade.idx
-
-        // scaling
         function atlas(grade, idx = 0, opts = {}) {
+          // element mat conversion
           if (opts.run === undefined) {
-            //opts: first-run
-            opts.run = opts.slice || Object.keys(grade.els).length
+            opts.run = opts.slice || Object.keys(grade.rects).length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
-            opts.step = opts.step || grade.canvas.width / grade.cells
+            opts.step = opts.step || grade.maxRes / grade.cells
             // keep unused references?
             opts.trim = !(opts.trim === false) || true
           }
@@ -428,16 +409,16 @@ const mpos = {
               atlas(grade, idx)
             } else {
               if (opts.trim) {
-                grade.els = Object.values(grade.els).filter((rect) => rect.mat)
+                grade.rects = Object.values(grade.rects).filter((rect) => rect.mat)
               }
               // the atlas ends with 2 blocks: cyan and transparent
-              opts.ctx.fillStyle = 'rgba(0, 255, 255, 0.25)'
-              opts.ctx.fillRect(grade.canvas.width - opts.step, grade.canvas.height - opts.step, opts.step, opts.step)
+              opts.ctx.fillStyle = 'rgba(0,255,255,0.25)'
+              opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
               transforms(grade)
             }
           }
 
-          let rect = grade.els[idx]
+          let rect = grade.rects[idx]
           if (rect && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
             //let reset = { transform: 'initial!important' }
             toSvg(rect.el)
@@ -456,7 +437,7 @@ const mpos = {
                       mpos.add.loader(file, dummy)
                     }
                   } else {
-                    // Instanced Mesh shader atlas
+                    // poster coordinate
 
                     // canvas xy: from block top
                     let x = (rect.atlas % grade.cells) * opts.step
@@ -464,8 +445,8 @@ const mpos = {
                     opts.ctx.drawImage(img, x, y, opts.step, opts.step)
                     // shader xy: from block bottom
                     // avoid 0 edge, so add 0.0001
-                    rect.x = (0.0001 + x) / grade.canvas.width
-                    rect.y = (0.0001 + y + opts.step) / grade.canvas.height
+                    rect.x = (0.0001 + x) / grade.maxRes
+                    rect.y = (0.0001 + y + opts.step) / grade.maxRes
                   }
 
                   next()
@@ -492,19 +473,18 @@ const mpos = {
           const generic = new THREE.InstancedMesh(
             vars.geo.clone(),
             [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
-            grade.hardmax
+            grade.maxEls
           )
           generic.instanceMatrix.setUsage(THREE.StaticDrawUsage)
-          generic.count = grade.softmax
+          generic.count = grade.minEls
           generic.userData.el = sel
-          generic.userData.grade = grade
-          generic.name = [grade.idx, selector].join('_')
+          generic.name = [grade.index, selector].join('_')
           generic.layers.set(2)
 
           // Meshes
           const cyan = { x: 1 - 1 / grade.cells, y: 0.01 }
-          const uvOffset = new Float32Array(grade.softmax * 2).fill(-1)
-          for (const [index, rect] of Object.entries(grade.els)) {
+          const uvOffset = new Float32Array(grade.minEls * 2).fill(-1)
+          for (const [index, rect] of Object.entries(grade.rects)) {
             if (rect.mat) {
               // Instance Matrix
               let dummy = new THREE.Object3D()
@@ -545,14 +525,14 @@ const mpos = {
 
           // UI Atlas
           let link = document.querySelector('#atlas a')
-          let name = ['atlas', grade.idx, grade.atlas, MAX_TEXTURE_SIZE].join('_')
+          let name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
           link.title = link.download = name
           link.href = grade.canvas.toDataURL()
           //link.appendChild(grade.canvas)
           //document.getElementById('atlas').appendChild(link)
 
           // OUTPUT
-          vars.group.userData.atlas = grade.atlas
+          vars.group.userData.grade = grade
           vars.group.scale.multiplyScalar(1 / vars.fov.max)
           vars.group.add(generic)
           vars.scene.add(vars.group)
@@ -633,7 +613,7 @@ const mpos = {
 
         const mesh = new THREE.Mesh(vars.geo, vars.mat)
         mesh.scale.set(w, h, d)
-        mesh.userData.el = rect
+        mesh.userData.el = rect.el
         mesh.name = name
 
         types.push(mesh)
@@ -658,6 +638,7 @@ const mpos = {
             el.style.width = w
             el.style.height = h
             const css3d = new CSS3DObject(el)
+            // note: this is the cloned el, not the original
             css3d.userData.el = el
             css3d.name = name
             types.push(css3d)
