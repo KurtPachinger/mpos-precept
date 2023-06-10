@@ -280,7 +280,7 @@ const mpos = {
             console.log('#comment', node.textContent)
           } else {
             let inPolar = precept.inPolar(node)
-            if (inPolar >= 1) {
+            if (inPolar) {
               let el = false
               if (inPolar >= 2) {
                 el = node
@@ -301,6 +301,7 @@ const mpos = {
                 wrap.appendChild(node)
 
                 el = wrap
+                inPolar = precept.inPolar(el)
                 grade.txt.push(node)
               }
 
@@ -328,14 +329,17 @@ const mpos = {
         function report(rect, z, mat) {
           rect.mat = mat
           rect.z = z
-          // shader
-          grade.minEls++
-          if (rect.inPolar < vars.opt.inPolar) {
-            // not scripts?
+
+          if (rect.inPolar >= vars.opt.inPolar) {
+            grade.minEls++
+            if (rect.mat === 'poster') {
+              // shader
+              rect.atlas = grade.atlas++
+            }
+          } else {
+            // off-screen
             console.log('observe', rect.el)
             mpos.ux.observer.observe(rect.el)
-          } else if (rect.mat === 'poster') {
-            rect.atlas = grade.atlas++
           }
         }
 
@@ -344,18 +348,16 @@ const mpos = {
 
           // SELF
           let rect = grade.rects[sel.getAttribute('data-idx')]
-
           rect && report(rect, z, 'self')
 
           // CHILD
           let children = sel.children
           for (let i = 0; i < children.length; i++) {
-            let mat = 'child'
-
             let node = children[i]
-            let rect = grade.rects[node.getAttribute('data-idx')]
 
+            let rect = grade.rects[node.getAttribute('data-idx')]
             if (rect && rect.inPolar) {
+              let mat = 'child'
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
               const abort = grade.atlas >= grade.minRes
@@ -389,8 +391,6 @@ const mpos = {
                       mat = 'poster'
                     }
                   }
-
-                  //
 
                   report(rect, z, mat)
                 }
@@ -489,12 +489,13 @@ const mpos = {
           // Meshes
           const cyan = { x: 1 - 1 / grade.cells, y: 0.01 }
           const uvOffset = new Float32Array(grade.minEls * 2).fill(-1)
+          let count = 0
           for (const [index, rect] of Object.entries(grade.rects)) {
-            if (rect.mat && rect.inPolar >= mpos.var.opt.inPolar) {
+            if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
               // Instance Matrix
               let dummy = new THREE.Object3D()
               dummy = mpos.add.box(rect, { dummy: dummy })
-              generic.setMatrixAt(index, dummy.matrix)
+              generic.setMatrixAt(count, dummy.matrix)
               // Instance Color
               const color = new THREE.Color()
               let bg = rect.css.style.backgroundColor
@@ -503,16 +504,16 @@ const mpos = {
               if (alpha <= 0.0) {
                 bg = rect.mat === 'child' ? 'cyan' : null
               }
-              generic.setColorAt(index, color.setStyle(bg))
+              generic.setColorAt(count, color.setStyle(bg))
 
               // Shader Atlas: index or dummy slot
-              const stepSize = index * 2
+              const stepSize = count * 2
               if (rect.atlas !== undefined || rect.mat === 'child') {
                 // uv coordinate
                 uvOffset[stepSize] = rect.x || cyan.x
                 uvOffset[stepSize + 1] = 1 - rect.y || cyan.y
                 // raycast
-                grade.ray.push(Number(index))
+                grade.ray.push(Number(count))
               }
 
               if (rect.mat === 'native') {
@@ -520,6 +521,7 @@ const mpos = {
                 let mesh = mpos.add.box(rect)
                 vars.group.add(mesh[1])
               }
+              count++
             }
           }
 
