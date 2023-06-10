@@ -1,10 +1,9 @@
 import * as THREE from 'three'
-import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
+import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
-import { toSvg } from 'html-to-image'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
-import { FileLoader } from 'three'
+import { toSvg } from 'html-to-image'
 
 const mpos = {
   var: {
@@ -13,6 +12,7 @@ const mpos = {
       selector: 'main',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
+      inPolar: 4,
       arc: false,
       update: function () {
         mpos.add
@@ -109,6 +109,7 @@ const mpos = {
       let param = []
       if (key === 'selector') param = [['body', 'main', '#text', '#media', '#transform', 'address']]
       if (key === 'depth') param = [0, 32, 1]
+      if (key === 'inPolar') param = [1, 4, 1]
 
       gui.add(vars.opt, key, ...param)
     })
@@ -169,7 +170,7 @@ const mpos = {
             const rect = grade.rects[hit.instanceId]
             const carot = vars.carot.style
             // visibility
-            const vis = mpos.precept.inPolar(rect.el) >= 2
+            const vis = mpos.precept.inPolar(rect.el) >= vars.opt.inPolar
             const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
             carot.backgroundColor = color
             // location
@@ -187,9 +188,8 @@ const mpos = {
       }
     },
     event: function (e) {
-      e.stopPropagation()
-      let idx = e.target.getAttribute('data-idx')
-      let node = document.querySelector('[data-idx="' + idx + '"]')
+      const idx = e.target.getAttribute('data-idx')
+      const node = document.querySelector('[data-idx="' + idx + '"]')
       node.value = e.target.value
     }
   },
@@ -202,7 +202,7 @@ const mpos = {
     poster: `.poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,caption,dt,dd`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
-      let vis = node.tagName || node.textContent.trim() ? -1 : false
+      let vis = node.tagName || node.textContent.trim() ? 1 : false
       if (typeof control === 'object') {
         // node relative in control plot
         vis = Object.values(control).some(function (tag) {
@@ -210,18 +210,18 @@ const mpos = {
           return unlist && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
         })
       } else {
-        // -1: node not empty
+        // 1: node not empty
         if (node.tagName) {
-          // 0: node is tag
+          // 2: node is tag
           vis++
-          if (true || node.checkVisibility()) {
-            // 1: tag not hidden
+          if (node.checkVisibility()) {
+            // 3: tag not hidden
             vis++
             const rect = node.getBoundingClientRect()
             const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
             const scroll = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
             if (scroll) {
-              // 2: tag in viewportinPolar
+              // 4: tag in viewport
               vis++
             }
           }
@@ -279,10 +279,10 @@ const mpos = {
             // #comment... (or CDATA, xml, php)
             console.log('#comment', node.textContent)
           } else {
-            let vis = precept.inPolar(node)
-            if (vis) {
+            let inPolar = precept.inPolar(node)
+            if (inPolar >= 1) {
               let el = false
-              if (vis >= 0) {
+              if (inPolar >= 2) {
                 el = node
                 // ...estimate
                 //if (node.matches([precept.native, precept.poster])) {}
@@ -308,7 +308,7 @@ const mpos = {
                 // static list
                 const idx = grade.maxEls
                 el.setAttribute('data-idx', idx)
-                grade.rects[idx] = { el: el }
+                grade.rects[idx] = { el: el, inPolar: inPolar }
                 grade.maxEls++
               }
             }
@@ -330,7 +330,11 @@ const mpos = {
           rect.z = z
           // shader
           grade.minEls++
-          if (rect.mat === 'poster') {
+          if (rect.inPolar < vars.opt.inPolar) {
+            // not scripts?
+            console.log('observe', rect.el)
+            mpos.ux.observer.observe(rect.el)
+          } else if (rect.mat === 'poster') {
             rect.atlas = grade.atlas++
           }
         }
@@ -351,44 +355,45 @@ const mpos = {
             let node = children[i]
             let rect = grade.rects[node.getAttribute('data-idx')]
 
-            let vis = precept.inPolar(node)
-            if (vis >= 1) {
+            if (rect && rect.inPolar) {
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
               const abort = grade.atlas >= grade.minRes
               if (block || abort) {
                 console.log('skip', node.nodeName)
-              } else if (vis >= 2) {
-                const allow = node.matches(precept.allow)
-                const manual = node.matches('.poster, .native, .loader')
-                const empty = node.children.length === 0
-
-                if (layer >= 1 && allow && !manual && !empty) {
-                  // selector structure output depth
-                  let depth = layer - 1
-                  struct(node, depth)
-                } else {
-                  // set box type
-                  if (manual) {
-                    // priority score
-                    if (node.matches('.loader')) {
-                      mat = 'loader'
-                    } else if (node.matches('.poster')) {
-                      mat = 'poster'
-                    } else if (node.matches('.native')) {
-                      mat = 'native'
-                    }
-                  } else if (node.matches([precept.native, precept.native3d])) {
-                    // todo: test internal type
-                    mat = 'native'
-                  } else if (node.matches(precept.poster)) {
-                    mat = 'poster'
-                  }
-                }
-                report(rect, z, mat)
               } else {
-                console.log('observe', rect.el)
-                mpos.ux.observer.observe(rect.el)
+                if (rect.inPolar >= 1) {
+                  const allow = node.matches(precept.allow)
+                  const manual = node.matches('.poster, .native, .loader')
+                  const empty = node.children.length === 0
+
+                  if (layer >= 1 && allow && !manual && !empty) {
+                    // selector structure output depth
+                    let depth = layer - 1
+                    struct(node, depth)
+                  } else {
+                    // set box type
+                    if (manual) {
+                      // priority score
+                      if (node.matches('.loader')) {
+                        mat = 'loader'
+                      } else if (node.matches('.poster')) {
+                        mat = 'poster'
+                      } else if (node.matches('.native')) {
+                        mat = 'native'
+                      }
+                    } else if (node.matches([precept.native, precept.native3d])) {
+                      // todo: test internal type
+                      mat = 'native'
+                    } else if (node.matches(precept.poster)) {
+                      mat = 'poster'
+                    }
+                  }
+
+                  //
+
+                  report(rect, z, mat)
+                }
               }
             }
           }
@@ -422,7 +427,7 @@ const mpos = {
           }
 
           let rect = grade.rects[idx]
-          if (rect && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
+          if (rect.inPolar >= mpos.var.opt.inPolar && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
             //let reset = { transform: 'initial!important' }
             toSvg(rect.el)
               .then(function (dataUrl) {
@@ -485,7 +490,7 @@ const mpos = {
           const cyan = { x: 1 - 1 / grade.cells, y: 0.01 }
           const uvOffset = new Float32Array(grade.minEls * 2).fill(-1)
           for (const [index, rect] of Object.entries(grade.rects)) {
-            if (rect.mat) {
+            if (rect.mat && rect.inPolar >= mpos.var.opt.inPolar) {
               // Instance Matrix
               let dummy = new THREE.Object3D()
               dummy = mpos.add.box(rect, { dummy: dummy })
@@ -664,7 +669,11 @@ const mpos = {
       if (unset === undefined) {
         // target element original style
         //console.log('unset style', target)
-        css.style = window.getComputedStyle(el)
+        let style = window.getComputedStyle(el)
+        css.style = {
+          transform: style.transform,
+          backgroundColor: style.backgroundColor
+        }
       }
 
       let els = []
@@ -801,15 +810,16 @@ const mpos = {
         // instantiate a loader: File, Audio, Object...
         let handler = file.match(/\.[0-9a-z]+$/i)
         handler = handler ? handler[0] : 'File'
-        const loader = dummy ? new SVGLoader() : new FileLoader()
+        const loader = handler.toUpperCase() === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
 
         loader.load(
           file,
           function (data) {
-            console.log('loader', data)
+            let res = { data: data }
+            console.log('load', data)
             if (handler.toUpperCase() === '.SVG') {
-              const paths = data.paths
               const group = new THREE.Group()
+              const paths = data.paths
 
               for (let i = 0; i < paths.length; i++) {
                 const path = paths[i]
@@ -829,17 +839,18 @@ const mpos = {
                   group.add(mesh)
                 }
               }
-
-              group.position.set(dummy.position.x / 2, dummy.position.y + dummy.scale.y / 2, dummy.position.z)
-              let invMax = Math.max(mpos.var.fov.w, mpos.var.fov.h)
-              group.scale.set(dummy.scale.x / invMax, dummy.scale.y / invMax, 1)
+              let scale = mpos.var.fov.max / Math.max(dummy.scale.x, dummy.scale.y)
+              group.position.x = dummy.position.x
+              group.position.y = dummy.position.y + dummy.scale.y / 2
+              group.scale.multiplyScalar(1 / scale)
               group.scale.y *= -1
+
               group.name = 'SVG'
               mpos.var.group.add(group)
             }
 
-            resolve(data)
-            reject(data)
+            resolve(res)
+            reject(res)
           },
           // called when loading is in progresses
           function (xhr) {
@@ -852,6 +863,7 @@ const mpos = {
         )
       })
 
+      //
       return promise
     }
   }
