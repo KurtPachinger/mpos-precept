@@ -404,7 +404,7 @@ const mpos = {
         function atlas(grade, idx = 0, opts = {}) {
           // element mat conversion
           if (opts.run === undefined) {
-            opts.run = opts.slice || Object.keys(grade.rects).length
+            opts.run = idx + opts.slice || Object.keys(grade.rects).length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
             opts.step = opts.step || grade.maxRes / grade.cells
             // keep unused references?
