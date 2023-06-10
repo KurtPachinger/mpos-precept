@@ -4,6 +4,7 @@ import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRe
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { toSvg } from 'html-to-image'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
+import { FileLoader } from 'three'
 
 const mpos = {
   var: {
@@ -429,13 +430,10 @@ const mpos = {
                 img.onload = function () {
                   if (rect.mat === 'loader') {
                     // SVGLoader supports files, but not text...?
-                    let file = rect.el.data || rect.el.src || rect.el.href || ''
-                    let type = file.match(/\.[0-9a-z]+$/i)
-                    type = type ? type[0] : false
-                    if (type === '.svg') {
+                    let file = rect.el.data || rect.el.src || rect.el.href | ''
+                    if (file) {
                       let dummy = new THREE.Object3D()
                       dummy = mpos.add.box(rect, { dummy: dummy })
-
                       mpos.add.loader(file, dummy)
                     }
                   } else {
@@ -800,47 +798,48 @@ const mpos = {
     },
     loader: function (file, dummy) {
       let promise = new Promise((resolve, reject) => {
-        // instantiate a loader
-        const loader = new SVGLoader()
+        // instantiate a loader: File, Audio, Object...
+        let handler = file.match(/\.[0-9a-z]+$/i)
+        handler = handler ? handler[0] : 'File'
+        const loader = dummy ? new SVGLoader() : new FileLoader()
 
-        // load a SVG resource
         loader.load(
-          // resource URL
           file,
-          // called when the resource is loaded
           function (data) {
             console.log('loader', data)
-            const paths = data.paths
-            const group = new THREE.Group()
+            if (handler.toUpperCase() === '.SVG') {
+              const paths = data.paths
+              const group = new THREE.Group()
 
-            for (let i = 0; i < paths.length; i++) {
-              const path = paths[i]
+              for (let i = 0; i < paths.length; i++) {
+                const path = paths[i]
 
-              const material = new THREE.MeshBasicMaterial({
-                color: path.color,
-                side: THREE.FrontSide,
-                depthWrite: false
-              })
+                const material = new THREE.MeshBasicMaterial({
+                  color: path.color,
+                  side: THREE.FrontSide,
+                  depthWrite: false
+                })
 
-              const shapes = SVGLoader.createShapes(path)
+                const shapes = SVGLoader.createShapes(path)
 
-              for (let j = 0; j < shapes.length; j++) {
-                const shape = shapes[j]
-                const geometry = new THREE.ShapeGeometry(shape)
-                const mesh = new THREE.Mesh(geometry, material)
-                group.add(mesh)
+                for (let j = 0; j < shapes.length; j++) {
+                  const shape = shapes[j]
+                  const geometry = new THREE.ShapeGeometry(shape)
+                  const mesh = new THREE.Mesh(geometry, material)
+                  group.add(mesh)
+                }
               }
+
+              group.position.set(dummy.position.x / 2, dummy.position.y + dummy.scale.y / 2, dummy.position.z)
+              let invMax = Math.max(mpos.var.fov.w, mpos.var.fov.h)
+              group.scale.set(dummy.scale.x / invMax, dummy.scale.y / invMax, 1)
+              group.scale.y *= -1
+              group.name = 'SVG'
+              mpos.var.group.add(group)
             }
 
-            group.position.set(dummy.position.x / 2, dummy.position.y + dummy.scale.y / 2, dummy.position.z)
-            let invMax = Math.max(mpos.var.fov.w, mpos.var.fov.h)
-            group.scale.set(dummy.scale.x / invMax, dummy.scale.y / invMax, 1)
-            group.scale.y *= -1
-            group.name = 'SVG'
-            mpos.var.group.add(group)
-
-            resolve(group)
-            reject(group)
+            resolve(data)
+            reject(data)
           },
           // called when loading is in progresses
           function (xhr) {
