@@ -12,7 +12,7 @@ const mpos = {
       selector: 'main',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
-      inPolar: 4,
+      inPolar: 3,
       arc: false,
       update: function () {
         mpos.add
@@ -28,7 +28,7 @@ const mpos = {
       max: 1024
     },
 
-    geo: new THREE.BoxBufferGeometry(1, 1, 1),
+    geo: new THREE.BoxGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
       transparent: true,
       wireframe: true,
@@ -38,7 +38,7 @@ const mpos = {
     }),
     mat_line: new THREE.LineBasicMaterial({
       transparent: true,
-      wireframe: true,
+      //wireframe: true,
       side: THREE.FrontSide
     }),
     raycaster: new THREE.Raycaster(),
@@ -420,7 +420,7 @@ const mpos = {
                 grade.rects = Object.values(grade.rects).filter((rect) => rect.mat)
               }
               // the atlas ends with 2 blocks: cyan and transparent
-              opts.ctx.fillStyle = 'rgba(0,255,255,0.25)'
+              opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
               opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
               transforms(grade)
             }
@@ -489,8 +489,8 @@ const mpos = {
           // Meshes
           const cyan = { x: 1 - 1 / grade.cells, y: 0.01 }
           const uvOffset = new Float32Array(grade.minEls * 2).fill(-1)
-          let count = 0
-          for (const [index, rect] of Object.entries(grade.rects)) {
+          //let count = 0
+          for (const [count, rect] of Object.entries(grade.rects)) {
             if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
               // Instance Matrix
               let dummy = new THREE.Object3D()
@@ -508,7 +508,7 @@ const mpos = {
 
               // Shader Atlas: index or dummy slot
               const stepSize = count * 2
-              if (rect.atlas !== undefined || rect.mat === 'child') {
+              if (rect.atlas !== undefined || rect.mat === 'child' || rect.mat === 'self') {
                 // uv coordinate
                 uvOffset[stepSize] = rect.x || cyan.x
                 uvOffset[stepSize + 1] = 1 - rect.y || cyan.y
@@ -521,8 +521,8 @@ const mpos = {
                 let mesh = mpos.add.box(rect)
                 vars.group.add(mesh[1])
               }
-              count++
             }
+            // count++
           }
 
           generic.instanceMatrix.needsUpdate = true
@@ -568,8 +568,8 @@ const mpos = {
       const sY = -opts.sY || 0
 
       // scale
-      const w = bound.width * rect.css.scale
-      const h = bound.height * rect.css.scale
+      const w = bound.width
+      const h = bound.height
       const d = vars.fov.z
       // position
       const x = sX + (bound.width / 2 + bound.left)
@@ -586,20 +586,51 @@ const mpos = {
 
       function transform(objects) {
         objects.forEach((obj) => {
-          //
-          //
+          // tiny offset
           let stencil = obj.isCSS3DObject || rect.mat === 'loader'
           let extrude = stencil ? vars.fov.z / 2 : 0
           z += extrude
 
-          if (!obj.isCSS3DObject) {
-            obj.scale.set(w, h, d)
+          if (obj.isCSS3DObject) {
+            // element does not scale like group
+            // BUG: retains css transform, but does not inherit
+            obj.userData.el.style.width = w
+            obj.userData.el.style.height = h
+          } else {
+            // BUG: inherits css transform, but not distinct origin
+            obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
+            obj.rotation.z = -rect.css.rotate
           }
-          obj.rotation.z = -rect.css.rotate
 
           obj.position.set(x, y, z)
 
+          // BUG FIX 1: ABOVE, remove css.scale and css.rotate
+          // BUG FIX 2: BELOW, apply per-instance to Object3D or HTML clone
+
+          const transform = rect.css.transform
+          for (let i = 0; i < transform.length; i++) {
+            // apply css transforms from origin
+            // scale *=, rotate +=
+            const dummy = new THREE.Object3D()
+            const inherit = transform[i]
+            const bound = inherit.bound
+            dummy.position.set(sX + bound.left + inherit.origin.x, sY - bound.top - inherit.origin.y, z)
+            dummy.scale.multiplyScalar(inherit.scale)
+            dummy.rotation.z = -inherit.rotate
+            //
+            //obj.rotation.applyMatrix4(dummy.matrix)
+            //obj.rotation.setFromRotationMatrix(dummy.matrix)
+            //obj.setRotationFromMatrix(dummy.matrix)
+            //
+            //obj.scale.applyMatrix4(dummy.matrix)
+            //obj.scale.setFromMatrixScale(dummy.matrix)
+            //obj.scale.multiplyScalar(dummy.matrix)
+            //
+            //obj.updateMatrix()
+          }
+
           if (vars.opt.arc) {
+            // bulge from view center
             obj.rotation.y = rad * damp * 2
             obj.position.setZ(z + pos * damp)
           }
@@ -619,7 +650,7 @@ const mpos = {
         const name = [rect.z, rect.mat, element.nodeName].join('_')
 
         const mesh = new THREE.Mesh(vars.geo, vars.mat)
-        mesh.scale.set(w, h, d)
+        //mesh.scale.set(w, h, d)
         mesh.userData.el = rect.el
         mesh.name = name
 
@@ -642,10 +673,12 @@ const mpos = {
               .catch((e) => console.log('err', e))
           } else if (rect.mat === 'native') {
             const el = element.cloneNode(true)
-            el.style.width = w
-            el.style.height = h
-            const css3d = new CSS3DObject(el)
-            // note: this is the cloned el, not the original
+            // wrap prevents overwritten transform
+            const wrap = document.createElement('div')
+            wrap.classList.add('clone')
+            wrap.append(el)
+            const css3d = new CSS3DObject(wrap)
+            // note: most userData.el reference an original, not a clone
             css3d.userData.el = el
             css3d.name = name
             types.push(css3d)
@@ -667,7 +700,7 @@ const mpos = {
     },
     css: function (el, unset) {
       // css style transforms
-      const css = { scale: 1, rotate: 0 }
+      const css = { scale: 1, rotate: 0, transform: [] }
       if (unset === undefined) {
         // target element original style
         //console.log('unset style', target)
@@ -681,14 +714,24 @@ const mpos = {
       let els = []
       while (el && el !== document) {
         if (unset === undefined) {
-          // ancestors cumulative matrix
+          // accumulate ancestor matrix
           const style = window.getComputedStyle(el)
           const transform = style.transform.replace(/(matrix)|[( )]/g, '')
           if (transform !== 'none') {
+            // transform matrix
             const [a, b] = transform.split(',')
-            css.scale *= Math.sqrt(a * a + b * b)
+            const scale = Math.sqrt(a * a + b * b)
             const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-            css.rotate += degree * (Math.PI / 180)
+            const radians = degree * (Math.PI / 180)
+            // element origin and bounds
+            const origin = style.transformOrigin.replace(/(px)/g, '').split(' ')
+            const bound = el.getBoundingClientRect()
+
+            // Output
+            // original accrue (didnt work)
+            css.scale *= scale
+            css.rotate += radians
+            css.transform.push({ scale: scale, rotate: radians, origin: { x: Number(origin[0]), y: Number(origin[1]) }, bound: bound })
           }
         } else {
           // style override
