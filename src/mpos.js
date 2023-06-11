@@ -556,12 +556,12 @@ const mpos = {
     box: function (rect, opts = {}) {
       const vars = mpos.var
       const element = rect.el
-      // css: unset for normal matrix
-      mpos.add.css(rect.el, true)
-      const bound = element.getBoundingClientRect()
-      mpos.add.css(rect.el, false)
-      // css: cumulative matrix
+      // css: cumulative transform
       rect.css = mpos.add.css(rect.el)
+      // css: unset for box scale
+      mpos.add.css(rect.el, true)
+      let bound = element.getBoundingClientRect()
+      mpos.add.css(rect.el, false)
 
       // origin(0,0) follows viewport, not window
       const sX = opts.sX || 0
@@ -572,6 +572,7 @@ const mpos = {
       const h = bound.height
       const d = vars.fov.z
       // position
+      bound = element.getBoundingClientRect()
       const x = sX + (bound.width / 2 + bound.left)
       const y = sY - bound.height / 2 - bound.top
       let z = rect.z
@@ -596,10 +597,13 @@ const mpos = {
             // BUG: retains css transform, but does not inherit
             obj.userData.el.style.width = w
             obj.userData.el.style.height = h
+            const scale = 'scale(' + rect.css.scale + ')'
+            const rotate = 'rotate(' + rect.css.degree + 'deg)'
+            obj.userData.el.style.transform = [scale, rotate].join(' ')
           } else {
             // BUG: inherits css transform, but not distinct origin
             obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
-            obj.rotation.z = -rect.css.rotate
+            obj.rotation.z = -rect.css.radian
           }
 
           obj.position.set(x, y, z)
@@ -618,15 +622,17 @@ const mpos = {
             dummy.scale.multiplyScalar(inherit.scale)
             dummy.rotation.z = -inherit.rotate
             //
+            //obj.rotation.z += dummy.rotation.z
             //obj.rotation.applyMatrix4(dummy.matrix)
             //obj.rotation.setFromRotationMatrix(dummy.matrix)
             //obj.setRotationFromMatrix(dummy.matrix)
             //
+            //obj.scale.multiplyScalar(inherit.scale)
             //obj.scale.applyMatrix4(dummy.matrix)
             //obj.scale.setFromMatrixScale(dummy.matrix)
             //obj.scale.multiplyScalar(dummy.matrix)
             //
-            //obj.updateMatrix()
+            obj.updateMatrix()
           }
 
           if (vars.opt.arc) {
@@ -700,7 +706,7 @@ const mpos = {
     },
     css: function (el, unset) {
       // css style transforms
-      const css = { scale: 1, rotate: 0, transform: [] }
+      const css = { scale: 1, radian: 0, degree: 0, transform: [] }
       if (unset === undefined) {
         // target element original style
         //console.log('unset style', target)
@@ -722,7 +728,7 @@ const mpos = {
             const [a, b] = transform.split(',')
             const scale = Math.sqrt(a * a + b * b)
             const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-            const radians = degree * (Math.PI / 180)
+            const radian = degree * (Math.PI / 180)
             // element origin and bounds
             const origin = style.transformOrigin.replace(/(px)/g, '').split(' ')
             const bound = el.getBoundingClientRect()
@@ -730,8 +736,15 @@ const mpos = {
             // Output
             // original accrue (didnt work)
             css.scale *= scale
-            css.rotate += radians
-            css.transform.push({ scale: scale, rotate: radians, origin: { x: Number(origin[0]), y: Number(origin[1]) }, bound: bound })
+            css.radian += radian
+            css.degree += degree
+            css.transform.push({
+              scale: scale,
+              degree: degree,
+              radian: radian,
+              origin: { x: Number(origin[0]), y: Number(origin[1]) },
+              bound: bound
+            })
           }
         } else {
           // style override
