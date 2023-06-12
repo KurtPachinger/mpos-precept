@@ -110,7 +110,7 @@ model-viewer {
   bottom: 0;
   right: 0;
   z-index: 3;
-  &:hover {
+  &#atlas:hover {
     transform: scale(2);
     transform-origin: bottom right;
   }
@@ -142,7 +142,12 @@ model-viewer {
   }
 }
 
-address.offscreen {
+
+a.poster, img.poster, object.poster {
+  // manual size for toSvg
+  display: inline-block
+}
+.offscreen {
   z-index: -2; 
   bottom: calc(var(--unit) / 2); 
 }
@@ -151,7 +156,7 @@ address.offscreen {
   // toggle CSS during transform
   // toSvg needs ClientRect without transforms
   transform: initial!important;
-  &.offscreen{
+   &.offscreen {
     // full-size box
     position: absolute;
     top: 0;

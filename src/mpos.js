@@ -330,78 +330,100 @@ const mpos = {
 
         // Atlas Units: relative device profile
         grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 128
-        grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2))
+        grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
         grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
         grade.canvas.width = grade.canvas.height = grade.maxRes
         //grade.canvas.id = grade.index
 
-        // DEEP-GRADE: type, count
-        function report(rect, z, mat) {
-          rect.mat = mat
-          rect.z = z
+        function setRect(rect, z, mat, unset) {
+          if (rect) {
+            rect.mat = mat
+            rect.z = z
 
-          if (rect.inPolar >= vars.opt.inPolar) {
-            grade.minEls++
+            if (rect.inPolar >= vars.opt.inPolar) {
+              grade.minEls++
 
-            if (rect.mat === 'poster') {
-              // shader
-              rect.atlas = grade.atlas++
+              if (rect.mat === 'poster') {
+                // shader
+                rect.atlas = grade.atlas++
+              }
+            } else {
+              // off-screen
+              console.log('observe', rect.el)
+              mpos.ux.observer.observe(rect.el)
             }
-          } else {
-            // off-screen
-            console.log('observe', rect.el)
-            mpos.ux.observer.observe(rect.el)
+
+            unset = unset || rect.el.matches('.offscreen,details:not([open])')
+            if (unset) {
+              rect.unset = true
+            }
           }
+          return unset
+        }
+        function setMat(node, mat, manual) {
+          if (manual) {
+            // priority score
+            if (node.matches('.loader')) {
+              mat = 'loader'
+            } else if (node.matches('.poster')) {
+              mat = 'poster'
+            } else if (node.matches('.native')) {
+              mat = 'native'
+            }
+          } else if (node.matches([precept.native, precept.native3d])) {
+            // todo: test internal type
+            mat = 'native'
+          } else if (node.matches(precept.poster)) {
+            mat = 'poster'
+          }
+          return mat
         }
 
-        function struct(sel, layer) {
+        function struct(sel, layer, unset) {
+          // DEEP-GRADE: type, count
           const z = layers - layer
 
           // SELF
           let rect = grade.rects[sel.getAttribute('data-idx')]
-          rect && report(rect, z, 'self')
+          // unset inherits transform from class
 
-          // CHILD
+          let mat = 'self'
+          // specify empty or manual
           let children = sel.children
-          for (let i = 0; i < children.length; i++) {
-            let node = children[i]
+          const manual = rect.el.matches('.poster, .native, .loader')
+          if (!children.length || manual) {
+            mat = setMat(rect.el, mat, manual)
+          }
+          unset = setRect(rect, z, mat, unset)
+          if (!manual) {
+            // CHILD
+            for (let i = 0; i < children.length; i++) {
+              let node = children[i]
 
-            let rect = grade.rects[node.getAttribute('data-idx')]
-            if (rect && rect.inPolar) {
-              // CLASSIFY TYPE
-              const block = node.matches(precept.block)
-              const abort = grade.atlas >= grade.minRes
-              if (block || abort) {
-                console.log('skip', node.nodeName)
-              } else {
-                if (rect.inPolar >= 1) {
-                  const allow = node.matches(precept.allow)
-                  const manual = node.matches('.poster, .native, .loader')
-                  const empty = node.children.length === 0
+              let rect = grade.rects[node.getAttribute('data-idx')]
+              if (rect && rect.inPolar) {
+                // CLASSIFY TYPE
+                const block = node.matches(precept.block)
+                const abort = grade.atlas >= grade.minRes
+                if (block || abort) {
+                  console.log('skip', node.nodeName)
+                } else {
+                  if (rect.inPolar >= 1) {
+                    const allow = node.matches(precept.allow)
+                    const manual = node.matches('.poster, .native, .loader')
+                    const empty = node.children.length === 0
 
-                  if (layer >= 1 && allow && !manual && !empty) {
-                    // selector structure output depth
-                    let depth = layer - 1
-                    struct(node, depth)
-                  } else {
-                    let mat = 'child'
-                    // set box type
-                    if (manual) {
-                      // priority score
-                      if (node.matches('.loader')) {
-                        mat = 'loader'
-                      } else if (node.matches('.poster')) {
-                        mat = 'poster'
-                      } else if (node.matches('.native')) {
-                        mat = 'native'
-                      }
-                    } else if (node.matches([precept.native, precept.native3d])) {
-                      // todo: test internal type
-                      mat = 'native'
-                    } else if (node.matches(precept.poster)) {
-                      mat = 'poster'
+                    if (layer >= 1 && allow && !manual && !empty) {
+                      // selector structure output depth
+                      let depth = layer - 1
+                      struct(node, depth, unset)
+                    } else {
+                      let mat = 'child'
+                      // set box type
+                      mat = setMat(node, mat, manual)
+
+                      setRect(rect, z, mat, unset)
                     }
-                    report(rect, z, mat)
                   }
                 }
               }
@@ -430,8 +452,10 @@ const mpos = {
                 grade.rects = Object.values(grade.rects).filter((rect) => rect.mat)
               }
               // the atlas ends with 2 blocks: cyan and transparent
+
               opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
               opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
+
               transforms(grade)
             }
           }
@@ -569,9 +593,10 @@ const mpos = {
       // css: cumulative transform
       rect.css = mpos.add.css(rect.el)
       // css: unset for box scale
-      mpos.add.css(rect.el, true)
+      mpos.add.css(rect.el, true, rect.unset)
+
       let bound = element.getBoundingClientRect()
-      mpos.add.css(rect.el, false)
+      mpos.add.css(rect.el, false, rect.unset)
 
       // origin(0,0) follows viewport, not window
       const sX = opts.sX || 0
@@ -582,7 +607,7 @@ const mpos = {
       const h = bound.height
       const d = vars.fov.z
       // position
-      bound = element.getBoundingClientRect()
+      bound = rect.unset ? bound : element.getBoundingClientRect()
       const x = sX + (bound.width / 2 + bound.left)
       const y = sY - bound.height / 2 - bound.top
       let z = rect.z
@@ -621,7 +646,7 @@ const mpos = {
 
           // BUG FIX 1: ABOVE, remove css.scale and css.rotate
           // BUG FIX 2: BELOW, apply per-instance to Object3D or HTML clone
-
+          /*
           const transform = rect.css.transform
           for (let i = 0; i < transform.length; i++) {
             // apply css transforms from origin
@@ -632,19 +657,11 @@ const mpos = {
             dummy.position.set(sX + bound.left + inherit.origin.x, sY - bound.top - inherit.origin.y, z)
             dummy.scale.multiplyScalar(inherit.scale)
             dummy.rotation.z = -inherit.rotate
-            //
-            //obj.rotation.z += dummy.rotation.z
-            //obj.rotation.applyMatrix4(dummy.matrix)
-            //obj.rotation.setFromRotationMatrix(dummy.matrix)
-            //obj.setRotationFromMatrix(dummy.matrix)
-            //
-            //obj.scale.multiplyScalar(inherit.scale)
-            //obj.scale.applyMatrix4(dummy.matrix)
-            //obj.scale.setFromMatrixScale(dummy.matrix)
-            //obj.scale.multiplyScalar(dummy.matrix)
-            //
+            obj.rotation.applyMatrix4(dummy.matrix)
+            obj.scale.applyMatrix4(dummy.matrix)
             obj.updateMatrix()
           }
+          */
 
           if (vars.opt.arc) {
             // bulge from view center
@@ -716,10 +733,10 @@ const mpos = {
 
       return types
     },
-    css: function (el, unset) {
+    css: function (el, traverse, unset) {
       // css style transforms
       const css = { scale: 1, radian: 0, degree: 0, transform: [] }
-      if (unset === undefined) {
+      if (traverse === undefined) {
         // target element original style
         //console.log('unset style', target)
         let style = window.getComputedStyle(el)
@@ -727,11 +744,16 @@ const mpos = {
           transform: style.transform,
           backgroundColor: style.backgroundColor
         }
+      } else if (unset) {
+        // quirks of DOM
+        if (el.matches('details')) {
+          el.open = traverse
+        }
       }
 
       let els = []
       while (el && el !== document) {
-        if (unset === undefined) {
+        if (traverse === undefined) {
           // accumulate ancestor matrix
           const style = window.getComputedStyle(el)
           const transform = style.transform.replace(/(matrix)|[( )]/g, '')
@@ -760,7 +782,7 @@ const mpos = {
           }
         } else {
           // style override
-          unset ? el.classList.add('unset') : el.classList.remove('unset')
+          traverse ? el.classList.add('unset') : el.classList.remove('unset')
         }
 
         els.unshift(el)
