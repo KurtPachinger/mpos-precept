@@ -80,7 +80,9 @@ const mpos = {
     vars.controls.update()
 
     // live
-    document.querySelector('#css3d > div > div > div').addEventListener('input', mpos.ux.event, false)
+    const cloneCSS = document.querySelector('#css3d > div > div > div')
+    cloneCSS.addEventListener('pointerdown', mpos.ux.event, false)
+    cloneCSS.addEventListener('input', mpos.ux.event, false)
     window.addEventListener('resize', mpos.ux.resize, false)
     vars.controls.addEventListener('change', mpos.ux.render, false)
     window.addEventListener('pointermove', mpos.ux.raycast, false)
@@ -188,9 +190,17 @@ const mpos = {
       }
     },
     event: function (e) {
-      const idx = e.target.getAttribute('data-idx')
-      const node = document.querySelector('[data-idx="' + idx + '"]')
-      node.value = e.target.value
+      if (e.type === 'pointerdown') {
+        // prevent drag Controls
+        if (e.target.matches('a,input,details,model-viewer')) {
+          e.stopPropagation()
+        }
+      } else {
+        // update form data
+        const idx = e.target.getAttribute('data-idx')
+        const node = document.querySelector('[data-idx="' + idx + '"]')
+        node.value = e.target.value
+      }
     }
   },
   precept: {
@@ -199,7 +209,7 @@ const mpos = {
     allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
-    poster: `.poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,caption,dt,dd`.split(','),
+    poster: `.poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,root`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
       let vis = node.tagName || node.textContent.trim() ? 1 : false
@@ -319,11 +329,11 @@ const mpos = {
         }
 
         // Atlas Units: relative device profile
-        grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 64
-        grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 3))
+        grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 128
+        grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2))
         grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
         grade.canvas.width = grade.canvas.height = grade.maxRes
-        grade.canvas.id = grade.index
+        //grade.canvas.id = grade.index
 
         // DEEP-GRADE: type, count
         function report(rect, z, mat) {
@@ -332,6 +342,7 @@ const mpos = {
 
           if (rect.inPolar >= vars.opt.inPolar) {
             grade.minEls++
+
             if (rect.mat === 'poster') {
               // shader
               rect.atlas = grade.atlas++
@@ -357,7 +368,6 @@ const mpos = {
 
             let rect = grade.rects[node.getAttribute('data-idx')]
             if (rect && rect.inPolar) {
-              let mat = 'child'
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
               const abort = grade.atlas >= grade.minRes
@@ -374,6 +384,7 @@ const mpos = {
                     let depth = layer - 1
                     struct(node, depth)
                   } else {
+                    let mat = 'child'
                     // set box type
                     if (manual) {
                       // priority score
@@ -390,9 +401,8 @@ const mpos = {
                     } else if (node.matches(precept.poster)) {
                       mat = 'poster'
                     }
+                    report(rect, z, mat)
                   }
-
-                  report(rect, z, mat)
                 }
               }
             }
@@ -428,8 +438,8 @@ const mpos = {
 
           let rect = grade.rects[idx]
           if (rect.inPolar >= mpos.var.opt.inPolar && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
-            //let reset = { transform: 'initial!important' }
-            toSvg(rect.el)
+            let unset = { transform: 'initial' }
+            toSvg(rect.el, { style: unset })
               .then(function (dataUrl) {
                 let img = new Image()
                 img.onload = function () {
@@ -508,10 +518,10 @@ const mpos = {
 
               // Shader Atlas: index or dummy slot
               const stepSize = count * 2
-              if (rect.atlas !== undefined || rect.mat === 'child' || rect.mat === 'self') {
-                // uv coordinate
-                uvOffset[stepSize] = rect.x || cyan.x
-                uvOffset[stepSize + 1] = 1 - rect.y || cyan.y
+              // uv coordinate
+              uvOffset[stepSize] = rect.x || cyan.x
+              uvOffset[stepSize + 1] = 1 - rect.y || cyan.y
+              if (rect.atlas !== undefined || rect.mat === 'child') {
                 // raycast
                 grade.ray.push(Number(count))
               }
@@ -594,14 +604,15 @@ const mpos = {
 
           if (obj.isCSS3DObject) {
             // element does not scale like group
-            // BUG: retains css transform, but does not inherit
             obj.userData.el.style.width = w
             obj.userData.el.style.height = h
-            const scale = 'scale(' + rect.css.scale + ')'
-            const rotate = 'rotate(' + rect.css.degree + 'deg)'
-            obj.userData.el.style.transform = [scale, rotate].join(' ')
+            // note: actually using cumulative
+            if (rect.css.transform.length) {
+              const scale = 'scale(' + rect.css.scale + ')'
+              const degree = 'rotate(' + rect.css.degree + 'deg)'
+              obj.userData.el.style.transform = [scale, degree].join(' ')
+            }
           } else {
-            // BUG: inherits css transform, but not distinct origin
             obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
             obj.rotation.z = -rect.css.radian
           }
@@ -671,7 +682,8 @@ const mpos = {
           // static or dynamic
           if (opts.mat === 'poster') {
             mesh.material = [vars.mat, vars.mat, vars.mat, vars.mat, mat, vars.mat_line]
-            toSvg(element)
+            let unset = { transform: 'initial' }
+            toSvg(element, { style: unset })
               .then(function (dataUrl) {
                 mat.map = new THREE.TextureLoader().load(dataUrl)
                 mat.needsUpdate = true
@@ -958,7 +970,7 @@ mpos.gen = function (num = 6, selector = 'main') {
   }
 
   let section = document.createElement('details')
-  section.classList.add('allow')
+  //section.classList.add('allow')
   let fragment = document.createDocumentFragment()
   for (let i = 0; i < num; i++) {
     // container
@@ -972,6 +984,7 @@ mpos.gen = function (num = 6, selector = 'main') {
     img.style.height = '8em'
     img.style.backgroundColor = color()
     //img.src = './OIG.jpg'
+    img.src = '#'
     el.appendChild(img)
     // list
     let ul = fill('ul', num / 2)

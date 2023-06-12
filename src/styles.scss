@@ -146,7 +146,7 @@ address.offscreen {
   z-index: -2; 
   bottom: calc(var(--unit) / 2); 
 }
-
+.clone {backface-visibility: hidden;}
 .unset {
   // toggle CSS during transform
   // toSvg needs ClientRect without transforms
