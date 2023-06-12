@@ -360,7 +360,7 @@ const mpos = {
           }
           return unset
         }
-        function setMat(node, mat, manual) {
+        function setMat(node, mat, manual, layer) {
           if (manual) {
             // priority score
             if (node.matches('.loader')) {
@@ -373,7 +373,7 @@ const mpos = {
           } else if (node.matches([precept.native, precept.native3d])) {
             // todo: test internal type
             mat = 'native'
-          } else if (node.matches(precept.poster)) {
+          } else if (node.matches(precept.poster) || layer === 0) {
             mat = 'poster'
           }
           return mat
@@ -420,7 +420,7 @@ const mpos = {
                     } else {
                       let mat = 'child'
                       // set box type
-                      mat = setMat(node, mat, manual)
+                      mat = setMat(node, mat, manual, layer)
 
                       setRect(rect, z, mat, unset)
                     }
