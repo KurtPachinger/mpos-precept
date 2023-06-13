@@ -1,5 +1,5 @@
 # mpos-precept
-Imposter layout to represent DOM rects in THREE.
+Imposter layout represents DOM rects in THREE.
 
 ### Process
 ```mermaid
