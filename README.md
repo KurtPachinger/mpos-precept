@@ -1,5 +1,9 @@
 # mpos-precept
-Imposter layout represents DOM rects in THREE.
+Use imposter DOM rects in THREE:
+
+```js
+mpos.dom( 'aside#form', 16 )
+```
 
 ### Process
 ```mermaid
