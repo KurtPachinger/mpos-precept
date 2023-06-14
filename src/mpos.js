@@ -9,7 +9,7 @@ const mpos = {
   var: {
     opt: {
       dispose: true,
-      selector: 'main',
+      selector: 'body',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 3,
@@ -63,7 +63,7 @@ const mpos = {
 
     // THREE
     vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.1, 10)
+    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, 10)
     //vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
     vars.camera.position.z = 1.25
@@ -219,6 +219,7 @@ const mpos = {
   },
   precept: {
     index: 0,
+    manual: `.loader,.native,.poster`.split(','),
     allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
@@ -376,13 +377,14 @@ const mpos = {
         function setMat(node, mat, manual, layer) {
           if (manual) {
             // priority score
-            if (node.matches('.loader')) {
-              mat = 'loader'
-            } else if (node.matches('.poster')) {
-              mat = 'poster'
-            } else if (node.matches('.native')) {
-              mat = 'native'
-            }
+            mpos.precept.manual.every(function (sel) {
+              sel = sel.replace('.', '')
+              if (node.className.includes(sel)) {
+                mat = sel
+                sel = false
+              }
+              return sel
+            })
           } else if (node.matches([precept.native, precept.native3d])) {
             // todo: test internal type
             mat = 'native'
@@ -403,7 +405,7 @@ const mpos = {
           let mat = 'self'
           // specify empty or manual
           let children = sel.children
-          const manual = rect.el.matches('.poster, .native, .loader')
+          const manual = rect.el.matches(precept.manual)
           if (!children.length || manual) {
             mat = setMat(rect.el, mat, manual)
           }
@@ -423,7 +425,7 @@ const mpos = {
                 } else {
                   if (rect.inPolar >= 1) {
                     const allow = node.matches(precept.allow)
-                    const manual = node.matches('.poster, .native, .loader')
+                    const manual = node.matches(precept.manual)
                     const empty = node.children.length === 0
 
                     if (layer >= 1 && allow && !manual && !empty) {
@@ -475,7 +477,7 @@ const mpos = {
 
           let rect = grade.rects[idx]
           if (rect.inPolar >= vars.opt.inPolar && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
-            //
+            // style needs no transform, and block
             let unset = { transform: 'initial', margin: 0 }
             toSvg(rect.el, { style: unset })
               .then(function (dataUrl) {
@@ -721,6 +723,7 @@ const mpos = {
               })
               .catch((e) => console.log('err', e))
           } else if (rect.mat === 'native') {
+            // note: element may not inherit some specific styles
             const el = element.cloneNode(true)
             // wrap prevents overwritten transform
             const wrap = document.createElement('div')

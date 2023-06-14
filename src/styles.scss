@@ -46,7 +46,7 @@
 }
 
 
-h2 { border-top: var(--u1) solid var(--sup); font-style:normal;font-weight:600; }
+h2 { border-top: var(--u1) solid var(--sup); font-style:normal; font-weight:600; }
 .sup, h2 span { background-color: var(--sup); }
 .sub { background-color: var(--sub); }
 
@@ -119,13 +119,16 @@ model-viewer {
     height: 100%;
   }
 }
-a.poster, img.poster, object.poster {
+a, img, obj {
+  &.poster {
   // manual size for toSvg
   display: inline-block
+  }
 }
 .clone { /*backface-visibility: hidden;*/ }
 
 
+//
 // MP INTERFACE
 #mp {
   &, .tool, .tool * {
@@ -134,8 +137,9 @@ a.poster, img.poster, object.poster {
   }
 
   #css3d { z-index: 1; }
-  &, #css3d, canvas[data-engine]{
-    overflow: hidden; overflow-y: auto;
+  &, #css3d, canvas[data-engine] {
+    overflow: hidden; 
+    overflow-y: auto;
     top: 0;
     left: 0;
     width: 100%;
