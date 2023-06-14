@@ -224,7 +224,7 @@ const mpos = {
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.mp-native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
-    poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,root`.split(','),
+    poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
       let vis = node.tagName || node.textContent.trim() ? 1 : false
@@ -310,24 +310,19 @@ const mpos = {
               if (inPolar >= 2) {
                 el = node
                 // ...estimate
-                //if (node.matches([precept.native, precept.poster])) {}
-              } else if (
-                node.nodeName === '#text' &&
-                node.parentNode.matches([precept.allow]) &&
-                !node.parentNode.matches([precept.native, precept.poster]) &&
-                node.parentElement.childNodes !== 1 &&
-                precept.inPolar(node, grade.rects)
-              ) {
-                // #text orphan with parent visible
-                // sanitize, block-level required for width
-                let wrap = document.createElement('div')
-                wrap.classList.add('mp-poster')
-                node.parentNode.insertBefore(wrap, node)
-                wrap.appendChild(node)
+              } else if (node.nodeName === '#text') {
+                const orphan = node.parentNode.childElementCount >= 1 && node.parentNode.matches([precept.allow])
+                if (orphan && precept.inPolar(node, grade.rects)) {
+                  // sanitize #text orphan (list or semantic) with parent visible
+                  let wrap = document.createElement('span')
+                  wrap.classList.add('mp-poster')
+                  node.parentNode.insertBefore(wrap, node)
+                  wrap.appendChild(node)
 
-                el = wrap
-                inPolar = precept.inPolar(el)
-                grade.txt.push(node)
+                  el = wrap
+                  inPolar = precept.inPolar(el)
+                  grade.txt.push(node)
+                }
               }
 
               if (el) {
@@ -408,7 +403,7 @@ const mpos = {
           let children = sel.children
           const manual = rect.el.matches(precept.manual)
           if (!children.length || manual) {
-            mat = setMat(rect.el, mat, manual)
+            mat = setMat(rect.el, mat, manual, children.length)
           }
           unset = setRect(rect, z, mat, unset)
           if (!manual) {
@@ -427,16 +422,16 @@ const mpos = {
                   if (rect.inPolar >= 1) {
                     const allow = node.matches(precept.allow)
                     const manual = node.matches(precept.manual)
-                    const empty = node.children.length === 0
+                    const child = node.children.length
 
-                    if (layer >= 1 && allow && !manual && !empty) {
+                    if (layer >= 1 && allow && child && !manual) {
                       // selector structure output depth
                       let depth = layer - 1
                       struct(node, depth, unset)
                     } else {
                       let mat = 'child'
                       // set box type
-                      mat = setMat(node, mat, manual, layer)
+                      mat = setMat(node, mat, manual, child)
 
                       setRect(rect, z, mat, unset)
                     }
@@ -480,8 +475,11 @@ const mpos = {
           if (rect.inPolar >= vars.opt.inPolar && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
             // style needs no transform, and block
             let unset = { transform: 'initial', margin: 0 }
+            // bug: style display-inline is not honored by style override
+            mpos.add.css(rect.el, true)
             toSvg(rect.el, { style: unset })
               .then(function (dataUrl) {
+                mpos.add.css(rect.el, false)
                 let img = new Image()
                 img.onload = function () {
                   if (rect.mat === 'loader') {

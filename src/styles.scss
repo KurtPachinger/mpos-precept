@@ -119,8 +119,8 @@ model-viewer {
     height: 100%;
   }
 }
-a, img, obj {
-  &.mp-poster {
+a, img, obj, span {
+  &.mp-unset {
   // manual size for toSvg
   display: inline-block
   }
