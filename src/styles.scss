@@ -21,6 +21,7 @@
 
   // STRUCTURE
   &, #main {
+    user-select: none;
     position: absolute;
     z-index: 2;
     margin: var(--u2);
@@ -50,7 +51,7 @@ h2 { border-top: var(--u1) solid var(--sup); font-style:normal; font-weight:600;
 .sup, h2 span { background-color: var(--sup); }
 .sub { background-color: var(--sub); }
 
-main, section, article, aside, fieldset { padding: var(--u2); user-select: none; }
+main, section, article, aside, fieldset { padding: var(--u2);  }
 section, aside, h2, p, ul, ol, form, table { 
   margin-bottom: var(--u2);
 }

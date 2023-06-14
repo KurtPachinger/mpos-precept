@@ -63,7 +63,7 @@ const mpos = {
 
     // THREE
     vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, 10)
+    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, 16)
     //vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
     vars.camera.position.z = 1.25
@@ -291,7 +291,7 @@ const mpos = {
         vars.group = new THREE.Group()
         vars.group.name = selector
         // root DOM node (viewport)
-        const mesh = mpos.add.box({ el: document.body, z: 0, mat: 'wire' }, { sX: grade.sX, sY: grade.sY })
+        const mesh = mpos.add.box({ el: document.body, z: -16, mat: 'wire' }, { sX: grade.sX, sY: grade.sY })
         vars.group.add(...mesh)
       }
 
@@ -567,6 +567,7 @@ const mpos = {
 
               if (rect.mat === 'native') {
                 // CSS3D standalone
+                console.log('native', rect.el)
                 let mesh = mpos.add.box(rect)
                 vars.group.add(mesh[1])
               }
@@ -639,7 +640,7 @@ const mpos = {
         objects.forEach((obj) => {
           // tiny offset
           let stencil = obj.isCSS3DObject || rect.mat === 'loader'
-          let extrude = stencil ? vars.fov.z / 2 : 0
+          let extrude = stencil ? vars.fov.z : 0
           z += extrude
 
           if (obj.isCSS3DObject) {
