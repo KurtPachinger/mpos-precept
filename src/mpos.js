@@ -16,7 +16,7 @@ const mpos = {
       arc: false,
       update: function () {
         mpos.add
-          .dom(mpos.var.opt.selector, mpos.var.opt.depth)
+          .dom(this.selector, this.depth)
           .then(mpos.ux.render)
           .catch((e) => console.log('err', e))
       }
@@ -27,14 +27,12 @@ const mpos = {
       z: 8,
       max: 1024
     },
-
     geo: new THREE.BoxGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
       transparent: true,
       wireframe: true,
       side: THREE.FrontSide,
-      color: 'cyan',
-      depthWrite: false
+      color: 'cyan'
     }),
     mat_line: new THREE.LineBasicMaterial({
       transparent: true,
@@ -42,21 +40,37 @@ const mpos = {
       side: THREE.FrontSide
     }),
     raycaster: new THREE.Raycaster(),
-    pointer: new THREE.Vector2(),
-    carot: document.getElementById('carot')
+    pointer: new THREE.Vector2()
   },
   init: function () {
     const vars = mpos.var
+    // containers
+    const template = document.createElement('template')
+    template.innerHTML = `
+    <section id="mp">
+      <address class="tool offscreen">
+        <object></object>
+      </address>
+      <aside class="tool block" id="atlas">
+        <a><canvas></canvas></a>
+        <hr id="carot" />
+      </aside>
+      <div id="css3d" class="block"></div>
+    </section>`
+    document.body.appendChild(template.content)
+    mpos.precept.canvas = document.querySelector('#atlas canvas')
+    mpos.var.carot = document.getElementById('carot')
+
     // THREE
     vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, 100)
+    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.1, 10)
     //vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
     vars.camera.position.z = 1.25
 
     vars.renderer = new THREE.WebGLRenderer()
     vars.renderer.setSize(vars.fov.w, vars.fov.h)
-    document.body.appendChild(vars.renderer.domElement)
+    document.getElementById('mp').appendChild(vars.renderer.domElement)
     vars.renderer.setClearColor(0x00ff00, 0)
     // helpers
     let axes = new THREE.AxesHelper(0.5)
@@ -205,7 +219,6 @@ const mpos = {
   },
   precept: {
     index: 0,
-    canvas: document.querySelector('#atlas canvas'),
     allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
@@ -461,8 +474,9 @@ const mpos = {
           }
 
           let rect = grade.rects[idx]
-          if (rect.inPolar >= mpos.var.opt.inPolar && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
-            let unset = { transform: 'initial' }
+          if (rect.inPolar >= vars.opt.inPolar && (typeof rect.atlas === 'number' || rect.mat === 'loader')) {
+            //
+            let unset = { transform: 'initial', margin: 0 }
             toSvg(rect.el, { style: unset })
               .then(function (dataUrl) {
                 let img = new Image()
@@ -796,6 +810,8 @@ const mpos = {
       const texAtlas = new THREE.CanvasTexture(canvas)
       texAtlas.minFilter = THREE.NearestFilter
       const m = new THREE.RawShaderMaterial({
+        transparent: true,
+        depthTest: false,
         uniforms: {
           map: {
             type: 't',
@@ -810,16 +826,15 @@ const mpos = {
 
         uniform mat4 modelViewMatrix;
         uniform mat4 projectionMatrix;
-        
+
         attribute vec3 position;
         attribute vec2 uv;
         attribute mat4 instanceMatrix;
         attribute vec2 uvOffset;
-        
+
         uniform float atlasSize;
-        
         varying vec2 vUv;
-        
+
         void main()
         {
           vUv = uvOffset + (uv / atlasSize);
@@ -836,8 +851,7 @@ const mpos = {
         {
           gl_FragColor = texture2D(map, vUv);
         }
-        `,
-        transparent: true
+        `
       })
 
       m.userData.t = texAtlas
@@ -992,7 +1006,7 @@ mpos.gen = function (num = 6, selector = 'main') {
   }
 
   let section = document.createElement('details')
-  //section.classList.add('allow')
+  section.classList.add('allow')
   let fragment = document.createDocumentFragment()
   for (let i = 0; i < num; i++) {
     // container
