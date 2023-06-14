@@ -1,5 +1,5 @@
 # mpos-precept
-Use imposter DOM rects in THREE:
+Imposter DOM rects in THREE:
 
 ```js
 mpos.dom( 'aside#form', 16 )
