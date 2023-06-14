@@ -51,11 +51,11 @@ const mpos = {
       <address class="tool offscreen">
         <object></object>
       </address>
-      <aside class="tool block" id="atlas">
+      <aside class="tool mp-block" id="atlas">
         <a><canvas></canvas></a>
         <hr id="carot" />
       </aside>
-      <div id="css3d" class="block"></div>
+      <div id="css3d" class="mp-block"></div>
     </section>`
     document.body.appendChild(template.content)
     mpos.precept.canvas = document.querySelector('#atlas canvas')
@@ -84,7 +84,7 @@ const mpos = {
     vars.rendererCSS = new CSS3DRenderer()
     vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
     css3d.appendChild(vars.rendererCSS.domElement)
-    css3d.querySelectorAll('div').forEach((el) => el.classList.add('block'))
+    css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
     vars.controls = new MapControls(vars.camera, vars.rendererCSS.domElement)
     vars.controls.screenSpacePanning = true
 
@@ -219,11 +219,12 @@ const mpos = {
   },
   precept: {
     index: 0,
-    manual: `.loader,.native,.poster`.split(','),
-    allow: `.allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
-    block: `.block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
-    native: `.native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
-    poster: `.poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,root`.split(','),
+    manual: `.mp-loader,.mp-native,.mp-poster`.split(','),
+    unset: `.offscreen,details:not([open])`.split(','),
+    allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
+    block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
+    native: `.mp-native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
+    poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,root`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
       let vis = node.tagName || node.textContent.trim() ? 1 : false
@@ -320,7 +321,7 @@ const mpos = {
                 // #text orphan with parent visible
                 // sanitize, block-level required for width
                 let wrap = document.createElement('div')
-                wrap.classList.add('poster')
+                wrap.classList.add('mp-poster')
                 node.parentNode.insertBefore(wrap, node)
                 wrap.appendChild(node)
 
@@ -367,7 +368,7 @@ const mpos = {
               mpos.ux.observer.observe(rect.el)
             }
 
-            unset = unset || rect.el.matches('.offscreen,details:not([open])')
+            unset = unset || rect.el.matches(precept.unset)
             if (unset) {
               rect.unset = true
             }
@@ -378,7 +379,7 @@ const mpos = {
           if (manual) {
             // priority score
             mpos.precept.manual.every(function (sel) {
-              sel = sel.replace('.', '')
+              sel = sel.replace('.mp-', '')
               if (node.className.includes(sel)) {
                 mat = sel
                 sel = false
@@ -727,7 +728,7 @@ const mpos = {
             const el = element.cloneNode(true)
             // wrap prevents overwritten transform
             const wrap = document.createElement('div')
-            wrap.classList.add('clone')
+            wrap.classList.add('mp-clone')
             wrap.append(el)
             const css3d = new CSS3DObject(wrap)
             // note: most userData.el reference an original, not a clone
@@ -799,7 +800,7 @@ const mpos = {
           }
         } else {
           // style override
-          traverse ? el.classList.add('unset') : el.classList.remove('unset')
+          traverse ? el.classList.add('mp-unset') : el.classList.remove('mp-unset')
         }
 
         els.unshift(el)
@@ -903,7 +904,7 @@ const mpos = {
 
       // CSS3D
       const css3d = mpos.var.rendererCSS.domElement
-      const clones = css3d.querySelectorAll(':not(.block)')
+      const clones = css3d.querySelectorAll(':not(.mp-block)')
       clones.forEach(function (el) {
         el.parentElement.removeChild(el)
       })
@@ -1009,7 +1010,7 @@ mpos.gen = function (num = 6, selector = 'main') {
   }
 
   let section = document.createElement('details')
-  section.classList.add('allow')
+  section.classList.add('mp-allow')
   let fragment = document.createDocumentFragment()
   for (let i = 0; i < num; i++) {
     // container

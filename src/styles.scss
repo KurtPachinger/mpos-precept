@@ -106,7 +106,7 @@ model-viewer {
 
 //
 // MP SELECTORS
-.unset {
+.mp-unset {
   // toggle CSS during transform
   // toSvg needs ClientRect without transforms
   transform: initial!important;
@@ -120,12 +120,12 @@ model-viewer {
   }
 }
 a, img, obj {
-  &.poster {
+  &.mp-poster {
   // manual size for toSvg
   display: inline-block
   }
 }
-.clone { /*backface-visibility: hidden;*/ }
+.mp-clone { /*backface-visibility: hidden;*/ }
 
 
 //
