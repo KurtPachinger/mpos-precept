@@ -16,12 +16,12 @@ subgraph selector
  parent--depth-->child
 end
 
-grade("Pre-grade. Sanitize.")
+grade("sanitize, transform")
 selector-->grade-->a
 
 subgraph type
   direction TB
-  a("1x: structure, viewport")
+  a("1x: structure, visibility")
   grade-.-tag{blacklist}
   a-->b{interactive}
   b--no---poster("2x: img, text")
