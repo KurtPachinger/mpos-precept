@@ -12,7 +12,7 @@ flowchart TB
 window-.-selector
 subgraph selector
  direction TB
- child--softmax-->parent
+ child--maxRes-->parent
  parent--depth-->child
 end
 
