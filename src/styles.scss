@@ -126,7 +126,7 @@ a, img, obj, span {
   display: inline-block
   }
 }
-.mp-clone { /*backface-visibility: hidden;*/ }
+.mp-clone { z-index:99;/*backface-visibility: hidden;*/ }
 
 
 //
