@@ -109,7 +109,7 @@ model-viewer {
 // MP SELECTORS
 .mp-offscreen {
   > * { z-index: -9; } 
-  bottom: 8rem; 
+  &.tool{ bottom: 8rem; } 
 }
 .mp-unset {
   // toggle CSS during transform
