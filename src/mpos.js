@@ -60,7 +60,7 @@ const mpos = {
 
     // THREE
     vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 4)
+    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 8)
     //vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
     vars.camera.position.z = vars.fov.max
@@ -70,7 +70,7 @@ const mpos = {
     document.getElementById('mp').appendChild(vars.renderer.domElement)
     vars.renderer.setClearColor(0x00ff00, 0)
     // helpers
-    let axes = new THREE.AxesHelper(0.5)
+    let axes = new THREE.AxesHelper(vars.fov.max)
     vars.scene.add(axes)
     //const pointLight = new THREE.PointLight(0xc0c0c0, 2, 10)
     //pointLight.position.set(0, 2, 5)
@@ -103,17 +103,23 @@ const mpos = {
 
     // Intersection Observer
     const callback = function (entries, observer) {
-      requestIdleCallback(
-        function () {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              console.log('entry', entry.target, entry.boundingClientRect)
-              observer.unobserve(entry.target)
-            }
-          })
-        },
-        { time: 1000 }
-      )
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          // enqueue element
+          //console.log('entry', entry.target, entry.boundingClientRect)
+          const grade = mpos.var.group.userData.grade
+          const idx = entry.target.getAttribute('data-idx')
+          grade.rects_.queue.push(idx)
+          observer.unobserve(entry.target)
+
+          requestIdleCallback(
+            function () {
+              mpos.precept.update(grade, idx)
+            },
+            { time: 1000 }
+          )
+        }
+      })
     }
     mpos.ux.observer = new IntersectionObserver(callback)
 
@@ -221,7 +227,7 @@ const mpos = {
   precept: {
     index: 0,
     manual: `.mp-loader,.mp-native,.mp-poster`.split(','),
-    unset: `.mp-offscreen,details:not([open])`.split(','),
+    unset: `.mp-offscreen`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
@@ -257,13 +263,57 @@ const mpos = {
       }
       return vis
     },
-    update: function (grade) {
-      console.log('grade', grade)
+    update: function (grade, dataIdx) {
+      if (dataIdx && !grade.rects_.queue.length) {
+        // skip Observer
+        return
+      }
+      console.log('grade', grade, dataIdx, grade.rects_.queue)
+
+      // if (dataIdx) && queue.length, reverse-iterate
+      // or return false
+
+      if (dataIdx) {
+        // Observer
+        const rect = grade.rects[dataIdx]
+        const type = rect.mat === 'native' || rect.mat === 'loader' ? 'other' : 'atlas'
+
+        const grect_ = grade.rects_[type + '_']
+        if (!grect_[dataIdx]) {
+          // test inPolar???
+          grade.minEls++
+          if (rect.mat === 'poster') {
+            // shader
+            rect.atlas = grade.atlas++
+          }
+
+          grade.rects_[type]++
+          grect_[dataIdx] = rect
+        } else {
+          // rect was found
+        }
+        // unconditional updates
+        rect.inPolar = mpos.precept.inPolar(rect.el)
+      }
+
       const promise = new Promise((resolve, reject) => {
-        function atlas(grade, idx = 0, opts = {}) {
+        // sequential index: {0,1,2 ...length}    Object.values(grade.rects_.atlas_)[idx]
+        // lookup index:     {0,3,13  ...keys}    grade.rects_.atlas_[idx]
+        // queue:            [108,109  ...idx]    ''
+        function atlas(grade, opts = {}) {
           // element mat conversion
-          if (opts.run === undefined) {
-            opts.run = idx + opts.slice || grade.rects_.atlas
+          if (opts.array === undefined) {
+            //
+            if (dataIdx) {
+              opts.array = grade.rects_.queue
+            } else {
+              opts.array = Object.keys(grade.rects_.atlas_)
+            }
+            opts.idx = opts.array.length
+            //
+            //
+
+            //opts.run = idx + opts.slice || grade.rects_.atlas
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
             opts.step = opts.step || grade.maxRes / grade.cells
             // keep unused references?
@@ -271,9 +321,14 @@ const mpos = {
           }
 
           function next() {
-            idx++
-            if (idx < opts.run) {
-              atlas(grade, idx)
+            // increment index, or pick -next index from queue
+            if (dataIdx) {
+              opts.array = opts.array.splice(0, opts.idx)
+            }
+
+            if (opts.idx > 0) {
+              opts.idx--
+              atlas(grade, opts)
             } else {
               //if (opts.trim) {
               //grade.rects_atlas = Object.values(grade.rects_atlas).filter((rect) => rect.mat)
@@ -282,12 +337,15 @@ const mpos = {
               opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
               opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
 
-              transforms(grade)
+              transforms(grade, dataIdx)
             }
           }
 
-          let rect = Object.values(grade.rects_.atlas_)[idx]
-          if (rect.atlas !== undefined) {
+          let rect = grade.rects_.atlas_[opts.array[opts.idx]]
+          //console.log(grade.rects_.atlas_, Object.values(grade.rects_.atlas_), rect, idx)
+          //console.log(dataIdx, opts.array, idx, rect)
+
+          if (rect && rect.atlas !== undefined) {
             // style needs no transform, and block
             let unset = { transform: 'initial', margin: 0 }
             // bug: style display-inline is not honored by style override
@@ -320,14 +378,29 @@ const mpos = {
             next()
           }
         }
+
+        // forget "run"
+        //
+
         atlas(grade)
 
-        function transforms(grade) {
-          for (const [index, rect] of Object.entries(grade.rects_.other_)) {
+        function transforms(grade, dataIdx) {
+          // do this earlier, once
+          let boxes = []
+          grade.group.traverseVisible(function (object) {
+            if (object.isCSS3DObject || (object.isMesh && !object.isInstancedMesh)) {
+              //boxes.push(object.userData.el.getAttribute('data-id'))
+            }
+          })
+
+          for (const [idx, rect] of Object.entries(grade.rects_.other_)) {
             // FileLoader or CSS3D
 
-            console.log('other_')
-            mpos.add.box(rect)
+            //const grect_ = grade.rects_.other_[dataIdx]
+            if (dataIdx === undefined || idx === dataIdx) {
+              console.log('other_')
+              mpos.add.box(rect)
+            }
           }
 
           grade.ray = []
@@ -343,11 +416,11 @@ const mpos = {
           const cyan = { x: 1 - 1 / grade.cells, y: 0.0001 }
           const uvOffset = new Float32Array(grade.minEls * 2).fill(-1)
 
-          for (const [index, rect] of Object.entries(grade.rects_.atlas_)) {
+          for (const [idx, rect] of Object.entries(grade.rects_.atlas_)) {
             // self, poster, child
             // Instance Matrix
             let dummy = mpos.add.box(rect)
-            generic.setMatrixAt(index, dummy.matrix)
+            generic.setMatrixAt(idx, dummy.matrix)
             // Instance Color
             const color = new THREE.Color()
             let bg = rect.css.style.backgroundColor
@@ -356,10 +429,10 @@ const mpos = {
             if (alpha <= 0.0) {
               bg = rect.mat !== 'poster' ? 'cyan' : null
             }
-            generic.setColorAt(index, color.setStyle(bg))
+            generic.setColorAt(idx, color.setStyle(bg))
 
             // Shader Atlas UV
-            const stepSize = index * 2
+            const stepSize = idx * 2
             if (rect.atlas !== undefined || rect.mat === 'self') {
               uvOffset[stepSize] = rect.x || cyan.x
               uvOffset[stepSize + 1] = 1 - rect.y || cyan.y
@@ -367,7 +440,7 @@ const mpos = {
             if (rect.atlas !== undefined || rect.mat === 'child') {
               // raycast filter
               //if (grade.ray.indexOf(index) === -1) {
-              grade.ray.push(Number(index))
+              grade.ray.push(Number(idx))
               //}
             }
           }
@@ -385,7 +458,7 @@ const mpos = {
           //link.appendChild(grade.canvas)
           //document.getElementById('atlas').appendChild(link)
 
-          console.log(grade)
+          //console.log(grade)
 
           mpos.ux.render()
 
@@ -502,7 +575,7 @@ const mpos = {
             }
           } else {
             // off-screen
-            console.log('observe', rect.el)
+            console.log('observe', rect.el.getAttribute('data-idx'))
             mpos.ux.observer.observe(rect.el)
           }
 
@@ -595,7 +668,9 @@ const mpos = {
       // - rects_atlas {} (rect.atlas !== undefined, rect.mat == poster|self|child)
       // - rects_other {} (rect.mat === native|loader)
       //
+
       grade.rects_ = {
+        queue: [],
         atlas: 0,
         atlas_: {},
         other: 0,
@@ -742,7 +817,7 @@ const mpos = {
       // special
       if (rect.mat === 'loader') {
         let file = rect.el.data || rect.el.src || rect.el.href | 'source'
-        mpos.add.loader(file, object)
+        mpos.add.loader(file, object, rect.el)
       } else if (rect.mat === 'native' || rect.mat === 'wire') {
         vars.group.add(object)
       }
@@ -922,7 +997,7 @@ const mpos = {
       // atlas[c].parentElement.removeChild(atlas[c])
       //}
     },
-    loader: function (file, dummy) {
+    loader: function (file, dummy, el) {
       if (!file) {
         return
       }
@@ -968,6 +1043,7 @@ const mpos = {
               group.scale.y *= -1
 
               group.name = 'SVG'
+              group.userData.el = el
               mpos.var.group.add(group)
             }
 
