@@ -48,14 +48,14 @@ const mpos = {
     const template = document.createElement('template')
     template.innerHTML = `
     <section id="mp">
-      <address class="tool offscreen">
+      <address class="tool mp-offscreen">
         <object></object>
       </address>
       <aside class="tool mp-block" id="atlas">
         <a><canvas></canvas></a>
         <hr id="carot" />
       </aside>
-      <div id="css3d" class="mp-block"></div>
+      <div id="css3d"></div>
     </section>`
     document.body.appendChild(template.content)
     mpos.precept.canvas = document.querySelector('#atlas canvas')
@@ -129,6 +129,7 @@ const mpos = {
 
       gui.add(vars.opt, key, ...param)
     })
+    gui.domElement.classList.add('mp-native')
   },
   ux: {
     resize: function () {
@@ -207,7 +208,9 @@ const mpos = {
     event: function (e) {
       if (e.type === 'pointerdown') {
         // prevent drag Controls
-        if (e.target.matches('a,input,details,model-viewer')) {
+        // ...or parentElement?
+        if (e.target.matches([mpos.precept.native, mpos.precept.native3d])) {
+          console.log('target.matches', e.target)
           e.stopPropagation()
         }
       } else {
@@ -221,10 +224,12 @@ const mpos = {
   precept: {
     index: 0,
     manual: `.mp-loader,.mp-native,.mp-poster`.split(','),
-    unset: `.offscreen,details:not([open])`.split(','),
+    unset: `.mp-offscreen,details:not([open])`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
-    native: `.mp-native,a,iframe,frame,embed,object,svg,table,details,form,dialog,video,audio[controls]`.split(','),
+    native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
+      ','
+    ),
     poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
@@ -534,7 +539,7 @@ const mpos = {
           for (const [index, rect] of Object.entries(grade.rects_.other_)) {
             // FileLoader or CSS3D
 
-            console.log('standalone', rect.el)
+            console.log('other_')
             mpos.add.box(rect)
           }
 
@@ -638,7 +643,7 @@ const mpos = {
       const y = sY - bound.height / 2 - bound.top
       let z = rect.z
       let zIndex = rect.css.zIndex
-      zIndex = zIndex > 0 ? 1 - 1 / zIndex : 0
+      zIndex = 1 - 1 / (zIndex || 1)
       z = Number((z * d + zIndex).toFixed(6))
       // arc
       const damp = 0.5
@@ -704,8 +709,9 @@ const mpos = {
         const el = rect.el.cloneNode(true)
         // wrap prevents overwritten transform
         const wrap = document.createElement('div')
-        wrap.classList.add('mp-clone')
+        wrap.classList.add('mp-native')
         wrap.append(el)
+        wrap.style.zIndex = rect.css.style.zIndex
         const css3d = new CSS3DObject(wrap)
         // note: most userData.el reference an original, not a clone
         css3d.userData.el = el
@@ -748,12 +754,16 @@ const mpos = {
         let style = window.getComputedStyle(el)
         css.style = {
           transform: style.transform,
-          backgroundColor: style.backgroundColor
+          backgroundColor: style.backgroundColor,
+          zIndex: style.zIndex
         }
       } else if (rect.unset) {
         // quirks of DOM
         if (el.matches('details')) {
           el.open = traverse
+        }
+        if (el.matches('.mp-offscreen')) {
+          rect.z = rect.css.style.zIndex
         }
       }
 

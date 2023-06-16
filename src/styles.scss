@@ -107,11 +107,15 @@ model-viewer {
 
 //
 // MP SELECTORS
+.mp-offscreen {
+  > * { z-index: -9; } 
+  bottom: 8rem; 
+}
 .mp-unset {
   // toggle CSS during transform
   // toSvg needs ClientRect without transforms
   transform: initial!important;
-   &.offscreen {
+   &.mp-offscreen {
     // full-size box
     position: absolute;
     top: 0;
@@ -126,7 +130,14 @@ a, img, obj, span {
   display: inline-block
   }
 }
-.mp-clone { z-index:99;/*backface-visibility: hidden;*/ }
+.mp-clone { /*backface-visibility: hidden;*/ }
+.tool {
+  width: 8rem;
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  z-index: 3;
+}
 
 
 //
@@ -136,6 +147,7 @@ a, img, obj, span {
     margin: 0;
     padding: 0;
   }
+
 
   #css3d { z-index: 1; }
   &, #css3d, canvas[data-engine] {
@@ -148,18 +160,6 @@ a, img, obj, span {
   }
   #css3d, canvas[data-engine] {
     position: fixed;
-  }
-
-  .tool {
-    width: 8rem;
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    z-index: 3;
-  }
-  .offscreen {
-    z-index: -2; 
-    bottom: 8rem; 
   }
 
   #atlas {
