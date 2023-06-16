@@ -15,10 +15,7 @@ const mpos = {
       inPolar: 3,
       arc: false,
       update: function () {
-        mpos.add
-          .dom(this.selector, this.depth)
-          .then(mpos.ux.render)
-          .catch((e) => console.log('err', e))
+        mpos.add.dom(this.selector, this.depth)
       }
     },
     fov: {
@@ -210,7 +207,7 @@ const mpos = {
         // prevent drag Controls
         // ...or parentElement?
         if (e.target.matches([mpos.precept.native, mpos.precept.native3d])) {
-          console.log('target.matches', e.target)
+          console.log(e.target.tagName)
           e.stopPropagation()
         }
       } else {
@@ -262,7 +259,7 @@ const mpos = {
     }
   },
   add: {
-    dom: async function (selector, layers = 8, update) {
+    dom: function (selector, layers = 8, update) {
       const vars = mpos.var
       // get DOM node
       selector = selector || vars.opt.selector || 'body'
@@ -271,7 +268,7 @@ const mpos = {
         return
       } else if (selector === 'address') {
         const obj = document.querySelector(selector + ' object')
-        await mpos.add.src(obj, vars.opt.address, 'data')
+        mpos.add.src(obj, vars.opt.address, 'data')
       }
 
       // structure
@@ -300,155 +297,155 @@ const mpos = {
         mpos.add.box({ el: document.body, z: -16, mat: 'wire' }, { sX: grade.sX, sY: grade.sY })
       }
 
-      const promise = new Promise((resolve, reject) => {
-        // FLAT-GRADE: filter, grade, sanitize
-        let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
-        let node = ni.nextNode()
-        while (node) {
-          if (node.nodeName === '#comment') {
-            // #comment... (or CDATA, xml, php)
-            console.log('#comment', node.textContent)
+      // FLAT-GRADE: filter, grade, sanitize
+      let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
+      let node = ni.nextNode()
+      while (node) {
+        if (node.nodeName === '#comment') {
+          // #comment... (or CDATA, xml, php)
+          console.log('#comment', node.textContent)
+        } else {
+          let inPolar = precept.inPolar(node)
+          if (inPolar) {
+            let el = false
+            if (inPolar >= 2) {
+              el = node
+              // ...estimate
+            } else if (node.nodeName === '#text') {
+              const orphan = node.parentNode.childElementCount >= 1 && node.parentNode.matches([precept.allow])
+              if (orphan && precept.inPolar(node, grade.rects)) {
+                // sanitize #text orphan (list or semantic) with parent visible
+                let wrap = document.createElement('span')
+                wrap.classList.add('mp-poster')
+                node.parentNode.insertBefore(wrap, node)
+                wrap.appendChild(node)
+
+                el = wrap
+                inPolar = precept.inPolar(el)
+                grade.txt.push(node)
+              }
+            }
+
+            if (el) {
+              // static list
+              const idx = grade.maxEls
+              el.setAttribute('data-idx', idx)
+              grade.rects[idx] = { el: el, inPolar: inPolar }
+              grade.maxEls++
+            }
+          }
+        }
+
+        node = ni.nextNode()
+      }
+
+      // Atlas Units: relative device profile
+      grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 128
+      grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
+      grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
+      grade.canvas.width = grade.canvas.height = grade.maxRes
+      //grade.canvas.id = grade.index
+
+      function setRect(rect, z, mat, unset) {
+        if (rect) {
+          rect.mat = mat
+          rect.z = z
+
+          if (rect.inPolar >= vars.opt.inPolar) {
+            grade.inPolar++
+
+            if (rect.mat === 'poster') {
+              // shader
+              rect.atlas = grade.atlas++
+            }
           } else {
-            let inPolar = precept.inPolar(node)
-            if (inPolar) {
-              let el = false
-              if (inPolar >= 2) {
-                el = node
-                // ...estimate
-              } else if (node.nodeName === '#text') {
-                const orphan = node.parentNode.childElementCount >= 1 && node.parentNode.matches([precept.allow])
-                if (orphan && precept.inPolar(node, grade.rects)) {
-                  // sanitize #text orphan (list or semantic) with parent visible
-                  let wrap = document.createElement('span')
-                  wrap.classList.add('mp-poster')
-                  node.parentNode.insertBefore(wrap, node)
-                  wrap.appendChild(node)
-
-                  el = wrap
-                  inPolar = precept.inPolar(el)
-                  grade.txt.push(node)
-                }
-              }
-
-              if (el) {
-                // static list
-                const idx = grade.maxEls
-                el.setAttribute('data-idx', idx)
-                grade.rects[idx] = { el: el, inPolar: inPolar }
-                grade.maxEls++
-              }
-            }
+            // off-screen
+            console.log('observe', rect.el)
+            mpos.ux.observer.observe(rect.el)
           }
 
-          node = ni.nextNode()
+          // unset inherits transform from class
+          unset = unset || rect.el.matches(precept.unset)
+          if (unset) {
+            rect.unset = true
+          }
         }
-
-        // Atlas Units: relative device profile
-        grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 128
-        grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
-        grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
-        grade.canvas.width = grade.canvas.height = grade.maxRes
-        //grade.canvas.id = grade.index
-
-        function setRect(rect, z, mat, unset) {
-          if (rect) {
-            rect.mat = mat
-            rect.z = z
-
-            if (rect.inPolar >= vars.opt.inPolar) {
-              grade.inPolar++
-
-              if (rect.mat === 'poster') {
-                // shader
-                rect.atlas = grade.atlas++
-              }
-            } else {
-              // off-screen
-              console.log('observe', rect.el)
-              mpos.ux.observer.observe(rect.el)
+        return unset
+      }
+      function setMat(node, mat, manual, layer) {
+        if (manual) {
+          // priority score
+          mpos.precept.manual.every(function (classMat) {
+            classMat = classMat.replace('.mp-', '')
+            if (node.className.includes(classMat)) {
+              mat = classMat
+              classMat = false
             }
-
-            // unset inherits transform from class
-            unset = unset || rect.el.matches(precept.unset)
-            if (unset) {
-              rect.unset = true
-            }
-          }
-          return unset
+            return classMat
+          })
+        } else if (node.matches([precept.native, precept.native3d])) {
+          // todo: test internal type
+          mat = 'native'
+        } else if (node.matches(precept.poster) || layer === 0) {
+          mat = 'poster'
         }
-        function setMat(node, mat, manual, layer) {
-          if (manual) {
-            // priority score
-            mpos.precept.manual.every(function (classMat) {
-              classMat = classMat.replace('.mp-', '')
-              if (node.className.includes(classMat)) {
-                mat = classMat
-                classMat = false
-              }
-              return classMat
-            })
-          } else if (node.matches([precept.native, precept.native3d])) {
-            // todo: test internal type
-            mat = 'native'
-          } else if (node.matches(precept.poster) || layer === 0) {
-            mat = 'poster'
-          }
-          return mat
+        return mat
+      }
+
+      function struct(sel, layer, unset) {
+        // DEEP-GRADE: type, count
+        const z = layers - layer
+
+        // SELF
+        const rect = grade.rects[sel.getAttribute('data-idx')]
+
+        let mat = 'self'
+        // specify empty or manual
+        let children = sel.children
+        const manual = rect.el.matches(precept.manual)
+        if (!children.length || manual) {
+          mat = setMat(rect.el, mat, manual, children.length)
         }
+        unset = setRect(rect, z, mat, unset)
+        if (!manual) {
+          // CHILD
+          for (let i = 0; i < children.length; i++) {
+            let node = children[i]
 
-        function struct(sel, layer, unset) {
-          // DEEP-GRADE: type, count
-          const z = layers - layer
+            let rect = grade.rects[node.getAttribute('data-idx')]
+            if (rect && rect.inPolar) {
+              // CLASSIFY TYPE
+              const block = node.matches(precept.block)
+              const abort = grade.atlas >= grade.minRes
+              if (block || abort) {
+                console.log('skip', node.nodeName)
+              } else {
+                if (rect.inPolar >= 1) {
+                  const allow = node.matches(precept.allow)
+                  const manual = node.matches(precept.manual)
+                  const child = node.children.length
 
-          // SELF
-          const rect = grade.rects[sel.getAttribute('data-idx')]
+                  if (layer >= 1 && allow && !manual && child) {
+                    // selector structure output depth
+                    let depth = layer - 1
+                    struct(node, depth, unset)
+                  } else {
+                    let mat = 'child'
+                    // set box type
+                    mat = setMat(node, mat, manual, child)
 
-          let mat = 'self'
-          // specify empty or manual
-          let children = sel.children
-          const manual = rect.el.matches(precept.manual)
-          if (!children.length || manual) {
-            mat = setMat(rect.el, mat, manual, children.length)
-          }
-          unset = setRect(rect, z, mat, unset)
-          if (!manual) {
-            // CHILD
-            for (let i = 0; i < children.length; i++) {
-              let node = children[i]
-
-              let rect = grade.rects[node.getAttribute('data-idx')]
-              if (rect && rect.inPolar) {
-                // CLASSIFY TYPE
-                const block = node.matches(precept.block)
-                const abort = grade.atlas >= grade.minRes
-                if (block || abort) {
-                  console.log('skip', node.nodeName)
-                } else {
-                  if (rect.inPolar >= 1) {
-                    const allow = node.matches(precept.allow)
-                    const manual = node.matches(precept.manual)
-                    const child = node.children.length
-
-                    if (layer >= 1 && allow && !manual && child) {
-                      // selector structure output depth
-                      let depth = layer - 1
-                      struct(node, depth, unset)
-                    } else {
-                      let mat = 'child'
-                      // set box type
-                      mat = setMat(node, mat, manual, child)
-
-                      setRect(rect, z, mat, unset)
-                    }
+                    setRect(rect, z, mat, unset)
                   }
                 }
               }
             }
           }
         }
+      }
 
-        struct(sel, layers)
+      struct(sel, layers)
 
+      const promise = new Promise((resolve, reject) => {
         // keep rects ARRAY
         // - can update HARD_REFRESH
         // - compare: batch, data-idx, props
@@ -611,12 +608,14 @@ const mpos = {
           grade.group = vars.group
           console.log(grade)
 
+          mpos.ux.render()
+
           resolve(grade)
           reject(grade)
         }
       })
 
-      return promise
+      promise.catch((e) => console.log('err', e))
     },
     box: function (rect, opts = {}) {
       const vars = mpos.var
