@@ -1,7 +1,7 @@
 {
   "name": "mpos-precept",
   "version": "1.0.0",
-  "description": "Imposter layout to represent DOM rects as THREE bounds.",
+  "description": "Imposter DOM rects in THREE",
   "keywords": [
     "dom",
     "layout",

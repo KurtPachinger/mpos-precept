@@ -28,13 +28,57 @@ const mpos = {
     mat: new THREE.MeshBasicMaterial({
       transparent: true,
       wireframe: true,
-      side: THREE.FrontSide,
-      color: 'cyan'
+      side: THREE.FrontSide
     }),
     mat_line: new THREE.LineBasicMaterial({
       transparent: true,
-      //wireframe: true,
+      opacity: 0.5,
+      depthWrite: false,
       side: THREE.FrontSide
+    }),
+    mat_shader: new THREE.RawShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: {
+        map: {
+          type: 't',
+          value: null
+        },
+        atlasSize: {
+          type: 'f',
+          value: null
+        }
+      },
+      vertexShader: `precision highp float;
+
+      uniform mat4 modelViewMatrix;
+      uniform mat4 projectionMatrix;
+
+      attribute vec3 position;
+      attribute vec2 uv;
+      attribute mat4 instanceMatrix;
+      attribute vec2 uvOffset;
+
+      uniform float atlasSize;
+      varying vec2 vUv;
+
+      void main()
+      {
+        vUv = uvOffset + (uv / atlasSize);
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }
+      `,
+      fragmentShader: `precision highp float;
+
+      varying vec2 vUv;
+      
+      uniform sampler2D map;
+      
+      void main()
+      {
+        gl_FragColor = texture2D(map, vUv);
+      }
+      `
     }),
     raycaster: new THREE.Raycaster(),
     pointer: new THREE.Vector2()
@@ -105,12 +149,15 @@ const mpos = {
     const callback = function (entries, observer) {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          // enqueue element
-          //console.log('entry', entry.target, entry.boundingClientRect)
-          const grade = mpos.var.group.userData.grade
-          const idx = entry.target.getAttribute('data-idx')
-          grade.rects_.queue.push(idx)
           observer.unobserve(entry.target)
+          //console.log('entry', entry.target, entry.boundingClientRect)
+          const idx = entry.target.getAttribute('data-idx')
+          const grade = mpos.var.group.userData.grade
+          // set visibility
+          const rect = grade.rects[idx]
+          rect.inPolar = mpos.precept.inPolar(rect.el)
+          // enqueue element
+          grade.rects_.queue.push(idx)
 
           requestIdleCallback(
             function () {
@@ -264,36 +311,39 @@ const mpos = {
       return vis
     },
     update: function (grade, dataIdx) {
-      if (dataIdx && !grade.rects_.queue.length) {
+      const queue = grade.rects_.queue
+      if (dataIdx && !queue.length) {
         // skip Observer
         return
       }
-      console.log('grade', grade, dataIdx, grade.rects_.queue)
+      console.log('grade', grade, dataIdx, queue)
 
       // if (dataIdx) && queue.length, reverse-iterate
       // or return false
 
       if (dataIdx) {
-        // Observer
-        const rect = grade.rects[dataIdx]
-        const type = rect.mat === 'native' || rect.mat === 'loader' ? 'other' : 'atlas'
+        for (let i = queue.length - 1; i >= 0; i--) {
+          let idx = queue[i]
+          // Observer
+          const rect = grade.rects[idx]
+          const type = rect.mat === 'native' || rect.mat === 'loader' ? 'other' : 'atlas'
 
-        const grect_ = grade.rects_[type + '_']
-        if (!grect_[dataIdx]) {
-          // test inPolar???
-          grade.minEls++
-          if (rect.mat === 'poster') {
-            // shader
-            rect.atlas = grade.atlas++
+          const grect_ = grade.rects_[type + '_']
+          if (!grect_[idx]) {
+            // test inPolar???
+            grade.minEls++
+            if (rect.mat === 'poster') {
+              // shader
+              rect.atlas = grade.atlas++
+            }
+
+            grade.rects_[type]++
+            grect_[idx] = rect
+          } else {
+            // rect was found
           }
-
-          grade.rects_[type]++
-          grect_[dataIdx] = rect
-        } else {
-          // rect was found
+          // unconditional updates
         }
-        // unconditional updates
-        rect.inPolar = mpos.precept.inPolar(rect.el)
       }
 
       const promise = new Promise((resolve, reject) => {
@@ -305,7 +355,7 @@ const mpos = {
           if (opts.array === undefined) {
             //
             if (dataIdx) {
-              opts.array = grade.rects_.queue
+              opts.array = queue
             } else {
               opts.array = Object.keys(grade.rects_.atlas_)
             }
@@ -405,31 +455,27 @@ const mpos = {
 
           grade.ray = []
 
-          const generic = grade.generic
-          generic.instanceMatrix.setUsage(THREE.StaticDrawUsage)
-          generic.count = grade.rects_.atlas
-          generic.userData.el = grade.sel
-          generic.name = [grade.index, grade.sel.tagName].join('_')
-          generic.layers.set(2)
+          const instanced = grade.instanced
+          instanced.count = grade.rects_.atlas
 
           // Meshes
           const cyan = { x: 1 - 1 / grade.cells, y: 0.0001 }
-          const uvOffset = new Float32Array(grade.minEls * 2).fill(-1)
+          const uvOffset = new Float32Array(grade.rects_.atlas * 2).fill(-1)
 
           for (const [idx, rect] of Object.entries(grade.rects_.atlas_)) {
             // self, poster, child
             // Instance Matrix
             let dummy = mpos.add.box(rect)
-            generic.setMatrixAt(idx, dummy.matrix)
+            instanced.setMatrixAt(idx, dummy.matrix)
             // Instance Color
             const color = new THREE.Color()
             let bg = rect.css.style.backgroundColor
             const rgba = bg.replace(/(rgba)|[( )]/g, '').split(',')
             const alpha = Number(rgba[3])
             if (alpha <= 0.0) {
-              bg = rect.mat !== 'poster' ? 'cyan' : null
+              bg = null
             }
-            generic.setColorAt(idx, color.setStyle(bg))
+            instanced.setColorAt(idx, color.setStyle(bg))
 
             // Shader Atlas UV
             const stepSize = idx * 2
@@ -445,10 +491,13 @@ const mpos = {
             }
           }
 
-          generic.instanceMatrix.needsUpdate = true
-          generic.instanceColor.needsUpdate = true
-          generic.computeBoundingSphere()
-          generic.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
+          instanced.instanceMatrix.needsUpdate = true
+          instanced.instanceColor.needsUpdate = true
+          instanced.computeBoundingSphere()
+          instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
+          // update shader and frame step
+          instanced.userData.shader.userData.t.needsUpdate = true
+          mpos.ux.render()
 
           // UI Atlas
           let link = document.querySelector('#atlas a')
@@ -457,10 +506,6 @@ const mpos = {
           link.href = grade.canvas.toDataURL()
           //link.appendChild(grade.canvas)
           //document.getElementById('atlas').appendChild(link)
-
-          //console.log(grade)
-
-          mpos.ux.render()
 
           resolve(grade)
           reject(grade)
@@ -490,8 +535,8 @@ const mpos = {
         index: precept.index++,
         minRes: 256,
         maxEls: 0,
-        minEls: 0, // inPolar, but may be appended to...
-        atlas: 0,
+        minEls: 0, // inPolar count, which Observers increment
+        atlas: 0, // poster count, whereas rects_.atlas includes self,child for instanceMesh
         rects: {},
         txt: [],
         sX: window.scrollX,
@@ -687,15 +732,21 @@ const mpos = {
 
       // Instanced Mesh, shader atlas
       const shader = mpos.add.shader(grade.canvas, grade.cells)
-      grade.generic = new THREE.InstancedMesh(
+      const instanced = new THREE.InstancedMesh(
         vars.geo.clone(),
         [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
         grade.maxEls
       )
+      instanced.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+      instanced.layers.set(2)
+      instanced.userData.shader = shader
+      instanced.userData.el = grade.sel
+      instanced.name = [grade.index, grade.sel.tagName].join('_')
+      grade.instanced = instanced
 
       // OUTPUT
       vars.group.userData.grade = grade
-      vars.group.add(grade.generic)
+      vars.group.add(instanced)
       vars.scene.add(vars.group)
 
       grade.group = vars.group
@@ -725,10 +776,12 @@ const mpos = {
       bound = rect.unset ? bound : rect.el.getBoundingClientRect()
       const x = sX + (bound.width / 2 + bound.left)
       const y = sY - bound.height / 2 - bound.top
-      let z = rect.z
-      let zIndex = rect.css.zIndex
-      zIndex = 1 - 1 / (zIndex || 1)
-      z = Number((z * d + zIndex).toFixed(6))
+      let z = rect.z * d
+      let zIndex = rect.css.style.zIndex
+      const sign = zIndex >= 0 ? 1 : -1
+      zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
+      zIndex *= sign
+      z += zIndex * (mpos.var.opt.depth * vars.fov.z)
       // arc
       const damp = 0.5
       const mid = vars.fov.w / 2
@@ -740,7 +793,7 @@ const mpos = {
         objects.forEach((obj) => {
           // tiny offset
           const stencil = obj.isCSS3DObject || rect.mat === 'loader'
-          const extrude = stencil ? vars.fov.z : 0
+          const extrude = stencil ? vars.fov.z / 2 : 0
           z += extrude
 
           if (obj.isCSS3DObject) {
@@ -802,7 +855,9 @@ const mpos = {
         object = css3d
       } else if (rect.mat === 'wire') {
         // mesh singleton
-        const mesh = new THREE.Mesh(vars.geo, vars.mat)
+        const mat = vars.mat.clone()
+        mat.color = new THREE.Color('cyan')
+        const mesh = new THREE.Mesh(vars.geo, mat)
         mesh.userData.el = rect.el
         mesh.animations = true
         object = mesh
@@ -839,7 +894,7 @@ const mpos = {
         css.style = {
           transform: style.transform,
           backgroundColor: style.backgroundColor,
-          zIndex: style.zIndex
+          zIndex: Number(style.zIndex)
         }
       } else if (rect.unset) {
         // quirks of DOM
@@ -895,51 +950,11 @@ const mpos = {
       //discourse.threejs.org/t/13221/17
       const texAtlas = new THREE.CanvasTexture(canvas)
       texAtlas.minFilter = THREE.NearestFilter
-      const m = new THREE.RawShaderMaterial({
-        transparent: true,
-        depthTest: false,
-        uniforms: {
-          map: {
-            type: 't',
-            value: texAtlas
-          },
-          atlasSize: {
-            type: 'f',
-            value: texStep
-          }
-        },
-        vertexShader: `precision highp float;
-
-        uniform mat4 modelViewMatrix;
-        uniform mat4 projectionMatrix;
-
-        attribute vec3 position;
-        attribute vec2 uv;
-        attribute mat4 instanceMatrix;
-        attribute vec2 uvOffset;
-
-        uniform float atlasSize;
-        varying vec2 vUv;
-
-        void main()
-        {
-          vUv = uvOffset + (uv / atlasSize);
-          gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-        }
-        `,
-        fragmentShader: `precision highp float;
-
-        varying vec2 vUv;
-        
-        uniform sampler2D map;
-        
-        void main()
-        {
-          gl_FragColor = texture2D(map, vUv);
-        }
-        `
-      })
-
+      // set
+      const m = mpos.var.mat_shader.clone()
+      m.uniforms.map.value = texAtlas
+      m.uniforms.atlasSize.value = texStep
+      // out
       m.userData.t = texAtlas
       return m
     },
