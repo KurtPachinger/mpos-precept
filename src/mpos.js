@@ -318,9 +318,6 @@ const mpos = {
       }
       console.log('grade', grade, dataIdx, queue)
 
-      // if (dataIdx) && queue.length, reverse-iterate
-      // or return false
-
       if (dataIdx) {
         for (let i = queue.length - 1; i >= 0; i--) {
           let idx = queue[i]
@@ -330,49 +327,51 @@ const mpos = {
 
           const grect_ = grade.rects_[type + '_']
           if (!grect_[idx]) {
-            // test inPolar???
             grade.minEls++
             if (rect.mat === 'poster') {
               // shader
               rect.atlas = grade.atlas++
+            } else if (type === 'other') {
+              // CSS3D or Loader
+
+              //
+              let object = mpos.add.box(rect)
+              grade.rects_.other_[idx].obj = object
             }
 
             grade.rects_[type]++
             grect_[idx] = rect
-          } else {
-            // rect was found
           }
-          // unconditional updates
         }
+      } else {
+        // the viewport
+        //const root = document.body
+        //const idx = root.getAttribute('data-idx')
+        //const rect = grade.rects[idx]
+        //rect.mat = 'wire'
+        //rect.z = -16
+        //grade.rects_.other_[idx] = rect
       }
 
       const promise = new Promise((resolve, reject) => {
-        // sequential index: {0,1,2 ...length}    Object.values(grade.rects_.atlas_)[idx]
-        // lookup index:     {0,3,13  ...keys}    grade.rects_.atlas_[idx]
-        // queue:            [108,109  ...idx]    ''
         function atlas(grade, opts = {}) {
           // element mat conversion
           if (opts.array === undefined) {
-            //
             if (dataIdx) {
+              // soft-update
               opts.array = queue
             } else {
+              // hard-update
               opts.array = Object.keys(grade.rects_.atlas_)
             }
             opts.idx = opts.array.length
-            //
-            //
-
-            //opts.run = idx + opts.slice || grade.rects_.atlas
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
             opts.step = opts.step || grade.maxRes / grade.cells
-            // keep unused references?
-            //opts.trim = !(opts.trim === false) || true
           }
 
           function next() {
-            // increment index, or pick -next index from queue
             if (dataIdx) {
+              // decrement queue
               opts.array = opts.array.splice(0, opts.idx)
             }
 
@@ -380,19 +379,15 @@ const mpos = {
               opts.idx--
               atlas(grade, opts)
             } else {
-              //if (opts.trim) {
-              //grade.rects_atlas = Object.values(grade.rects_atlas).filter((rect) => rect.mat)
-              //}
-              // the atlas ends with 2 blocks: cyan and transparent
+              // atlas ends with blank
               opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
               opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
-
+              // complete
               transforms(grade, dataIdx)
             }
           }
 
           let rect = grade.rects_.atlas_[opts.array[opts.idx]]
-          //console.log(grade.rects_.atlas_, Object.values(grade.rects_.atlas_), rect, idx)
           //console.log(dataIdx, opts.array, idx, rect)
 
           if (rect && rect.atlas !== undefined) {
@@ -413,7 +408,7 @@ const mpos = {
                   // avoid 0 edge, so add 0.0001
                   rect.x = (0.0001 + x) / grade.maxRes
                   rect.y = (0.0001 + y + opts.step) / grade.maxRes
-
+                  // recursive
                   next()
                 }
 
@@ -429,28 +424,33 @@ const mpos = {
           }
         }
 
-        // forget "run"
-        //
-
         atlas(grade)
 
         function transforms(grade, dataIdx) {
-          // do this earlier, once
-          let boxes = []
-          grade.group.traverseVisible(function (object) {
-            if (object.isCSS3DObject || (object.isMesh && !object.isInstancedMesh)) {
-              //boxes.push(object.userData.el.getAttribute('data-id'))
+          //grade.sX = window.scrollX
+          //grade.sY = window.scrollY
+
+          const other = {}
+          grade.group.children.forEach(function (object) {
+            if (object.isCSS3DObject || object.isGroup || (object.isMesh && !object.isInstancedMesh)) {
+              let idx = object.userData.el.getAttribute('data-idx')
+              other[idx] = object
             }
           })
-
           for (const [idx, rect] of Object.entries(grade.rects_.other_)) {
-            // FileLoader or CSS3D
-
-            //const grect_ = grade.rects_.other_[dataIdx]
-            if (dataIdx === undefined || idx === dataIdx) {
+            // CSS3D or Loader
+            if (dataIdx === undefined) {
+              // add it
               console.log('other_')
-              mpos.add.box(rect)
+              let obj = mpos.add.box(rect)
+              grade.rects_.other_[idx].obj = obj
+            } else {
+              // update positions
+              let obj = grade.rects_.other_[idx].obj
+              //console.log('object', obj)
+              mpos.add.box(rect, { update: obj, sX: grade.sX, sY: grade.sY })
             }
+            // ...or update the position?
           }
 
           grade.ray = []
@@ -462,11 +462,12 @@ const mpos = {
           const cyan = { x: 1 - 1 / grade.cells, y: 0.0001 }
           const uvOffset = new Float32Array(grade.rects_.atlas * 2).fill(-1)
 
+          let count = 0
           for (const [idx, rect] of Object.entries(grade.rects_.atlas_)) {
             // self, poster, child
             // Instance Matrix
             let dummy = mpos.add.box(rect)
-            instanced.setMatrixAt(idx, dummy.matrix)
+            instanced.setMatrixAt(count, dummy.matrix)
             // Instance Color
             const color = new THREE.Color()
             let bg = rect.css.style.backgroundColor
@@ -475,10 +476,10 @@ const mpos = {
             if (alpha <= 0.0) {
               bg = null
             }
-            instanced.setColorAt(idx, color.setStyle(bg))
+            instanced.setColorAt(count, color.setStyle(bg))
 
             // Shader Atlas UV
-            const stepSize = idx * 2
+            const stepSize = count * 2
             if (rect.atlas !== undefined || rect.mat === 'self') {
               uvOffset[stepSize] = rect.x || cyan.x
               uvOffset[stepSize + 1] = 1 - rect.y || cyan.y
@@ -489,6 +490,7 @@ const mpos = {
               grade.ray.push(Number(idx))
               //}
             }
+            count++
           }
 
           instanced.instanceMatrix.needsUpdate = true
@@ -532,16 +534,24 @@ const mpos = {
       const precept = mpos.precept
       const grade = {
         sel: sel,
+        canvas: precept.canvas,
         index: precept.index++,
-        minRes: 256,
-        maxEls: 0,
-        minEls: 0, // inPolar count, which Observers increment
         atlas: 0, // poster count, whereas rects_.atlas includes self,child for instanceMesh
-        rects: {},
+        minEls: 0, // inPolar count, which Observers increment
+        maxEls: 0,
+        minRes: 256,
+        // build lists
         txt: [],
+        rects: {},
+        rects_: {
+          queue: [],
+          atlas: 0,
+          atlas_: {},
+          other: 0,
+          other_: {}
+        },
         sX: window.scrollX,
-        sY: window.scrollY,
-        canvas: precept.canvas
+        sY: window.scrollY
       }
 
       // THREE cleanup
@@ -552,7 +562,6 @@ const mpos = {
         vars.group = new THREE.Group()
         vars.group.name = selector
         // root DOM node (viewport)
-        mpos.add.box({ el: document.body, z: -16, mat: 'wire' }, { sX: grade.sX, sY: grade.sY })
       }
 
       // FLAT-GRADE: filter, grade, sanitize
@@ -714,13 +723,6 @@ const mpos = {
       // - rects_other {} (rect.mat === native|loader)
       //
 
-      grade.rects_ = {
-        queue: [],
-        atlas: 0,
-        atlas_: {},
-        other: 0,
-        other_: {}
-      }
       for (const [index, rect] of Object.entries(grade.rects)) {
         // make two good current lists
         if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
@@ -777,7 +779,7 @@ const mpos = {
       const x = sX + (bound.width / 2 + bound.left)
       const y = sY - bound.height / 2 - bound.top
       let z = rect.z * d
-      let zIndex = rect.css.style.zIndex
+      let zIndex = Number(rect.css.style.zIndex) || 0
       const sign = zIndex >= 0 ? 1 : -1
       zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
       zIndex *= sign
@@ -788,34 +790,32 @@ const mpos = {
       const rad = (mid - x) / mid
       const pos = mid * Math.abs(rad)
 
-      function transform(objects) {
-        objects = Array.isArray(objects) ? objects : [objects]
-        objects.forEach((obj) => {
-          // tiny offset
-          const stencil = obj.isCSS3DObject || rect.mat === 'loader'
-          const extrude = stencil ? vars.fov.z / 2 : 0
-          z += extrude
+      function transform(obj) {
+        // tiny offset
+        const stencil = obj.isCSS3DObject || rect.mat === 'loader'
+        const extrude = stencil ? vars.fov.z / 2 : 0
+        z += extrude
 
-          if (obj.isCSS3DObject) {
-            // element does not scale like group
-            obj.userData.el.style.width = w
-            obj.userData.el.style.height = h
-            // note: actually using cumulative
-            if (rect.css.transform.length) {
-              const scale = 'scale(' + rect.css.scale + ')'
-              const degree = 'rotate(' + rect.css.degree + 'deg)'
-              obj.userData.el.style.transform = [scale, degree].join(' ')
-            }
-          } else {
-            obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
-            obj.rotation.z = -rect.css.radian
+        if (obj.isCSS3DObject) {
+          // element does not scale like group
+          obj.userData.el.style.width = w
+          obj.userData.el.style.height = h
+          // note: actually using cumulative
+          if (rect.css.transform.length) {
+            const scale = 'scale(' + rect.css.scale + ')'
+            const degree = 'rotate(' + rect.css.degree + 'deg)'
+            obj.userData.el.style.transform = [scale, degree].join(' ')
           }
+        } else {
+          obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
+          obj.rotation.z = -rect.css.radian
+        }
 
-          obj.position.set(x, y, z)
+        obj.position.set(x, y, z)
 
-          // BUG FIX 1: ABOVE, remove css.scale and css.rotate
-          // BUG FIX 2: BELOW, apply per-instance to Object3D or HTML clone
-          /*
+        // BUG FIX 1: ABOVE, remove css.scale and css.rotate
+        // BUG FIX 2: BELOW, apply per-instance to Object3D or HTML clone
+        /*
           const transform = rect.css.transform
           for (let i = 0; i < transform.length; i++) {
             // apply css transforms from origin
@@ -832,16 +832,17 @@ const mpos = {
           }
           */
 
-          if (vars.opt.arc) {
-            // bulge from view center
-            obj.rotation.y = rad * damp * 2
-            obj.position.setZ(z + pos * damp)
-          }
-        })
+        if (vars.opt.arc) {
+          // bulge from view center
+          obj.rotation.y = rad * damp * 2
+          obj.position.setZ(z + pos * damp)
+        }
       }
 
       let object
-      if (rect.mat === 'native') {
+      if (opts.update) {
+        object = opts.update
+      } else if (rect.mat === 'native') {
         // note: element may not inherit some specific styles
         const el = rect.el.cloneNode(true)
         // wrap prevents overwritten transform
@@ -869,17 +870,19 @@ const mpos = {
       transform(object)
       object.updateMatrix()
 
-      // special
-      if (rect.mat === 'loader') {
-        let file = rect.el.data || rect.el.src || rect.el.href | 'source'
-        mpos.add.loader(file, object, rect.el)
-      } else if (rect.mat === 'native' || rect.mat === 'wire') {
-        vars.group.add(object)
+      if (opts.update === undefined) {
+        // other custom process
+        if (rect.mat === 'loader') {
+          let file = rect.el.data || rect.el.src || rect.el.href | 'source'
+          mpos.add.loader(file, object, rect.el).then(function (res) {
+            object = res
+          })
+        } else if (rect.mat === 'native' || rect.mat === 'wire') {
+          vars.group.add(object)
+        }
+        const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
+        object.name = name
       }
-
-      // output
-      const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
-      object.name = name
 
       return object
     },
@@ -894,7 +897,7 @@ const mpos = {
         css.style = {
           transform: style.transform,
           backgroundColor: style.backgroundColor,
-          zIndex: Number(style.zIndex)
+          zIndex: style.zIndex
         }
       } else if (rect.unset) {
         // quirks of DOM
@@ -1013,11 +1016,10 @@ const mpos = {
       //}
     },
     loader: function (file, dummy, el) {
-      if (!file) {
-        return
-      }
-
       let promise = new Promise((resolve, reject) => {
+        if (!file) {
+          resolve('no file')
+        }
         // instantiate a loader: File, Audio, Object...
         let handler = file.match(/\.[0-9a-z]+$/i)
         handler = handler ? handler[0] : 'File'
@@ -1026,8 +1028,8 @@ const mpos = {
         loader.load(
           file,
           function (data) {
-            let res = { data: data }
-            console.log('load', data)
+            let res
+
             if (handler.toUpperCase() === '.SVG') {
               const group = new THREE.Group()
               const paths = data.paths
@@ -1060,10 +1062,11 @@ const mpos = {
               group.name = 'SVG'
               group.userData.el = el
               mpos.var.group.add(group)
+              res = group
             }
 
             resolve(res)
-            reject(res)
+            reject(data)
           },
           // called when loading is in progresses
           function (xhr) {
@@ -1076,7 +1079,7 @@ const mpos = {
         )
       })
 
-      //
+      console.log(promise)
       return promise
     }
   }

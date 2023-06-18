@@ -110,6 +110,7 @@ model-viewer {
 .mp-offscreen {
   > * { z-index: -9; } 
   &.tool{ bottom: 8rem; } 
+  pointer-events: none;
 }
 .mp-unset {
   // toggle CSS during transform
