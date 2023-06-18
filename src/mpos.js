@@ -104,7 +104,7 @@ const mpos = {
 
     // THREE
     vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 8)
+    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
     //vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
     vars.camera.position.z = vars.fov.max
@@ -316,7 +316,6 @@ const mpos = {
         // skip Observer
         return
       }
-      console.log('grade', grade, dataIdx, queue)
 
       if (dataIdx) {
         for (let i = queue.length - 1; i >= 0; i--) {
@@ -333,14 +332,12 @@ const mpos = {
               rect.atlas = grade.atlas++
             } else if (type === 'other') {
               // CSS3D or Loader
-
-              //
-              let object = mpos.add.box(rect)
-              grade.rects_.other_[idx].obj = object
+              rect.obj = mpos.add.box(rect)
             }
 
             grade.rects_[type]++
             grect_[idx] = rect
+          } else {
           }
         }
       } else {
@@ -348,7 +345,7 @@ const mpos = {
         const root = document.body
         const rect = { el: root, z: -16, mat: 'wire' }
         rect.obj = mpos.add.box(rect)
-        mpos.var.group.add(rect.obj)
+        grade.group.add(rect.obj)
         const idx = root.getAttribute('data-idx')
         grade.rects_.other_[idx] = rect
         grade.rects_.other++
@@ -434,13 +431,6 @@ const mpos = {
         function transforms(grade, dataIdx) {
           grade.scroll = { x: window.scrollX, y: -window.scrollY }
 
-          const other = {}
-          grade.group.children.forEach(function (object) {
-            if (object.isCSS3DObject || object.isGroup || (object.isMesh && !object.isInstancedMesh)) {
-              let idx = object.userData.el.getAttribute('data-idx')
-              other[idx] = object
-            }
-          })
           for (const [idx, rect] of Object.entries(grade.rects_.other_)) {
             // CSS3D or Loader
             if (dataIdx === undefined) {
@@ -522,6 +512,7 @@ const mpos = {
       })
 
       promise.catch((e) => console.log('err', e))
+      return promise
     }
   },
   add: {
@@ -635,7 +626,7 @@ const mpos = {
             }
           } else {
             // off-screen
-            console.log('observe', rect.el.getAttribute('data-idx'))
+            console.log('observe')
             mpos.ux.observer.observe(rect.el)
           }
 
@@ -759,7 +750,10 @@ const mpos = {
 
       grade.group = vars.group
 
-      mpos.precept.update(grade)
+      mpos.precept.update(grade).then(function (grade) {
+        console.log('update', grade)
+      })
+      return grade.group
     },
     box: function (rect, opts = {}) {
       const vars = mpos.var
