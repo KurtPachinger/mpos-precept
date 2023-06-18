@@ -874,7 +874,7 @@ const mpos = {
         // other custom process
         if (rect.mat === 'loader') {
           let file = rect.el.data || rect.el.src || rect.el.href | 'source'
-          mpos.add.loader(file, object, rect.el).then(function (res) {
+          mpos.add.loader(file, object, rect).then(function (res) {
             object = res
           })
         } else if (rect.mat === 'native') {
@@ -1015,7 +1015,7 @@ const mpos = {
       // atlas[c].parentElement.removeChild(atlas[c])
       //}
     },
-    loader: function (file, dummy, el) {
+    loader: function (file, dummy, rect) {
       let promise = new Promise((resolve, reject) => {
         if (!file) {
           resolve('no file')
@@ -1052,15 +1052,22 @@ const mpos = {
                   group.add(mesh)
                 }
               }
-              let scale = mpos.var.fov.max / Math.max(dummy.scale.x, dummy.scale.y)
-              group.scale.multiplyScalar(1 / scale)
-              group.position.x = dummy.position.x - dummy.scale.x / 2
-              group.position.y = dummy.position.y + dummy.scale.y / 2
 
+              const aabb = new THREE.Box3()
+              aabb.setFromObject(group)
+              // scale
+              const s1 = Math.max(dummy.scale.x, dummy.scale.y)
+              const s2 = Math.max(aabb.max.x, aabb.max.y)
+              const scale = s1 / s2
+              group.scale.multiplyScalar(scale)
               group.scale.y *= -1
+              // position
+              group.position.copy(dummy.position)
+              group.position.x -= dummy.scale.x / 2
+              group.position.y += dummy.scale.y / 2
 
               group.name = 'SVG'
-              group.userData.el = el
+              group.userData.el = rect.el
               mpos.var.group.add(group)
               res = group
             }
