@@ -88,15 +88,15 @@ const mpos = {
     // containers
     const template = document.createElement('template')
     template.innerHTML = `
-    <section id="mp">
-      <address class="tool mp-offscreen">
+    <section id='mp' class='mp-block'>
+      <address class='tool mp-offscreen'>
         <object></object>
       </address>
-      <aside class="tool mp-block" id="atlas">
+      <aside class='tool' id='atlas'>
         <a><canvas></canvas></a>
-        <hr id="carot" />
+        <hr id='carot' />
       </aside>
-      <div id="css3d"></div>
+      <div id='css3d'></div>
     </section>`
     document.body.appendChild(template.content)
     mpos.precept.canvas = document.querySelector('#atlas canvas')
@@ -163,7 +163,7 @@ const mpos = {
             function () {
               mpos.precept.update(grade, idx)
             },
-            { time: 1000 }
+            { time: 500 }
           )
         }
       })
@@ -323,7 +323,7 @@ const mpos = {
           let idx = queue[i]
           // Observer
           const rect = grade.rects[idx]
-          const type = rect.mat === 'native' || rect.mat === 'loader' ? 'other' : 'atlas'
+          const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
 
           const grect_ = grade.rects_[type + '_']
           if (!grect_[idx]) {
@@ -344,13 +344,14 @@ const mpos = {
           }
         }
       } else {
-        // the viewport
-        //const root = document.body
-        //const idx = root.getAttribute('data-idx')
-        //const rect = grade.rects[idx]
-        //rect.mat = 'wire'
-        //rect.z = -16
-        //grade.rects_.other_[idx] = rect
+        // add viewport
+        const root = document.body
+        const rect = { el: root, z: -16, mat: 'wire' }
+        rect.obj = mpos.add.box(rect)
+        mpos.var.group.add(rect.obj)
+        const idx = root.getAttribute('data-idx')
+        grade.rects_.other_[idx] = rect
+        grade.rects_.other++
       }
 
       const promise = new Promise((resolve, reject) => {
@@ -377,11 +378,15 @@ const mpos = {
 
             if (opts.idx > 0) {
               opts.idx--
-              atlas(grade, opts)
+              setTimeout(() => {
+                atlas(grade, opts)
+              }, 0)
             } else {
-              // atlas ends with blank
-              opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
-              opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
+              if (!dataIdx) {
+                // atlas ends with blank
+                opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
+                opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
+              }
               // complete
               transforms(grade, dataIdx)
             }
@@ -427,8 +432,7 @@ const mpos = {
         atlas(grade)
 
         function transforms(grade, dataIdx) {
-          //grade.sX = window.scrollX
-          //grade.sY = window.scrollY
+          grade.scroll = { x: window.scrollX, y: -window.scrollY }
 
           const other = {}
           grade.group.children.forEach(function (object) {
@@ -448,7 +452,10 @@ const mpos = {
               // update positions
               let obj = grade.rects_.other_[idx].obj
               //console.log('object', obj)
-              mpos.add.box(rect, { update: obj, sX: grade.sX, sY: grade.sY })
+
+              let scroll = rect.mat === 'wire' ? grade.scroll : undefined
+
+              mpos.add.box(rect, { update: obj, scroll: scroll })
             }
             // ...or update the position?
           }
@@ -550,8 +557,7 @@ const mpos = {
           other: 0,
           other_: {}
         },
-        sX: window.scrollX,
-        sY: window.scrollY
+        scroll: { x: window.scrollX, y: -window.scrollY }
       }
 
       // THREE cleanup
@@ -726,7 +732,7 @@ const mpos = {
       for (const [index, rect] of Object.entries(grade.rects)) {
         // make two good current lists
         if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
-          let type = rect.mat === 'native' || rect.mat === 'loader' ? 'other' : 'atlas'
+          let type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
           grade.rects_[type]++
           grade.rects_[type + '_'][rect.el.getAttribute('data-idx')] = rect
         }
@@ -767,8 +773,7 @@ const mpos = {
       mpos.add.css(rect, false)
 
       // origin(0,0) follows viewport, not window
-      const sX = opts.sX || 0
-      const sY = -opts.sY || 0
+      const scroll = opts.scroll || { x: 0, y: 0 }
 
       // scale
       const w = bound.width
@@ -776,8 +781,8 @@ const mpos = {
       const d = vars.fov.z
       // position
       bound = rect.unset ? bound : rect.el.getBoundingClientRect()
-      const x = sX + (bound.width / 2 + bound.left)
-      const y = sY - bound.height / 2 - bound.top
+      const x = scroll.x + (bound.width / 2 + bound.left)
+      const y = scroll.y - bound.height / 2 - bound.top
       let z = rect.z * d
       let zIndex = Number(rect.css.style.zIndex) || 0
       const sign = zIndex >= 0 ? 1 : -1
@@ -877,7 +882,7 @@ const mpos = {
           mpos.add.loader(file, object, rect.el).then(function (res) {
             object = res
           })
-        } else if (rect.mat === 'native' || rect.mat === 'wire') {
+        } else if (rect.mat === 'native') {
           vars.group.add(object)
         }
         const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
