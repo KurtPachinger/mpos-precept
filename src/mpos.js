@@ -1087,12 +1087,18 @@ const mpos = {
 mpos.gen = function (num = 6, selector = 'main') {
   //img,ul,embed
   let lipsum = [
+    'Nunc at dolor lacus. ',
     'Lorem ipsum dolor sit amet. ',
+    'Phasellus eu sapien tellus. ',
     'Consectetur adipiscing elit. ',
     'Integer nec vulputate lacus. ',
-    'Nunc at dolor lacus. ',
+    'Donec auctor id leo eu varius. ',
+    'Sed viverra quis nisl et vulputate. ',
+    'Morbi eget eros non felis tempor sodales. ',
+    'Praesent in elementum risus, a vehicula justo. ',
     'Vivamus eget magna quis nisi ultrices faucibus. ',
-    'Phasellus eu sapien tellus. '
+    'Phasellus massa mauris, rutrum ac semper posuere. ',
+    'Nunc a nibh vitae eros fringilla lacinia id in sapien. '
   ]
 
   function fill(element, length) {
