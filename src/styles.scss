@@ -39,7 +39,7 @@
     float: left;
     width: 50%;
     height: 1em;
-    background-color: rgba( 128, 128, 128, 0.25 )
+    background-color: rgba( 128, 128, 128, 0.25 );
     }
   }
 
@@ -47,12 +47,12 @@
 }
 
 
-h2 { border-top: var(--u1) solid var(--sup); font-style:normal; font-weight:600; }
+h2 { border-top: var(--u1) solid var(--sup); font-style: normal; font-weight: 600; }
 .sup, h2 span { background-color: var(--sup); }
 .sub { background-color: var(--sub); }
 
-main, section, article, aside, fieldset { padding: var(--u2);  }
-section, aside, h2, p, ul, ol, form, table { 
+main, section, article, aside, fieldset { padding: var(--u2); }
+section, aside, h2, p, ul, ol, form, table {
   margin-bottom: var(--u2);
 }
 
@@ -67,16 +67,17 @@ ul { padding-left: 1.75em; }
 
 tr, li, summary {
   &:hover {
-    background-color: var(--sub)!important; }
+    background-color: var(--sub)!important;
+  }
 }
 
 
 // framework
 .w25, .w50, .w75 { float: left; }
-.w25 { width: 25.00%; }
-.w50 { width: 50.00%; }
-.w75 { width: 75.00%; }
-.w100 { width: 100%;  }
+.w25 { width: 25.0%; }
+.w50 { width: 50.0%; }
+.w75 { width: 75.0%; }
+.w100 { width: 100%; }
 img {
   width: 100%;
   height: auto;
@@ -104,13 +105,12 @@ model-viewer {
 }
 
 
-
 //
 // MP SELECTORS
 .mp-offscreen {
-  > * { z-index: 0.999; } 
-  &.tool{ bottom: 8rem; } 
-  pointer-events: none;
+pointer-events: none;
+  > * { z-index: 0.999; }
+  &.tool{ bottom: 8rem; }
 }
 .mp-unset {
   // toggle CSS during transform
@@ -120,7 +120,7 @@ model-viewer {
     // full-size box
     position: absolute;
     top: 0;
-    right:100%;
+    right: 100%;
     width: 100%;
     height: 100%;
   }
@@ -149,10 +149,9 @@ a, img, obj, span {
     padding: 0;
   }
 
-
   #css3d { z-index: 1; }
   &, #css3d, canvas[data-engine] {
-    overflow: hidden; 
+    overflow: hidden;
     //overflow-y: auto;
     top: 0;
     left: 0;

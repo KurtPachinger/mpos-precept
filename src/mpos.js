@@ -419,7 +419,7 @@ const mpos = {
               })
               .catch(function (e) {
                 // some box problem... error retry count?
-                console.log('err', e, rect.el, e.target.classList)
+                console.log('err', e.target)
                 next()
               })
           } else {
@@ -430,25 +430,20 @@ const mpos = {
         atlas(grade)
 
         function transforms(grade, dataIdx) {
-          grade.scroll = { x: window.scrollX, y: -window.scrollY }
+          grade.scroll = { x: window.scrollX, y: window.scrollY }
 
           for (const [idx, rect] of Object.entries(grade.rects_.other_)) {
             // CSS3D or Loader
             if (dataIdx === undefined) {
               // add it
-              console.log('other_')
               let obj = mpos.add.box(rect)
               grade.rects_.other_[idx].obj = obj
             } else {
               // update positions
               let obj = grade.rects_.other_[idx].obj
-              //console.log('object', obj)
-
               let scroll = rect.mat === 'wire' ? grade.scroll : undefined
-
               mpos.add.box(rect, { update: obj, scroll: scroll })
             }
-            // ...or update the position?
           }
 
           grade.ray = []
@@ -796,6 +791,8 @@ const mpos = {
         const extrude = stencil ? vars.fov.z / 2 : 0
         z += extrude
 
+        obj.position.set(x, y, z)
+
         if (obj.isCSS3DObject) {
           // element does not scale like group
           obj.userData.el.style.width = w
@@ -806,31 +803,14 @@ const mpos = {
             const degree = 'rotate(' + rect.css.degree + 'deg)'
             obj.userData.el.style.transform = [scale, degree].join(' ')
           }
+        } else if (obj.isGroup) {
+          // group implies loader, a group of arbitrary scale
+          obj.position.x -= w / 2
+          obj.position.y += h / 2
         } else {
           obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
           obj.rotation.z = -rect.css.radian
         }
-
-        obj.position.set(x, y, z)
-
-        // BUG FIX 1: ABOVE, remove css.scale and css.rotate
-        // BUG FIX 2: BELOW, apply per-instance to Object3D or HTML clone
-        /*
-          const transform = rect.css.transform
-          for (let i = 0; i < transform.length; i++) {
-            // apply css transforms from origin
-            // scale *=, rotate +=
-            const dummy = new THREE.Object3D()
-            const inherit = transform[i]
-            const bound = inherit.bound
-            dummy.position.set(sX + bound.left + inherit.origin.x, sY - bound.top - inherit.origin.y, z)
-            dummy.scale.multiplyScalar(inherit.scale)
-            dummy.rotation.z = -inherit.rotate
-            obj.rotation.applyMatrix4(dummy.matrix)
-            obj.scale.applyMatrix4(dummy.matrix)
-            obj.updateMatrix()
-          }
-          */
 
         if (vars.opt.arc) {
           // bulge from view center
@@ -870,21 +850,20 @@ const mpos = {
       transform(object)
       object.updateMatrix()
 
+      let group = false
       if (opts.update === undefined) {
         // other custom process
         if (rect.mat === 'loader') {
-          let file = rect.el.data || rect.el.src || rect.el.href | 'source'
-          mpos.add.loader(file, object, rect).then(function (res) {
-            object = res
-          })
+          let file = rect.el.data || rect.el.src || rect.el.href
+          group = new THREE.Group()
+          mpos.add.loader(file, object, group)
         } else if (rect.mat === 'native') {
           vars.group.add(object)
         }
         const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
         object.name = name
       }
-
-      return object
+      return group || object
     },
     css: function (rect, traverse) {
       // css style transforms
@@ -1015,79 +994,79 @@ const mpos = {
       // atlas[c].parentElement.removeChild(atlas[c])
       //}
     },
-    loader: function (file, dummy, rect) {
-      let promise = new Promise((resolve, reject) => {
-        if (!file) {
-          resolve('no file')
-        }
-        // instantiate a loader: File, Audio, Object...
-        let handler = file.match(/\.[0-9a-z]+$/i)
-        handler = handler ? handler[0] : 'File'
-        const loader = handler.toUpperCase() === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
+    loader: function (file, dummy, group) {
+      const promise = new Promise((resolve, reject) => {
+        if (file) {
+          // instantiate a loader: File, Audio, Object...
+          let handler = file.match(/\.[0-9a-z]+$/i)
+          handler = handler ? handler[0] : 'File'
+          const loader = handler.toUpperCase() === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
 
-        loader.load(
-          file,
-          function (data) {
-            let res
+          loader.load(
+            file,
+            function (data) {
+              let res
+              if (handler.toUpperCase() === '.SVG') {
+                const paths = data.paths
 
-            if (handler.toUpperCase() === '.SVG') {
-              const group = new THREE.Group()
-              const paths = data.paths
+                for (let i = 0; i < paths.length; i++) {
+                  const path = paths[i]
 
-              for (let i = 0; i < paths.length; i++) {
-                const path = paths[i]
+                  const material = new THREE.MeshBasicMaterial({
+                    color: path.color,
+                    side: THREE.FrontSide,
+                    depthWrite: false
+                  })
 
-                const material = new THREE.MeshBasicMaterial({
-                  color: path.color,
-                  side: THREE.FrontSide,
-                  depthWrite: false
-                })
+                  const shapes = SVGLoader.createShapes(path)
 
-                const shapes = SVGLoader.createShapes(path)
-
-                for (let j = 0; j < shapes.length; j++) {
-                  const shape = shapes[j]
-                  const geometry = new THREE.ShapeGeometry(shape)
-                  const mesh = new THREE.Mesh(geometry, material)
-                  group.add(mesh)
+                  for (let j = 0; j < shapes.length; j++) {
+                    const shape = shapes[j]
+                    const geometry = new THREE.ShapeGeometry(shape)
+                    const mesh = new THREE.Mesh(geometry, material)
+                    group.add(mesh)
+                  }
                 }
+
+                // scale
+                const aabb = new THREE.Box3()
+                aabb.setFromObject(group)
+                const s1 = Math.max(dummy.scale.x, dummy.scale.y)
+                const s2 = Math.max(aabb.max.x, aabb.max.y)
+                group.scale.multiplyScalar(s1 / s2)
+                group.scale.y *= -1
+                // position
+                group.position.copy(dummy.position)
+                group.position.x -= dummy.scale.x / 2
+                group.position.y += dummy.scale.y / 2
+
+                group.name = 'SVG'
+                //group.userData.el = rect.el
+                mpos.var.group.add(group)
+                res = group
               }
 
-              const aabb = new THREE.Box3()
-              aabb.setFromObject(group)
-              // scale
-              const s1 = Math.max(dummy.scale.x, dummy.scale.y)
-              const s2 = Math.max(aabb.max.x, aabb.max.y)
-              const scale = s1 / s2
-              group.scale.multiplyScalar(scale)
-              group.scale.y *= -1
-              // position
-              group.position.copy(dummy.position)
-              group.position.x -= dummy.scale.x / 2
-              group.position.y += dummy.scale.y / 2
-
-              group.name = 'SVG'
-              group.userData.el = rect.el
-              mpos.var.group.add(group)
-              res = group
+              resolve(res)
+              reject(data)
+            },
+            // called when loading is in progresses
+            function (xhr) {
+              console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
+            },
+            // called when loading has errors
+            function (error) {
+              console.log('An error happened')
             }
-
-            resolve(res)
-            reject(data)
-          },
-          // called when loading is in progresses
-          function (xhr) {
-            console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
-          },
-          // called when loading has errors
-          function (error) {
-            console.log('An error happened')
-          }
-        )
+          )
+        } else {
+          resolve('no file')
+        }
       })
 
-      console.log(promise)
-      return promise
+      promise.then(function (res) {
+        console.log('loader', res)
+        return res
+      })
     }
   }
 }
@@ -1142,8 +1121,7 @@ mpos.gen = function (num = 6, selector = 'main') {
     img.classList.add(i % 2 === 0 ? 'w50' : 'w100')
     img.style.height = '8em'
     img.style.backgroundColor = color()
-    //img.src = './OIG.jpg'
-    img.src = '#'
+    img.src = 'data:,'
     el.appendChild(img)
     // list
     let ul = fill('ul', num / 2)
