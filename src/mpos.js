@@ -492,7 +492,6 @@ const mpos = {
           instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
           // update shader and frame step
           instanced.userData.shader.userData.t.needsUpdate = true
-          mpos.ux.render()
 
           // UI Atlas
           let link = document.querySelector('#atlas a')
@@ -508,11 +507,15 @@ const mpos = {
       })
 
       promise.catch((e) => console.log('err', e))
-      return promise
+      promise.then(function (res) {
+        console.log('grade', res)
+        mpos.ux.render()
+        return promise
+      })
     }
   },
   add: {
-    dom: async function (selector, layers = 8, update) {
+    dom: async function (selector, layers = 8) {
       const vars = mpos.var
       // get DOM node
       selector = selector || vars.opt.selector || 'body'
@@ -549,13 +552,10 @@ const mpos = {
 
       // THREE cleanup
       let dispose = vars.opt.dispose ? selector : false
-      if (!update) {
-        mpos.add.old(dispose)
-        // new THREE group
-        vars.group = new THREE.Group()
-        vars.group.name = selector
-        // root DOM node (viewport)
-      }
+      mpos.add.old(dispose)
+      // new THREE group
+      vars.group = new THREE.Group()
+      vars.group.name = selector
 
       // FLAT-GRADE: filter, grade, sanitize
       let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
@@ -707,17 +707,8 @@ const mpos = {
 
       struct(sel, layers)
 
-      // keep rects ARRAY
-      // - can update HARD_REFRESH
-      // - compare: batch, data-idx, props
-      // - can push/pop
-      // maintain two specific lists:
-      // - rects_atlas {} (rect.atlas !== undefined, rect.mat == poster|self|child)
-      // - rects_other {} (rect.mat === native|loader)
-      //
-
       for (const [index, rect] of Object.entries(grade.rects)) {
-        // make two good current lists
+        // make two good current lists: InstancedMesh atlas || other...
         if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
           let type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
           grade.rects_[type]++
@@ -746,10 +737,8 @@ const mpos = {
 
       grade.group = vars.group
 
-      mpos.precept.update(grade).then(function (grade) {
-        console.log('update', grade)
-      })
-      return grade.group
+      mpos.precept.update(grade)
+      return vars.group
     },
     box: function (rect, opts = {}) {
       const vars = mpos.var
@@ -1065,6 +1054,7 @@ const mpos = {
 
       promise.then(function (res) {
         console.log('loader', res)
+        mpos.ux.render()
         return res
       })
     }
