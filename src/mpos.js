@@ -158,7 +158,7 @@ const mpos = {
           const rect = grade.rects[idx]
           rect.inPolar = mpos.precept.inPolar(rect.el)
           // enqueue element
-          grade.rects_.queue.push(idx)
+          grade.r_.queue.push(idx)
 
           requestIdleCallback(
             function () {
@@ -236,7 +236,9 @@ const mpos = {
 
           if (obj) {
             //console.log('ray', obj)
-            const rect = grade.rects_.atlas_[hit.instanceId]
+
+            const rect = Object.values(grade.r_.atlas.rects)[hit.instanceId]
+            //console.log('ray', hit.instanceId, rect)
             const carot = vars.carot.style
             // visibility
             const vis = mpos.precept.inPolar(rect.el) >= vars.opt.inPolar
@@ -312,21 +314,24 @@ const mpos = {
       return vis
     },
     update: function (grade, dataIdx) {
-      const queue = grade.rects_.queue
-      if (dataIdx && !queue.length) {
+      const r_queue = grade.r_.queue
+      if (dataIdx && !r_queue.length) {
         // skip Observer
         return
       }
 
+      const r_atlas = grade.r_.atlas
+      const r_other = grade.r_.other
+
       if (dataIdx) {
-        for (let i = queue.length - 1; i >= 0; i--) {
-          let idx = queue[i]
+        for (let i = r_queue.length - 1; i >= 0; i--) {
+          let idx = r_queue[i]
           // Observer
           const rect = grade.rects[idx]
           const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
 
-          const grect_ = grade.rects_[type + '_']
-          if (!grect_[idx]) {
+          const r_ = grade.r_[type]
+          if (!r_.rects[idx]) {
             grade.minEls++
             if (rect.mat === 'poster') {
               // shader
@@ -336,20 +341,18 @@ const mpos = {
               rect.obj = mpos.add.box(rect)
             }
 
-            grade.rects_[type]++
-            grect_[idx] = rect
+            r_.count++
+            r_.rects[idx] = rect
           } else {
           }
         }
       } else {
         // add viewport
         const root = document.body
-        const rect = { el: root, z: -16, mat: 'wire' }
-        rect.obj = mpos.add.box(rect)
-        grade.group.add(rect.obj)
+        const rect = { el: root, mat: 'wire', z: -16 }
         const idx = root.getAttribute('data-idx')
-        grade.rects_.other_[idx] = rect
-        grade.rects_.other++
+        r_other.rects[idx] = rect
+        r_other.count++
       }
 
       const promise = new Promise((resolve, reject) => {
@@ -358,10 +361,10 @@ const mpos = {
           if (opts.array === undefined) {
             if (dataIdx) {
               // soft-update
-              opts.array = queue
+              opts.array = r_queue
             } else {
               // hard-update
-              opts.array = Object.keys(grade.rects_.atlas_)
+              opts.array = Object.keys(r_atlas.rects)
             }
             opts.idx = opts.array.length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
@@ -390,7 +393,7 @@ const mpos = {
             }
           }
 
-          let rect = grade.rects_.atlas_[opts.array[opts.idx]]
+          let rect = r_atlas.rects[opts.array[opts.idx]]
           //console.log(dataIdx, opts.array, idx, rect)
 
           if (rect && rect.atlas !== undefined) {
@@ -432,16 +435,20 @@ const mpos = {
         function transforms(grade, dataIdx) {
           grade.scroll = { x: window.scrollX, y: window.scrollY }
 
-          for (const [idx, rect] of Object.entries(grade.rects_.other_)) {
+          for (const [idx, rect] of Object.entries(r_other.rects)) {
+            let scroll = false
+            if (rect.mat === 'wire' && rect.el.tagName === 'BODY') {
+              scroll = { x: grade.scroll.x, y: grade.scroll.y, fix: true }
+            }
+
             // CSS3D or Loader
             if (dataIdx === undefined) {
               // add it
-              let obj = mpos.add.box(rect)
-              grade.rects_.other_[idx].obj = obj
+              let obj = mpos.add.box(rect, { scroll: scroll })
+              r_other.rects[idx].obj = obj
             } else {
               // update positions
-              let obj = grade.rects_.other_[idx].obj
-              let scroll = rect.mat === 'wire' ? grade.scroll : undefined
+              let obj = r_other.rects[idx].obj
               mpos.add.box(rect, { update: obj, scroll: scroll })
             }
           }
@@ -449,14 +456,14 @@ const mpos = {
           grade.ray = []
 
           const instanced = grade.instanced
-          instanced.count = grade.rects_.atlas
+          instanced.count = r_atlas.count
 
           // Meshes
           const cyan = { x: 1 - 1 / grade.cells, y: 0.0001 }
-          const uvOffset = new Float32Array(grade.rects_.atlas * 2).fill(-1)
+          const uvOffset = new Float32Array(instanced.count * 2).fill(-1)
 
           let count = 0
-          for (const [idx, rect] of Object.entries(grade.rects_.atlas_)) {
+          for (const [idx, rect] of Object.entries(r_atlas.rects)) {
             // self, poster, child
             // Instance Matrix
             let dummy = mpos.add.box(rect)
@@ -481,8 +488,8 @@ const mpos = {
               // raycast filter
               //if (grade.ray.indexOf(index) === -1) {
               grade.ray.push(Number(idx))
-              //}
             }
+            // }
             count++
           }
 
@@ -533,19 +540,17 @@ const mpos = {
         sel: sel,
         canvas: precept.canvas,
         index: precept.index++,
-        atlas: 0, // poster count, whereas rects_.atlas includes self,child for instanceMesh
+        atlas: 0, // poster count, whereas r_.atlas includes self,child for instanceMesh
         minEls: 0, // inPolar count, which Observers increment
         maxEls: 0,
         minRes: 256,
         // build lists
         txt: [],
         rects: {},
-        rects_: {
+        r_: {
           queue: [],
-          atlas: 0,
-          atlas_: {},
-          other: 0,
-          other_: {}
+          atlas: { count: 0, rects: {} },
+          other: { count: 0, rects: {} }
         },
         scroll: { x: window.scrollX, y: -window.scrollY }
       }
@@ -710,9 +715,10 @@ const mpos = {
       for (const [index, rect] of Object.entries(grade.rects)) {
         // make two good current lists: InstancedMesh atlas || other...
         if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
-          let type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
-          grade.rects_[type]++
-          grade.rects_[type + '_'][rect.el.getAttribute('data-idx')] = rect
+          const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
+          const r_ = grade.r_[type]
+          r_.count++
+          r_.rects[rect.el.getAttribute('data-idx')] = rect
         }
       }
 
@@ -752,7 +758,7 @@ const mpos = {
       mpos.add.css(rect, false)
 
       // origin(0,0) follows viewport, not window
-      const scroll = opts.scroll || { x: 0, y: 0 }
+      let scroll = opts.scroll || { x: 0, y: 0 }
 
       // scale
       const w = bound.width
@@ -760,8 +766,13 @@ const mpos = {
       const d = vars.fov.z
       // position
       bound = rect.unset ? bound : rect.el.getBoundingClientRect()
-      const x = scroll.x + (bound.width / 2 + bound.left)
-      const y = scroll.y - bound.height / 2 - bound.top
+      let x = scroll.x + (bound.width / 2 + bound.left)
+      let y = scroll.y - bound.height / 2 - bound.top
+      if (scroll.fix) {
+        x = 0
+        y = 0
+        console.log(scroll, rect.el)
+      }
       let z = rect.z * d
       let zIndex = Number(rect.css.style.zIndex) || 0
       const sign = zIndex >= 0 ? 1 : -1
@@ -843,11 +854,16 @@ const mpos = {
       if (opts.update === undefined) {
         // other custom process
         if (rect.mat === 'loader') {
+          // slow
           let file = rect.el.data || rect.el.src || rect.el.href
           group = new THREE.Group()
           mpos.add.loader(file, object, group)
-        } else if (rect.mat === 'native') {
-          vars.group.add(object)
+        } else {
+          // general
+          let add = rect.mat === 'native' || rect.mat === 'wire'
+          if (add) {
+            vars.group.add(object)
+          }
         }
         const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
         object.name = name
