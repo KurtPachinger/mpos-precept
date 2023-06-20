@@ -757,22 +757,21 @@ const mpos = {
       let bound = rect.el.getBoundingClientRect()
       mpos.add.css(rect, false)
 
-      // origin(0,0) follows viewport, not window
-      let scroll = opts.scroll || { x: 0, y: 0 }
-
       // scale
       const w = bound.width
       const h = bound.height
       const d = vars.fov.z
       // position
       bound = rect.unset ? bound : rect.el.getBoundingClientRect()
-      let x = scroll.x + (bound.width / 2 + bound.left)
-      let y = scroll.y - bound.height / 2 - bound.top
-      if (scroll.fix) {
-        x = 0
-        y = 0
-        console.log(scroll, rect.el)
+      let x = bound.width / 2
+      let y = -bound.height / 2
+      // origin(0,0) follows viewport, not window
+      let scroll = opts.scroll || { x: 0, y: 0 }
+      if (!scroll.fix) {
+        x += scroll.x + bound.left
+        y += scroll.y - bound.top
       }
+
       let z = rect.z * d
       let zIndex = Number(rect.css.style.zIndex) || 0
       const sign = zIndex >= 0 ? 1 : -1
