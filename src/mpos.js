@@ -102,6 +102,7 @@ const mpos = {
     document.body.appendChild(template.content)
     mpos.precept.canvas = document.querySelector('#atlas canvas')
     mpos.var.carot = document.getElementById('carot')
+    const mp = document.getElementById('mp')
 
     // THREE
     vars.scene = new THREE.Scene()
@@ -112,7 +113,7 @@ const mpos = {
 
     vars.renderer = new THREE.WebGLRenderer()
     vars.renderer.setSize(vars.fov.w, vars.fov.h)
-    document.getElementById('mp').appendChild(vars.renderer.domElement)
+    mp.appendChild(vars.renderer.domElement)
     vars.renderer.setClearColor(0x00ff00, 0)
     // helpers
     let axes = new THREE.AxesHelper(vars.fov.max)
@@ -130,18 +131,19 @@ const mpos = {
     vars.controls = new MapControls(vars.camera, vars.rendererCSS.domElement)
     vars.controls.screenSpacePanning = true
 
-    const helfHeight = -((vars.fov.h / 2) * (1 / vars.fov.max))
-    vars.camera.position.setY(helfHeight + 0.125)
-    vars.controls.target.setY(helfHeight)
+    const halfHeight = -((vars.fov.h / 2) * (1 / vars.fov.max))
+    vars.camera.position.setY(halfHeight + 0.125)
+    vars.controls.target.setY(halfHeight)
     vars.controls.update()
 
     // live
-    const cloneCSS = document.querySelector('#css3d > div > div > div')
+    vars.controls.addEventListener('change', mpos.ux.render, false)
+    mp.addEventListener('pointermove', mpos.ux.raycast, false)
+    window.addEventListener('scroll', mpos.ux.event, false)
+    window.addEventListener('resize', mpos.ux.reflow, false)
+    const cloneCSS = mp.querySelector('#css3d > div > div > div')
     cloneCSS.addEventListener('pointerdown', mpos.ux.event, false)
     cloneCSS.addEventListener('input', mpos.ux.event, false)
-    window.addEventListener('resize', mpos.ux.resize, false)
-    vars.controls.addEventListener('change', mpos.ux.render, false)
-    window.addEventListener('pointermove', mpos.ux.raycast, false)
 
     vars.raycaster.layers.set(2)
     mpos.ux.render()
@@ -164,7 +166,7 @@ const mpos = {
             function () {
               mpos.precept.update(grade, idx)
             },
-            { time: 500 }
+            { time: 125 }
           )
         }
       })
@@ -183,22 +185,26 @@ const mpos = {
     gui.domElement.classList.add('mp-native')
   },
   ux: {
-    resize: function () {
+    reflow: function (e) {
       const vars = mpos.var
       // throttle
-      clearTimeout(vars.resize)
-      vars.resize = setTimeout(function () {
-        vars.fov.w = window.innerWidth
-        vars.fov.h = window.innerHeight
+      clearTimeout(vars.reflow)
+      vars.reflow = setTimeout(function () {
+        if (e.type === 'resize') {
+          vars.fov.w = window.innerWidth
+          vars.fov.h = window.innerHeight
 
-        vars.camera.aspect = vars.fov.w / vars.fov.h
-        vars.camera.updateProjectionMatrix()
+          vars.camera.aspect = vars.fov.w / vars.fov.h
+          vars.camera.updateProjectionMatrix()
 
-        vars.renderer.setSize(vars.fov.w, vars.fov.h)
-        vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+          vars.renderer.setSize(vars.fov.w, vars.fov.h)
+          vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+        } else if (e.type === 'scroll') {
+          // maybe update inPolar?
+        }
 
         mpos.ux.render()
-      }, 250)
+      }, 125)
     },
     render: function () {
       const vars = mpos.var
@@ -259,14 +265,27 @@ const mpos = {
       }
     },
     event: function (e) {
-      if (e.type === 'pointerdown') {
+      if (e.type === 'scroll') {
+        const idx = 'Infinity'
+        const grade = mpos.var.group.userData.grade
+        if (grade.r_.queue.indexOf(idx) === -1) {
+          grade.r_.queue.push(idx)
+
+          requestIdleCallback(
+            function () {
+              mpos.precept.update(grade, idx)
+            },
+            { time: 125 }
+          )
+        }
+      } else if (e.type === 'pointerdown') {
         // prevent drag Controls
         // ...or parentElement?
         if (e.target.matches([mpos.precept.native, mpos.precept.native3d])) {
           console.log(e.target.tagName)
           e.stopPropagation()
         }
-      } else {
+      } else if (e.type === 'input') {
         // update form data
         const idx = e.target.getAttribute('data-idx')
         const node = document.querySelector('[data-idx="' + idx + '"]')
@@ -319,6 +338,7 @@ const mpos = {
         // skip Observer
         return
       }
+      console.log(grade.r_.queue, dataIdx)
 
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
@@ -326,26 +346,40 @@ const mpos = {
       if (dataIdx) {
         for (let i = r_queue.length - 1; i >= 0; i--) {
           let idx = r_queue[i]
-          // Observer
-          const rect = grade.rects[idx]
-          const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
+          if (idx !== 'Infinity') {
+            // Observer
+            const rect = grade.rects[idx]
+            const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
 
-          const r_ = grade.r_[type]
-          if (!r_.rects[idx]) {
-            grade.minEls++
-            if (rect.mat === 'poster') {
-              // shader
-              rect.atlas = grade.atlas++
-            } else if (type === 'other') {
-              // CSS3D or Loader
-              rect.obj = mpos.add.box(rect)
+            const r_ = grade.r_[type]
+            if (!r_.rects[idx]) {
+              grade.minEls++
+              if (rect.mat === 'poster') {
+                // shader
+                rect.atlas = grade.atlas++
+              } else if (type === 'other') {
+                // CSS3D or Loader
+                rect.obj = mpos.add.box(rect)
+              }
+
+              r_.count++
+              r_.rects[idx] = rect
             }
-
-            r_.count++
-            r_.rects[idx] = rect
-          } else {
           }
         }
+
+        if (dataIdx === 'Infinity') {
+          //console.log(grade, r_queue, dataIdx)
+          function vis(arr) {
+            Object.values(arr).forEach(function (rect) {
+              rect.inPolar = mpos.precept.inPolar(rect.el)
+            })
+          }
+          vis(r_atlas.rects)
+          vis(r_other.rects)
+        }
+
+        // loop for inPolar
       } else {
         // add viewport
         const root = document.body
@@ -441,15 +475,20 @@ const mpos = {
               scroll = { x: grade.scroll.x, y: grade.scroll.y, fix: true }
             }
 
+            let r_rect = r_other.rects[idx]
             // CSS3D or Loader
             if (dataIdx === undefined) {
               // add it
-              let obj = mpos.add.box(rect, { scroll: scroll })
-              r_other.rects[idx].obj = obj
+              let object = mpos.add.box(rect, { scroll: scroll })
+              r_rect.obj = object
             } else {
               // update positions
-              let obj = r_other.rects[idx].obj
-              mpos.add.box(rect, { update: obj, scroll: scroll })
+              let object = r_rect.obj
+              mpos.add.box(rect, { update: object, scroll: scroll })
+            }
+
+            if (dataIdx === 'Infinity') {
+              // filter visibility
             }
           }
 
@@ -494,7 +533,7 @@ const mpos = {
           }
 
           instanced.instanceMatrix.needsUpdate = true
-          instanced.instanceColor.needsUpdate = true
+          instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
           instanced.computeBoundingSphere()
           instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
           // update shader and frame step
@@ -897,8 +936,9 @@ const mpos = {
         if (traverse === undefined) {
           // accumulate ancestor matrix
           const style = window.getComputedStyle(el)
-          const transform = style.transform.replace(/(matrix)|[( )]/g, '')
-          if (transform !== 'none') {
+
+          if (style.transform.startsWith('matrix')) {
+            const transform = style.transform.replace(/(matrix)|[( )]/g, '')
             // transform matrix
             const [a, b] = transform.split(',')
             const scale = Math.sqrt(a * a + b * b)
