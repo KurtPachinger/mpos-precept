@@ -1,8 +1,8 @@
 import './styles.scss'
 import * as THREE from 'three'
-import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
+import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { toSvg } from 'html-to-image'
 
@@ -139,7 +139,7 @@ const mpos = {
     // live
     vars.controls.addEventListener('change', mpos.ux.render, false)
     mp.addEventListener('pointermove', mpos.ux.raycast, false)
-    window.addEventListener('scroll', mpos.ux.event, false)
+    window.addEventListener('scroll', mpos.ux.reflow, false)
     window.addEventListener('resize', mpos.ux.reflow, false)
     const cloneCSS = mp.querySelector('#css3d > div > div > div')
     cloneCSS.addEventListener('pointerdown', mpos.ux.event, false)
@@ -154,20 +154,7 @@ const mpos = {
         if (entry.isIntersecting) {
           observer.unobserve(entry.target)
           //console.log('entry', entry.target, entry.boundingClientRect)
-          const idx = entry.target.getAttribute('data-idx')
-          const grade = mpos.var.group.userData.grade
-          // set visibility
-          const rect = grade.rects[idx]
-          rect.inPolar = mpos.precept.inPolar(rect.el)
-          // enqueue element
-          grade.r_.queue.push(idx)
-
-          requestIdleCallback(
-            function () {
-              mpos.precept.update(grade, idx)
-            },
-            { time: 125 }
-          )
+          mpos.ux.reflow(entry)
         }
       })
     }
@@ -187,24 +174,57 @@ const mpos = {
   ux: {
     reflow: function (e) {
       const vars = mpos.var
-      // throttle
-      clearTimeout(vars.reflow)
-      vars.reflow = setTimeout(function () {
-        if (e.type === 'resize') {
-          vars.fov.w = window.innerWidth
-          vars.fov.h = window.innerHeight
+      const grade = vars.group.userData.grade
+      const queue = grade.r_.queue
 
-          vars.camera.aspect = vars.fov.w / vars.fov.h
-          vars.camera.updateProjectionMatrix()
+      function enqueue(idx) {
+        requestIdleCallback(
+          function () {
+            mpos.precept.update(grade, idx)
+          },
+          { time: 125 }
+        )
+      }
 
-          vars.renderer.setSize(vars.fov.w, vars.fov.h)
-          vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
-        } else if (e.type === 'scroll') {
-          // maybe update inPolar?
-        }
+      if (e.isIntersecting) {
+        // IntersectionObserver
+        // set visibility
+        const idx = e.target.getAttribute('data-idx')
+        const rect = grade.rects[idx]
+        rect.inPolar = mpos.precept.inPolar(rect.el)
+        // enqueue element
+        queue.push(idx)
+        enqueue(idx)
+      } else {
+        // throttle
+        clearTimeout(vars.reflow)
+        vars.reflow = setTimeout(function () {
+          if (e.type === 'resize') {
+            // maybe re-calculate inPolar and update?
+            vars.fov.w = window.innerWidth
+            vars.fov.h = window.innerHeight
 
-        mpos.ux.render()
-      }, 125)
+            vars.camera.aspect = vars.fov.w / vars.fov.h
+            vars.camera.updateProjectionMatrix()
+
+            vars.renderer.setSize(vars.fov.w, vars.fov.h)
+            vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+            mpos.ux.render()
+          } else if (e.type === 'scroll') {
+            let idx = 'move'
+            if (vars.opt.inPolar === 4) {
+              // ...checkbox?
+              idx = 'trim'
+            }
+
+            if (queue.indexOf(idx) === -1) {
+              queue.push(idx)
+            }
+
+            enqueue(idx)
+          }
+        }, 250)
+      }
     },
     render: function () {
       const vars = mpos.var
@@ -266,18 +286,7 @@ const mpos = {
     },
     event: function (e) {
       if (e.type === 'scroll') {
-        const idx = 'Infinity'
-        const grade = mpos.var.group.userData.grade
-        if (grade.r_.queue.indexOf(idx) === -1) {
-          grade.r_.queue.push(idx)
-
-          requestIdleCallback(
-            function () {
-              mpos.precept.update(grade, idx)
-            },
-            { time: 125 }
-          )
-        }
+        // mpos.update inPolar
       } else if (e.type === 'pointerdown') {
         // prevent drag Controls
         // ...or parentElement?
@@ -334,6 +343,7 @@ const mpos = {
     },
     update: function (grade, dataIdx) {
       const r_queue = grade.r_.queue
+      // test !isFinite(dataIdx) ...[undefined, '0', 'move', 'trim']
       if (dataIdx && !r_queue.length) {
         // skip Observer
         return
@@ -344,9 +354,11 @@ const mpos = {
       const r_other = grade.r_.other
 
       if (dataIdx) {
+        // SOFT-UPDATE
+        let reflow = false
         for (let i = r_queue.length - 1; i >= 0; i--) {
           let idx = r_queue[i]
-          if (idx !== 'Infinity') {
+          if (isFinite(idx)) {
             // Observer
             const rect = grade.rects[idx]
             const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
@@ -365,11 +377,12 @@ const mpos = {
               r_.count++
               r_.rects[idx] = rect
             }
+          } else if (idx === 'trim') {
+            reflow = true
           }
         }
 
-        if (dataIdx === 'Infinity') {
-          //console.log(grade, r_queue, dataIdx)
+        if (reflow) {
           function vis(arr) {
             Object.values(arr).forEach(function (rect) {
               rect.inPolar = mpos.precept.inPolar(rect.el)
@@ -377,11 +390,12 @@ const mpos = {
           }
           vis(r_atlas.rects)
           vis(r_other.rects)
+          //console.log(grade, r_queue, grade.r_)
         }
 
         // loop for inPolar
       } else {
-        // add viewport
+        // HARD-UPDATE
         const root = document.body
         const rect = { el: root, mat: 'wire', z: -16 }
         const idx = root.getAttribute('data-idx')
