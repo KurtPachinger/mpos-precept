@@ -505,12 +505,14 @@ const mpos = {
               mpos.add.box(rect, { scroll: scroll })
             }
 
-            // filter visibility
-            let visible = true
-            if (grade.inPolar >= 4) {
-              visible = rect.inPolar >= grade.inPolar
+            if (rect.obj) {
+              // filter visibility
+              let visible = true
+              if (grade.inPolar >= 4) {
+                visible = rect.inPolar >= grade.inPolar
+              }
+              rect.obj.visible = visible
             }
-            rect.obj.visible = visible
           })
 
           grade.ray = []
