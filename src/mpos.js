@@ -136,19 +136,26 @@ const mpos = {
     vars.controls.target.setY(halfHeight)
     vars.controls.update()
 
+    // reveal
+    vars.raycaster.layers.set(2)
+    mpos.ux.render()
+
     // live
     vars.controls.addEventListener('change', mpos.ux.render, false)
     mp.addEventListener('pointermove', mpos.ux.raycast, false)
     window.addEventListener('scroll', mpos.ux.reflow, false)
-    window.addEventListener('resize', mpos.ux.reflow, false)
+    //window.addEventListener('resize', mpos.ux.reflow, false)
     const cloneCSS = mp.querySelector('#css3d > div > div > div')
     cloneCSS.addEventListener('pointerdown', mpos.ux.event, false)
     cloneCSS.addEventListener('input', mpos.ux.event, false)
 
-    vars.raycaster.layers.set(2)
-    mpos.ux.render()
+    // resize
+    const resizeObserver = new ResizeObserver((entries) => {
+      mpos.ux.reflow({ type: 'resize' })
+    })
+    resizeObserver.observe(mp)
 
-    // Intersection Observer
+    // scroll
     const callback = function (entries, observer) {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
@@ -190,8 +197,7 @@ const mpos = {
         // IntersectionObserver
         // set visibility
         const idx = e.target.getAttribute('data-idx')
-        const rect = grade.rects[idx]
-        rect.inPolar = mpos.precept.inPolar(rect.el)
+
         // enqueue element
         queue.push(idx)
         enqueue(idx)
@@ -211,11 +217,8 @@ const mpos = {
             vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
             mpos.ux.render()
           } else if (e.type === 'scroll') {
-            let idx = 'move'
-            if (vars.opt.inPolar === 4) {
-              // ...checkbox?
-              idx = 'trim'
-            }
+            //console.log(vars.opt.inPolar, mpos.var.opt.inPolar)
+            const idx = vars.opt.inPolar === 4 ? 'trim' : 'move'
 
             if (queue.indexOf(idx) === -1) {
               queue.push(idx)
@@ -361,6 +364,7 @@ const mpos = {
           if (isFinite(idx)) {
             // Observer
             const rect = grade.rects[idx]
+            rect.inPolar = mpos.precept.inPolar(rect.el)
             const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
 
             const r_ = grade.r_[type]
@@ -376,6 +380,8 @@ const mpos = {
 
               r_.count++
               r_.rects[idx] = rect
+            } else {
+              r_.rects[idx].inPolar = rect.inPolar
             }
           } else if (idx === 'trim') {
             reflow = true
@@ -482,29 +488,30 @@ const mpos = {
 
         function transforms(grade, dataIdx) {
           grade.scroll = { x: window.scrollX, y: window.scrollY }
+          grade.inPolar = mpos.var.opt.inPolar
 
-          for (const [idx, rect] of Object.entries(r_other.rects)) {
+          Object.values(r_other.rects).forEach(function (rect) {
             let scroll = false
             if (rect.mat === 'wire' && rect.el.tagName === 'BODY') {
-              scroll = { x: grade.scroll.x, y: grade.scroll.y, fix: true }
+              scroll = { x: 0, y: 0, fix: true }
             }
 
-            let r_rect = r_other.rects[idx]
             // CSS3D or Loader
             if (dataIdx === undefined) {
-              // add it
-              let object = mpos.add.box(rect, { scroll: scroll })
-              r_rect.obj = object
+              // add, async
+              rect.obj = mpos.add.box(rect, { add: true, scroll: scroll })
             } else {
-              // update positions
-              let object = r_rect.obj
-              mpos.add.box(rect, { update: object, scroll: scroll })
+              // update transforms
+              mpos.add.box(rect, { scroll: scroll })
             }
 
-            if (dataIdx === 'Infinity') {
-              // filter visibility
+            // filter visibility
+            let visible = true
+            if (grade.inPolar >= 4) {
+              visible = rect.inPolar >= grade.inPolar
             }
-          }
+            rect.obj.visible = visible
+          })
 
           grade.ray = []
 
@@ -872,8 +879,8 @@ const mpos = {
       }
 
       let object
-      if (opts.update) {
-        object = opts.update
+      if (rect.obj) {
+        object = rect.obj
       } else if (rect.mat === 'native') {
         // note: element may not inherit some specific styles
         const el = rect.el.cloneNode(true)
@@ -903,7 +910,7 @@ const mpos = {
       object.updateMatrix()
 
       let group = false
-      if (opts.update === undefined) {
+      if (!rect.obj || opts.add) {
         // other custom process
         if (rect.mat === 'loader') {
           // slow
@@ -1051,6 +1058,7 @@ const mpos = {
       //for (let c = atlas.length - 1; c >= 0; c--) {
       // atlas[c].parentElement.removeChild(atlas[c])
       //}
+      mpos.ux.observer.disconnect()
     },
     loader: function (file, dummy, group) {
       const promise = new Promise((resolve, reject) => {
