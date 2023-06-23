@@ -13,7 +13,7 @@ const mpos = {
       selector: 'body',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
-      inPolar: 3,
+      inPolar: 2,
       arc: false,
       update: function () {
         mpos.add.dom(this.selector, this.depth)
@@ -29,11 +29,13 @@ const mpos = {
     mat: new THREE.MeshBasicMaterial({
       transparent: true,
       wireframe: true,
+      color: 'cyan',
       side: THREE.FrontSide
     }),
     mat_line: new THREE.LineBasicMaterial({
       transparent: true,
       opacity: 0.5,
+      color: 'cyan',
       depthWrite: false,
       side: THREE.FrontSide
     }),
@@ -383,7 +385,7 @@ const mpos = {
           vis(r_other.rects)
         }
       } else {
-        // HARD-update
+        // HARD-update: viewport
         const root = document.body
         const rect = { el: root, mat: 'wire', z: -16, fix: true }
         const idx = root.getAttribute('data-idx')
@@ -425,7 +427,7 @@ const mpos = {
                 opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
               }
               // complete
-              transforms(grade, dataIdx)
+              transforms(grade)
             }
           }
 
@@ -464,9 +466,13 @@ const mpos = {
           }
         }
 
+        if (!dataIdx) {
+          // HARD-update: FCP FPO
+          transforms(grade, true)
+        }
         atlas(grade)
 
-        function transforms(grade, dataIdx) {
+        function transforms(grade, paint) {
           // apply cumulative updates
           grade.scroll = { x: window.scrollX, y: window.scrollY }
           grade.inPolar = mpos.var.opt.inPolar
@@ -532,20 +538,25 @@ const mpos = {
           instanced.instanceMatrix.needsUpdate = true
           instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
           instanced.computeBoundingSphere()
-          // update shader
-          instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
-          instanced.userData.shader.userData.t.needsUpdate = true
 
-          // UI Atlas
-          let link = document.querySelector('#atlas a')
-          let name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
-          link.title = link.download = name
-          link.href = grade.canvas.toDataURL()
-          //link.appendChild(grade.canvas)
-          //document.getElementById('atlas').appendChild(link)
+          if (!paint) {
+            // update shader
+            instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
+            instanced.userData.shader.userData.t.needsUpdate = true
 
-          resolve(grade)
-          reject(grade)
+            // UI Atlas
+            let link = document.querySelector('#atlas a')
+            let name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
+            link.title = link.download = name
+            link.href = grade.canvas.toDataURL()
+            //link.appendChild(grade.canvas)
+            //document.getElementById('atlas').appendChild(link)
+
+            resolve(grade)
+            reject(grade)
+          } else {
+            //mpos.ux.render()
+          }
         }
       })
 
