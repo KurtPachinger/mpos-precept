@@ -72,7 +72,6 @@ const mpos = {
       fragmentShader: `precision highp float;
 
       varying vec2 vUv;
-      
       uniform sampler2D map;
       
       void main()
@@ -107,7 +106,6 @@ const mpos = {
     // THREE
     vars.scene = new THREE.Scene()
     vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
-    //vars.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.5, 1.5)
     vars.camera.layers.enableAll()
     vars.camera.position.z = vars.fov.max
 
@@ -116,11 +114,8 @@ const mpos = {
     mp.appendChild(vars.renderer.domElement)
     vars.renderer.setClearColor(0x00ff00, 0)
     // helpers
-    let axes = new THREE.AxesHelper(vars.fov.max)
+    const axes = new THREE.AxesHelper(vars.fov.max)
     vars.scene.add(axes)
-    //const pointLight = new THREE.PointLight(0xc0c0c0, 2, 10)
-    //pointLight.position.set(0, 2, 5)
-    //vars.scene.add(pointLight)
 
     // CSS3D
     const css3d = document.getElementById('css3d')
@@ -140,27 +135,26 @@ const mpos = {
     vars.raycaster.layers.set(2)
     mpos.ux.render()
 
-    // live
-    vars.controls.addEventListener('change', mpos.ux.render, false)
-    mp.addEventListener('pointermove', mpos.ux.raycast, false)
-    window.addEventListener('scroll', mpos.ux.reflow, false)
-    //window.addEventListener('resize', mpos.ux.reflow, false)
+    // user events: css
     const cloneCSS = mp.querySelector('#css3d > div > div > div')
     cloneCSS.addEventListener('pointerdown', mpos.ux.event, false)
     cloneCSS.addEventListener('input', mpos.ux.event, false)
+    // user events: scene
+    vars.controls.addEventListener('change', mpos.ux.render, false)
+    mp.addEventListener('pointermove', mpos.ux.raycast, false)
+    window.addEventListener('scroll', mpos.ux.reflow, false)
 
     // resize
-    const resizeObserver = new ResizeObserver((entries) => {
+    const resize = new ResizeObserver((entries) => {
       mpos.ux.reflow({ type: 'resize' })
     })
-    resizeObserver.observe(mp)
+    resize.observe(mp)
 
     // scroll
     const callback = function (entries, observer) {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           observer.unobserve(entry.target)
-          //console.log('entry', entry.target, entry.boundingClientRect)
           mpos.ux.reflow(entry)
         }
       })
@@ -194,19 +188,16 @@ const mpos = {
       }
 
       if (e.isIntersecting) {
-        // IntersectionObserver
-        // set visibility
+        // enqueue visible element
         const idx = e.target.getAttribute('data-idx')
-
-        // enqueue element
         queue.push(idx)
         enqueue(idx)
       } else {
-        // throttle
+        // throttle event
         clearTimeout(vars.reflow)
         vars.reflow = setTimeout(function () {
           if (e.type === 'resize') {
-            // maybe re-calculate inPolar and update?
+            // ...recalculate inPolar and update?
             vars.fov.w = window.innerWidth
             vars.fov.h = window.innerHeight
 
@@ -215,11 +206,11 @@ const mpos = {
 
             vars.renderer.setSize(vars.fov.w, vars.fov.h)
             vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+
             mpos.ux.render()
           } else if (e.type === 'scroll') {
-            //console.log(vars.opt.inPolar, mpos.var.opt.inPolar)
+            // soft-update visible area
             const idx = vars.opt.inPolar === 4 ? 'trim' : 'move'
-
             if (queue.indexOf(idx) === -1) {
               queue.push(idx)
             }
@@ -234,8 +225,7 @@ const mpos = {
       //requestAnimationFrame(vars.animate)
       const time = new Date().getTime() / 100
       vars.scene.traverseVisible(function (obj) {
-        // in frustum... in viewport?
-        // ...upsample, animate, or ux.
+        // step a frame tick
         let animate = obj.animations === true
         if (animate) {
           obj.rotation.x = Math.sin(time) / 10
@@ -264,8 +254,6 @@ const mpos = {
           const obj = hit.object
 
           if (obj) {
-            //console.log('ray', obj)
-
             const rect = Object.values(grade.r_.atlas.rects)[hit.instanceId]
             //console.log('ray', hit.instanceId, rect)
             const carot = vars.carot.style
@@ -288,17 +276,14 @@ const mpos = {
       }
     },
     event: function (e) {
-      if (e.type === 'scroll') {
-        // mpos.update inPolar
-      } else if (e.type === 'pointerdown') {
-        // prevent drag Controls
-        // ...or parentElement?
+      if (e.type === 'pointerdown') {
+        // prevent drag Controls (...parentElement?)
         if (e.target.matches([mpos.precept.native, mpos.precept.native3d])) {
           console.log(e.target.tagName)
           e.stopPropagation()
         }
       } else if (e.type === 'input') {
-        // update form data
+        // clone form data
         const idx = e.target.getAttribute('data-idx')
         const node = document.querySelector('[data-idx="' + idx + '"]')
         node.value = e.target.value
@@ -346,9 +331,8 @@ const mpos = {
     },
     update: function (grade, dataIdx) {
       const r_queue = grade.r_.queue
-      // test !isFinite(dataIdx) ...[undefined, '0', 'move', 'trim']
       if (dataIdx && !r_queue.length) {
-        // skip Observer
+        // redundant invocation
         return
       }
       console.log('queue', grade.r_.queue, dataIdx)
@@ -357,7 +341,7 @@ const mpos = {
       const r_other = grade.r_.other
 
       if (dataIdx) {
-        // SOFT-UPDATE
+        // SOFT-update
         let reflow = false
         for (let i = r_queue.length - 1; i >= 0; i--) {
           let idx = r_queue[i]
@@ -375,7 +359,7 @@ const mpos = {
                 rect.atlas = grade.atlas++
               } else if (type === 'other') {
                 // CSS3D or Loader
-                rect.obj = mpos.add.box(rect)
+                rect.add = true
               }
 
               r_.count++
@@ -389,6 +373,7 @@ const mpos = {
         }
 
         if (reflow) {
+          // update visibility
           function vis(arr) {
             Object.values(arr).forEach(function (rect) {
               rect.inPolar = mpos.precept.inPolar(rect.el)
@@ -396,12 +381,9 @@ const mpos = {
           }
           vis(r_atlas.rects)
           vis(r_other.rects)
-          //console.log(grade, r_queue, grade.r_)
         }
-
-        // loop for inPolar
       } else {
-        // HARD-UPDATE
+        // HARD-update
         const root = document.body
         const rect = { el: root, mat: 'wire', z: -16, fix: true }
         const idx = root.getAttribute('data-idx')
@@ -414,10 +396,10 @@ const mpos = {
           // element mat conversion
           if (opts.array === undefined) {
             if (dataIdx) {
-              // soft-update
+              // SOFT-update
               opts.array = r_queue
             } else {
-              // hard-update
+              // HARD-update
               opts.array = Object.keys(r_atlas.rects)
             }
             opts.idx = opts.array.length
@@ -438,11 +420,9 @@ const mpos = {
               }, 0)
             } else {
               if (!dataIdx) {
-                // atlas ends with blank
+                // atlas ends with blank key
                 opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
                 opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
-
-                //eol, frame, cyan, struct, guide, grid, template, guide, slot,
               }
               // complete
               transforms(grade, dataIdx)
@@ -450,8 +430,6 @@ const mpos = {
           }
 
           let rect = r_atlas.rects[opts.array[opts.idx]]
-          //console.log(dataIdx, opts.array, idx, rect)
-
           if (rect && rect.atlas !== undefined) {
             // style needs no transform, and block
             let unset = { transform: 'initial', margin: 0 }
@@ -462,7 +440,7 @@ const mpos = {
                 mpos.add.css(rect, false)
                 let img = new Image()
                 img.onload = function () {
-                  // canvas xy: from block top
+                  // canvas xy: from block top (FIFO)
                   let x = (rect.atlas % grade.cells) * opts.step
                   let y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * opts.step
                   opts.ctx.drawImage(img, x, y, opts.step, opts.step)
@@ -477,8 +455,8 @@ const mpos = {
                 img.src = dataUrl
               })
               .catch(function (e) {
-                // some box problem... error retry count?
-                console.log('err', e.target)
+                // src problem...
+                console.log('error', e.target)
                 next()
               })
           } else {
@@ -489,11 +467,12 @@ const mpos = {
         atlas(grade)
 
         function transforms(grade, dataIdx) {
+          // apply cumulative updates
           grade.scroll = { x: window.scrollX, y: window.scrollY }
           grade.inPolar = mpos.var.opt.inPolar
 
+          // Mesh: CSS3D, loader, root...
           Object.values(r_other.rects).forEach(function (rect) {
-            // CSS3D, loader, root...
             const add = dataIdx === undefined || rect.add
             const scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
             // add (async) or transform
@@ -509,20 +488,16 @@ const mpos = {
             }
           })
 
-          grade.ray = []
-
+          // Instanced Mesh
           const instanced = grade.instanced
           instanced.count = r_atlas.count
-
-          // Meshes
-
           const uvOffset = new Float32Array(instanced.count * 2).fill(-1)
 
+          grade.ray = []
           let count = 0
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
-            // self, poster, child
             // Instance Matrix
-            let dummy = mpos.add.box(rect)
+            const dummy = mpos.add.box(rect)
             instanced.setMatrixAt(count, dummy.matrix)
             // Instance Color
             const color = new THREE.Color()
@@ -531,33 +506,34 @@ const mpos = {
             const alpha = Number(rgba[3])
             if (alpha <= 0.0) {
               bg = null
+            } else {
+              // avoid warning
+              bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
             }
             instanced.setColorAt(count, color.setStyle(bg))
 
             // Shader Atlas UV
             const stepSize = count * 2
-
             if (rect.inPolar >= grade.inPolar) {
+              // mat: self, child, poster...
               if (rect.atlas !== undefined || rect.mat === 'self') {
                 uvOffset[stepSize] = rect.x || grade.key.x
                 uvOffset[stepSize + 1] = 1 - rect.y || grade.key.y
               }
               if (rect.atlas !== undefined || rect.mat === 'child') {
                 // raycast filter
-                //if (grade.ray.indexOf(index) === -1) {
                 grade.ray.push(Number(idx))
               }
             }
 
-            // }
             count++
           }
 
           instanced.instanceMatrix.needsUpdate = true
           instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
           instanced.computeBoundingSphere()
+          // update shader
           instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
-          // update shader and frame step
           instanced.userData.shader.userData.t.needsUpdate = true
 
           // UI Atlas
@@ -573,7 +549,7 @@ const mpos = {
         }
       })
 
-      promise.catch((e) => console.log('err', e))
+      promise.catch((e) => console.log('error', e))
       promise.then(function (res) {
         console.log('update', res)
         mpos.ux.render()
@@ -604,7 +580,7 @@ const mpos = {
         minEls: 0, // inPolar count, which Observers increment
         maxEls: 0,
         minRes: 256,
-        // build lists
+        // list, grade and sort
         txt: [],
         rects: {},
         r_: {
@@ -615,10 +591,10 @@ const mpos = {
         scroll: { x: window.scrollX, y: -window.scrollY }
       }
 
-      // THREE cleanup
+      // OLD group
       let dispose = vars.opt.dispose ? selector : false
       mpos.add.old(dispose)
-      // new THREE group
+      // NEW group
       vars.group = new THREE.Group()
       vars.group.name = selector
 
@@ -669,9 +645,6 @@ const mpos = {
       grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
       grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
       grade.canvas.width = grade.canvas.height = grade.maxRes
-      //grade.canvas.id = grade.index
-
-      //
 
       function setRect(rect, z, mat, unset) {
         if (rect) {
@@ -686,8 +659,7 @@ const mpos = {
               rect.atlas = grade.atlas++
             }
           } else {
-            // off-screen
-            console.log('observe')
+            // off-screen elements
             mpos.ux.observer.observe(rect.el)
           }
 
@@ -711,7 +683,7 @@ const mpos = {
             return classMat
           })
         } else if (node.matches([precept.native, precept.native3d])) {
-          // todo: test internal type
+          // todo: shared 3d spaces
           mat = 'native'
         } else if (node.matches(precept.poster) || layer === 0) {
           mat = 'poster'
@@ -773,7 +745,7 @@ const mpos = {
       struct(sel, layers)
 
       Object.values(grade.rects).forEach((rect) => {
-        // make two good current lists: InstancedMesh atlas || other...
+        // begin two lists: atlas (instanced) || other (mesh)
         if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
           const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
           const r_ = grade.r_[type]
@@ -810,12 +782,12 @@ const mpos = {
     box: function (rect, opts = {}) {
       const vars = mpos.var
 
-      // css: cumulative transform
+      // css: accumulate transforms
       rect.css = mpos.add.css(rect)
       // css: unset for box scale
       mpos.add.css(rect, true)
-
       let bound = rect.el.getBoundingClientRect()
+      // css: remove unset
       mpos.add.css(rect, false)
 
       // scale
@@ -826,7 +798,7 @@ const mpos = {
       bound = rect.unset ? bound : rect.el.getBoundingClientRect()
       let x = bound.width / 2
       let y = -bound.height / 2
-      // origin(0,0) follows viewport, not window
+      // scroll{0,0} is viewport, not document
       let scroll = opts.scroll || { x: 0, y: 0 }
       if (!scroll.fix) {
         x += scroll.x + bound.left
@@ -846,7 +818,7 @@ const mpos = {
       const pos = mid * Math.abs(rad)
 
       function transform(obj) {
-        // tiny offset
+        // separation for portal
         const stencil = obj.isCSS3DObject || rect.mat === 'loader'
         const extrude = stencil ? vars.fov.z / 2 : 0
         z += extrude
@@ -864,7 +836,7 @@ const mpos = {
             obj.userData.el.style.transform = [scale, degree].join(' ')
           }
         } else if (obj.isGroup) {
-          // group implies loader, a group of arbitrary scale
+          // group implies loader, with arbitrary scale
           obj.position.x -= w / 2
           obj.position.y += h / 2
         } else {
@@ -939,7 +911,6 @@ const mpos = {
       const css = { scale: 1, radian: 0, degree: 0, transform: [] }
       if (traverse === undefined) {
         // target element original style
-        //console.log('unset style', target)
         let style = window.getComputedStyle(el)
         css.style = {
           transform: style.transform,
@@ -1001,11 +972,11 @@ const mpos = {
       //discourse.threejs.org/t/13221/17
       const texAtlas = new THREE.CanvasTexture(canvas)
       texAtlas.minFilter = THREE.NearestFilter
-      // set
+      // update
       const m = mpos.var.mat_shader.clone()
       m.uniforms.map.value = texAtlas
       m.uniforms.atlasSize.value = texStep
-      // out
+      // output
       m.userData.t = texAtlas
       return m
     },
@@ -1017,7 +988,7 @@ const mpos = {
       })
     },
     old: function (selector) {
-      // Mesh
+      // dispose of scene and release listeners
       let groups
       if (selector) {
         groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
@@ -1125,7 +1096,7 @@ const mpos = {
             },
             // called when loading has errors
             function (error) {
-              console.log('An error happened')
+              console.log('error loading')
             }
           )
         } else {
@@ -1143,7 +1114,7 @@ const mpos = {
 }
 
 mpos.gen = function (num = 6, selector = 'main') {
-  //img,ul,embed
+  // img,ul,embed
   let lipsum = [
     'Nunc at dolor lacus. ',
     'Lorem ipsum dolor sit amet. ',
