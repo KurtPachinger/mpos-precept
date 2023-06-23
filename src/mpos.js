@@ -1040,14 +1040,16 @@ const mpos = {
         if (file) {
           // instantiate a loader: File, Audio, Object...
           let handler = file.match(/\.[0-9a-z]+$/i)
-          handler = handler ? handler[0] : 'File'
-          const loader = handler.toUpperCase() === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
+          handler = handler && dummy && group ? handler[0].toUpperCase() : 'File'
+          const loader = handler === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
 
           loader.load(
             file,
             function (data) {
               let res
-              if (handler.toUpperCase() === '.SVG') {
+              if (handler === 'File') {
+                res = data
+              } else if (handler === '.SVG') {
                 const paths = data.paths
 
                 for (let i = 0; i < paths.length; i++) {
