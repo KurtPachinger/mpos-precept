@@ -65,9 +65,9 @@ table {
 
 ul { padding-left: 1.75em; }
 
-tr, li, summary {
+table tr, li, summary {
   &:hover {
-    background-color: var(--sub)!important;
+    background-color: var(--sub);
   }
 }
 
@@ -116,7 +116,9 @@ pointer-events: none;
   // toggle CSS during transform
   // toSvg needs ClientRect without transforms
   transform: initial!important;
-   &.mp-offscreen {
+  // pseudo states
+  &:hover{ background-color: initial; }
+  &.mp-offscreen {
     // full-size box
     position: absolute;
     top: 0;

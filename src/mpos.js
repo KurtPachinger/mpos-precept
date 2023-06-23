@@ -351,7 +351,7 @@ const mpos = {
         // skip Observer
         return
       }
-      console.log(grade.r_.queue, dataIdx)
+      console.log('queue', grade.r_.queue, dataIdx)
 
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
@@ -403,7 +403,7 @@ const mpos = {
       } else {
         // HARD-UPDATE
         const root = document.body
-        const rect = { el: root, mat: 'wire', z: -16 }
+        const rect = { el: root, mat: 'wire', z: -16, fix: true }
         const idx = root.getAttribute('data-idx')
         r_other.rects[idx] = rect
         r_other.count++
@@ -441,6 +441,8 @@ const mpos = {
                 // atlas ends with blank
                 opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
                 opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
+
+                //eol, frame, cyan, struct, guide, grid, template, guide, slot,
               }
               // complete
               transforms(grade, dataIdx)
@@ -491,24 +493,16 @@ const mpos = {
           grade.inPolar = mpos.var.opt.inPolar
 
           Object.values(r_other.rects).forEach(function (rect) {
-            let scroll = false
-            if (rect.mat === 'wire' && rect.el.tagName === 'BODY') {
-              scroll = { x: 0, y: 0, fix: true }
-            }
-
-            // CSS3D or Loader
-            if (dataIdx === undefined) {
-              // add, async
-              rect.obj = mpos.add.box(rect, { add: true, scroll: scroll })
-            } else {
-              // update transforms
-              mpos.add.box(rect, { scroll: scroll })
-            }
+            // CSS3D, loader, root...
+            const add = dataIdx === undefined || rect.add
+            const scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
+            // add (async) or transform
+            mpos.add.box(rect, { add: add, scroll: scroll })
 
             if (rect.obj) {
               // filter visibility
               let visible = true
-              if (grade.inPolar >= 4) {
+              if (grade.inPolar >= 4 && !rect.fix) {
                 visible = rect.inPolar >= grade.inPolar
               }
               rect.obj.visible = visible
@@ -521,7 +515,7 @@ const mpos = {
           instanced.count = r_atlas.count
 
           // Meshes
-          const cyan = { x: 1 - 1 / grade.cells, y: 0.0001 }
+
           const uvOffset = new Float32Array(instanced.count * 2).fill(-1)
 
           let count = 0
@@ -542,15 +536,19 @@ const mpos = {
 
             // Shader Atlas UV
             const stepSize = count * 2
-            if (rect.atlas !== undefined || rect.mat === 'self') {
-              uvOffset[stepSize] = rect.x || cyan.x
-              uvOffset[stepSize + 1] = 1 - rect.y || cyan.y
+
+            if (rect.inPolar >= grade.inPolar) {
+              if (rect.atlas !== undefined || rect.mat === 'self') {
+                uvOffset[stepSize] = rect.x || grade.key.x
+                uvOffset[stepSize + 1] = 1 - rect.y || grade.key.y
+              }
+              if (rect.atlas !== undefined || rect.mat === 'child') {
+                // raycast filter
+                //if (grade.ray.indexOf(index) === -1) {
+                grade.ray.push(Number(idx))
+              }
             }
-            if (rect.atlas !== undefined || rect.mat === 'child') {
-              // raycast filter
-              //if (grade.ray.indexOf(index) === -1) {
-              grade.ray.push(Number(idx))
-            }
+
             // }
             count++
           }
@@ -577,7 +575,7 @@ const mpos = {
 
       promise.catch((e) => console.log('err', e))
       promise.then(function (res) {
-        console.log('grade', res)
+        console.log('update', res)
         mpos.ux.render()
         return promise
       })
@@ -774,7 +772,7 @@ const mpos = {
 
       struct(sel, layers)
 
-      for (const [index, rect] of Object.entries(grade.rects)) {
+      Object.values(grade.rects).forEach((rect) => {
         // make two good current lists: InstancedMesh atlas || other...
         if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
           const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
@@ -782,7 +780,8 @@ const mpos = {
           r_.count++
           r_.rects[rect.el.getAttribute('data-idx')] = rect
         }
-      }
+      })
+      grade.key = { x: 1 - 1 / grade.cells, y: 0.0001 }
 
       // Instanced Mesh, shader atlas
       const shader = mpos.add.shader(grade.canvas, grade.cells)
@@ -911,14 +910,14 @@ const mpos = {
       transform(object)
       object.updateMatrix()
 
-      let group = false
-      if (!rect.obj || opts.add) {
+      let obj = object
+      if (opts.add) {
         // other custom process
         if (rect.mat === 'loader') {
-          // slow
+          // async
           let file = rect.el.data || rect.el.src || rect.el.href
-          group = new THREE.Group()
-          mpos.add.loader(file, object, group)
+          obj = new THREE.Group()
+          mpos.add.loader(file, object, obj)
         } else {
           // general
           let add = rect.mat === 'native' || rect.mat === 'wire'
@@ -928,8 +927,11 @@ const mpos = {
         }
         const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
         object.name = name
+        rect.add = false
+        rect.obj = obj
       }
-      return group || object
+
+      return obj
     },
     css: function (rect, traverse) {
       // css style transforms
