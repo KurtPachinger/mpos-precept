@@ -925,11 +925,11 @@ const mpos = {
       if (traverse === undefined) {
         // target element original style
         if (!rect.css) {
-          let style = window.getComputedStyle(el)
+          //let style = window.getComputedStyle(el)
           css.style = {
-            transform: style.transform,
-            backgroundColor: style.backgroundColor,
-            zIndex: style.zIndex
+            transform: el.style.transform,
+            backgroundColor: el.style.backgroundColor,
+            zIndex: el.style.zIndex
           }
         }
       } else if (rect.unset) {
@@ -947,9 +947,8 @@ const mpos = {
         if (traverse === undefined) {
           if (!rect.css) {
             // accumulate ancestor matrix
-            const style = window.getComputedStyle(el)
-
-            if (style.transform.startsWith('matrix')) {
+            if (el.style.transform && el.style.transform.match(/(matrix|scale|rotate)/g)) {
+              const style = window.getComputedStyle(el)
               const transform = style.transform.replace(/(matrix)|[( )]/g, '')
               // transform matrix
               const [a, b] = transform.split(',')
