@@ -1,4 +1,4 @@
-import './styles.scss'
+import './mpos.scss'
 import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
@@ -479,7 +479,7 @@ const mpos = {
 
           // Mesh: CSS3D, loader, root...
           Object.values(r_other.rects).forEach(function (rect) {
-            const add = dataIdx === undefined || rect.add
+            const add = !rect.obj && (dataIdx === undefined || rect.add)
             const scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
             // add (async) or transform
             mpos.add.box(rect, { add: add, scroll: scroll })
@@ -895,6 +895,7 @@ const mpos = {
 
       let obj = object
       if (opts.add) {
+        rect.add = false
         // other custom process
         if (rect.mat === 'loader') {
           // async
@@ -909,8 +910,8 @@ const mpos = {
           }
         }
         const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
-        object.name = name
-        rect.add = false
+        obj.name = name
+
         rect.obj = obj
       }
 

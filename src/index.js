@@ -1,3 +1,4 @@
+import './styles.scss'
 import mpos from './mpos.js'
 
 mpos.init()
