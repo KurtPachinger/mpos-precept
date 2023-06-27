@@ -925,11 +925,12 @@ const mpos = {
       if (traverse === undefined) {
         // target element original style
         if (!rect.css) {
-          //let style = window.getComputedStyle(el)
+          let style = window.getComputedStyle(el)
           css.style = {
-            transform: el.style.transform,
-            backgroundColor: el.style.backgroundColor,
-            zIndex: el.style.zIndex
+            transform: style.transform,
+            transformOrigin: style.transformOrigin,
+            backgroundColor: style.backgroundColor,
+            zIndex: style.zIndex
           }
         }
       } else if (rect.unset) {
@@ -942,13 +943,15 @@ const mpos = {
         }
       }
 
+      const rects = mpos.var.group.userData.grade.rects
       let els = []
       while (el && el !== document.body) {
         if (traverse === undefined) {
           if (!rect.css) {
             // accumulate ancestor matrix
-            if (el.style.transform && el.style.transform.match(/(matrix|scale|rotate)/g)) {
-              const style = window.getComputedStyle(el)
+            const cache = rects[el.getAttribute('data-idx')].css
+            const style = cache ? cache.style : window.getComputedStyle(el)
+            if (style.transform.startsWith('matrix')) {
               const transform = style.transform.replace(/(matrix)|[( )]/g, '')
               // transform matrix
               const [a, b] = transform.split(',')
@@ -964,6 +967,7 @@ const mpos = {
               css.scale *= scale
               css.radian += radian
               css.degree += degree
+
               css.transform.push({
                 scale: scale,
                 degree: degree,
