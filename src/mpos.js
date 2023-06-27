@@ -507,7 +507,7 @@ const mpos = {
             instanced.setMatrixAt(count, dummy.matrix)
             // Instance Color
             const color = new THREE.Color()
-            let bg = rect.css.style.backgroundColor
+            let bg = rect.css.style.backgroundColor || ''
             const rgba = bg.replace(/(rgba)|[( )]/g, '').split(',')
             const alpha = Number(rgba[3])
             if (alpha <= 0.0) {
@@ -817,7 +817,7 @@ const mpos = {
       }
 
       let z = rect.z * d
-      let zIndex = Number(rect.css.style.zIndex) || 0
+      let zIndex = Number(rect.css.style.zIndex || 0)
       const sign = zIndex >= 0 ? 1 : -1
       zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
       zIndex *= sign
@@ -919,15 +919,18 @@ const mpos = {
     },
     css: function (rect, traverse) {
       // css style transforms
+      // naive check (!rect.css) avoids expensive/live loops
       let el = rect.el
-      const css = { scale: 1, radian: 0, degree: 0, transform: [] }
+      const css = rect.css || { scale: 1, radian: 0, degree: 0, transform: [], style: {} }
       if (traverse === undefined) {
         // target element original style
-        let style = window.getComputedStyle(el)
-        css.style = {
-          transform: style.transform,
-          backgroundColor: style.backgroundColor,
-          zIndex: style.zIndex
+        if (!rect.css) {
+          let style = window.getComputedStyle(el)
+          css.style = {
+            transform: style.transform,
+            backgroundColor: style.backgroundColor,
+            zIndex: style.zIndex
+          }
         }
       } else if (rect.unset) {
         // quirks of DOM
@@ -942,32 +945,34 @@ const mpos = {
       let els = []
       while (el && el !== document.body) {
         if (traverse === undefined) {
-          // accumulate ancestor matrix
-          const style = window.getComputedStyle(el)
+          if (!rect.css) {
+            // accumulate ancestor matrix
+            const style = window.getComputedStyle(el)
 
-          if (style.transform.startsWith('matrix')) {
-            const transform = style.transform.replace(/(matrix)|[( )]/g, '')
-            // transform matrix
-            const [a, b] = transform.split(',')
-            const scale = Math.sqrt(a * a + b * b)
-            const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-            const radian = degree * (Math.PI / 180)
-            // element origin and bounds
-            const origin = style.transformOrigin.replace(/(px)/g, '').split(' ')
-            const bound = el.getBoundingClientRect()
+            if (style.transform.startsWith('matrix')) {
+              const transform = style.transform.replace(/(matrix)|[( )]/g, '')
+              // transform matrix
+              const [a, b] = transform.split(',')
+              const scale = Math.sqrt(a * a + b * b)
+              const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+              const radian = degree * (Math.PI / 180)
+              // element origin and bounds
+              const origin = style.transformOrigin.replace(/(px)/g, '').split(' ')
+              const bound = el.getBoundingClientRect()
 
-            // Output
-            // original accrue (didnt work)
-            css.scale *= scale
-            css.radian += radian
-            css.degree += degree
-            css.transform.push({
-              scale: scale,
-              degree: degree,
-              radian: radian,
-              origin: { x: Number(origin[0]), y: Number(origin[1]) },
-              bound: bound
-            })
+              // Output
+              // original accrue (didnt work)
+              css.scale *= scale
+              css.radian += radian
+              css.degree += degree
+              css.transform.push({
+                scale: scale,
+                degree: degree,
+                radian: radian,
+                origin: { x: Number(origin[0]), y: Number(origin[1]) },
+                bound: bound
+              })
+            }
           }
         } else {
           // style override
