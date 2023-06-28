@@ -10,7 +10,7 @@ const mpos = {
   var: {
     opt: {
       dispose: true,
-      selector: 'body',
+      selector: '#text',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 2,
@@ -228,7 +228,7 @@ const mpos = {
       const time = new Date().getTime() / 100
       vars.scene.traverseVisible(function (obj) {
         // step a frame tick
-        let animate = obj.animations === true
+        const animate = obj.animations === true
         if (animate) {
           obj.rotation.x = Math.sin(time) / 10
           obj.rotation.y = Math.cos(time) / 10
@@ -346,7 +346,7 @@ const mpos = {
         // SOFT-update
         let reflow = false
         for (let i = r_queue.length - 1; i >= 0; i--) {
-          let idx = r_queue[i]
+          const idx = r_queue[i]
           if (isFinite(idx)) {
             // Observer
             const rect = grade.rects[idx]
@@ -431,20 +431,20 @@ const mpos = {
             }
           }
 
-          let rect = r_atlas.rects[opts.array[opts.idx]]
+          const rect = r_atlas.rects[opts.array[opts.idx]]
           if (rect && rect.atlas !== undefined) {
             // style needs no transform, and block
-            let unset = { transform: 'initial', margin: 0 }
+            const unset = { transform: 'initial', margin: 0 }
             // bug: style display-inline is not honored by style override
             mpos.add.css(rect, true)
             toSvg(rect.el, { style: unset })
               .then(function (dataUrl) {
                 mpos.add.css(rect, false)
-                let img = new Image()
+                const img = new Image()
                 img.onload = function () {
                   // canvas xy: from block top (FIFO)
-                  let x = (rect.atlas % grade.cells) * opts.step
-                  let y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * opts.step
+                  const x = (rect.atlas % grade.cells) * opts.step
+                  const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * opts.step
                   opts.ctx.drawImage(img, x, y, opts.step, opts.step)
                   // shader xy: from block bottom
                   // avoid 0 edge, so add 0.0001
@@ -545,8 +545,8 @@ const mpos = {
             instanced.userData.shader.userData.t.needsUpdate = true
 
             // UI Atlas
-            let link = document.querySelector('#atlas a')
-            let name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
+            const link = document.querySelector('#atlas a')
+            const name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
             link.title = link.download = name
             link.href = grade.canvas.toDataURL()
             //link.appendChild(grade.canvas)
@@ -573,7 +573,7 @@ const mpos = {
       const vars = mpos.var
       // get DOM node
       selector = selector || vars.opt.selector || 'body'
-      let sel = document.querySelector(selector)
+      const sel = document.querySelector(selector)
       if (sel === null) {
         return
       } else if (selector === 'address') {
@@ -603,14 +603,14 @@ const mpos = {
       }
 
       // OLD group
-      let dispose = vars.opt.dispose ? selector : false
+      const dispose = vars.opt.dispose ? selector : false
       mpos.add.old(dispose)
       // NEW group
       vars.group = new THREE.Group()
       vars.group.name = selector
 
       // FLAT-GRADE: filter, grade, sanitize
-      let ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
+      const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
       let node = ni.nextNode()
       while (node) {
         if (node.nodeName === '#comment') {
@@ -627,7 +627,7 @@ const mpos = {
               const orphan = node.parentNode.childElementCount >= 1 && node.parentNode.matches([precept.allow])
               if (orphan && precept.inPolar(node, grade.rects)) {
                 // sanitize #text orphan (list or semantic) with parent visible
-                let wrap = document.createElement('span')
+                const wrap = document.createElement('span')
                 wrap.classList.add('mp-poster')
                 node.parentNode.insertBefore(wrap, node)
                 wrap.appendChild(node)
@@ -711,7 +711,7 @@ const mpos = {
 
         let mat = 'self'
         // specify empty or manual
-        let children = sel.children
+        const children = sel.children
         const manual = rect.el.matches(precept.manual)
         if (!children.length || manual) {
           mat = setMat(rect.el, mat, manual, children.length)
@@ -720,9 +720,9 @@ const mpos = {
         if (!manual) {
           // CHILD
           for (let i = 0; i < children.length; i++) {
-            let node = children[i]
+            const node = children[i]
 
-            let rect = grade.rects[node.getAttribute('data-idx')]
+            const rect = grade.rects[node.getAttribute('data-idx')]
             if (rect && rect.inPolar) {
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
@@ -737,7 +737,7 @@ const mpos = {
 
                   if (layer >= 1 && allow && !manual && child) {
                     // selector structure output depth
-                    let depth = layer - 1
+                    const depth = layer - 1
                     struct(node, depth, unset)
                   } else {
                     let mat = 'child'
@@ -810,7 +810,7 @@ const mpos = {
       let x = bound.width / 2
       let y = -bound.height / 2
       // scroll{0,0} is viewport, not document
-      let scroll = opts.scroll || { x: 0, y: 0 }
+      const scroll = opts.scroll || { x: 0, y: 0 }
       if (!scroll.fix) {
         x += scroll.x + bound.left
         y += scroll.y - bound.top
@@ -899,15 +899,12 @@ const mpos = {
         // other custom process
         if (rect.mat === 'loader') {
           // async
-          let file = rect.el.data || rect.el.src || rect.el.href
+          const file = rect.el.data || rect.el.src || rect.el.href
           obj = new THREE.Group()
           mpos.add.loader(file, object, obj)
         } else {
-          // general
-          let add = rect.mat === 'native' || rect.mat === 'wire'
-          if (add) {
-            vars.group.add(object)
-          }
+          // general (native, wire)
+          vars.group.add(object)
         }
         const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
         obj.name = name
@@ -925,7 +922,7 @@ const mpos = {
       if (traverse === undefined) {
         // target element original style
         if (!rect.css) {
-          let style = window.getComputedStyle(el)
+          const style = window.getComputedStyle(el)
           css.style = {
             transform: style.transform,
             transformOrigin: style.transformOrigin,
@@ -949,7 +946,7 @@ const mpos = {
         if (traverse === undefined) {
           if (!rect.css) {
             // accumulate ancestor matrix
-            const cache = rects[el.getAttribute('data-idx')].css
+            const cache = rects[el.getAttribute('data-idx')]?.css
             const style = cache ? cache.style : window.getComputedStyle(el)
             if (style.transform.startsWith('matrix')) {
               const transform = style.transform.replace(/(matrix)|[( )]/g, '')
@@ -1016,14 +1013,14 @@ const mpos = {
 
       if (groups && groups.length) {
         for (let g = groups.length - 1; g >= 0; g--) {
-          let group = groups[g].children || []
+          const group = groups[g].children || []
           for (let o = group.length - 1; o >= 0; o--) {
-            let obj = group[o]
+            const obj = group[o]
             if (obj.type === 'Mesh') {
               obj.geometry.dispose()
-              let material = obj.material
+              const material = obj.material
               for (let m = material.length - 1; m >= 0; m--) {
-                let mat = material[m]
+                const mat = material[m]
                 if (mat) {
                   mat.canvas && (mat.canvas = null)
                   mat.map && mat.map.dispose()
@@ -1053,6 +1050,7 @@ const mpos = {
       //for (let c = atlas.length - 1; c >= 0; c--) {
       // atlas[c].parentElement.removeChild(atlas[c])
       //}
+      document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
       mpos.ux.observer.disconnect()
     },
     loader: function (file, dummy, group) {
@@ -1137,7 +1135,7 @@ const mpos = {
 
 mpos.gen = function (num = 6, selector = 'main') {
   // img,ul,embed
-  let lipsum = [
+  const lipsum = [
     'Nunc at dolor lacus. ',
     'Lorem ipsum dolor sit amet. ',
     'Phasellus eu sapien tellus. ',
@@ -1154,8 +1152,8 @@ mpos.gen = function (num = 6, selector = 'main') {
 
   function fill(element, length) {
     length = Math.floor(length) + 1
-    let el = document.createElement(element)
-    let len = Math.floor(Math.random() * length)
+    const el = document.createElement(element)
+    const len = Math.floor(Math.random() * length)
     for (let i = 0; i < len; i++) {
       el.innerText = lipsum[Math.floor(Math.random() * (lipsum.length - 1))]
     }
@@ -1171,24 +1169,24 @@ mpos.gen = function (num = 6, selector = 'main') {
     return TCOV
   }
 
-  let section = document.createElement('details')
+  const section = document.createElement('details')
   section.classList.add('mp-allow')
-  let fragment = document.createDocumentFragment()
+  const fragment = document.createDocumentFragment()
   for (let i = 0; i < num; i++) {
     // container
-    let el = document.createElement('article')
+    const el = document.createElement('article')
     // heading
     el.appendChild(fill('h2', num))
     el.appendChild(fill('p', num * 2))
     // img
-    let img = fill('img', -1)
+    const img = fill('img', -1)
     img.classList.add(i % 2 === 0 ? 'w50' : 'w100')
     img.style.height = '8em'
     img.style.backgroundColor = color()
     img.src = 'data:,'
     el.appendChild(img)
     // list
-    let ul = fill('ul', num / 2)
+    const ul = fill('ul', num / 2)
     ul.appendChild(fill('li', num * 3))
     ul.appendChild(fill('li', num * 6))
     ul.appendChild(fill('li', num * 2))
