@@ -151,3 +151,18 @@
     <a name="anchor"></a>
   </main>
 </details>
+<script>
+  let Module = {
+    wasmBinaryFile: './opencv_js.wasm',
+    preRun: [
+      function () {
+        //huningxin.github.io/opencv.js/samples/index.html
+      }
+    ],
+    _main: function () {
+      cv = Module
+      console.log('OpenCV ready!', cv)
+    }
+  }
+</script>
+<script async src="./opencv.js"></script>

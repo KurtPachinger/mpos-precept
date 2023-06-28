@@ -10,7 +10,7 @@ const mpos = {
   var: {
     opt: {
       dispose: true,
-      selector: '#text',
+      selector: 'body',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 2,
@@ -899,9 +899,9 @@ const mpos = {
         // other custom process
         if (rect.mat === 'loader') {
           // async
-          const file = rect.el.data || rect.el.src || rect.el.href
+
           obj = new THREE.Group()
-          mpos.add.loader(file, object, obj)
+          mpos.add.loader(rect, object, obj)
         } else {
           // general (native, wire)
           vars.group.add(object)
@@ -1053,8 +1053,28 @@ const mpos = {
       document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
       mpos.ux.observer.disconnect()
     },
-    loader: function (file, dummy, group) {
+    loader: function (rect, dummy, group) {
+      const file = rect.el.data || rect.el.src || rect.el.href
+
+      function fitting(dummy, group) {
+        // scale
+        const aabb = new THREE.Box3()
+        aabb.setFromObject(group)
+        const s1 = Math.max(dummy.scale.x, dummy.scale.y)
+        const s2 = Math.max(aabb.max.x, aabb.max.y)
+        group.scale.multiplyScalar(s1 / s2)
+        group.scale.y *= -1
+        // position
+        group.position.copy(dummy.position)
+        group.position.x -= dummy.scale.x / 2
+        group.position.y += dummy.scale.y / 2
+
+        //group.userData.el = rect.el
+        mpos.var.group.add(group)
+      }
+
       const promise = new Promise((resolve, reject) => {
+        let res
         if (file) {
           // instantiate a loader: File, Audio, Object...
           let handler = file.match(/\.[0-9a-z]+$/i)
@@ -1064,7 +1084,6 @@ const mpos = {
           loader.load(
             file,
             function (data) {
-              let res
               if (handler === 'File') {
                 res = data
               } else if (handler === '.SVG') {
@@ -1089,21 +1108,8 @@ const mpos = {
                   }
                 }
 
-                // scale
-                const aabb = new THREE.Box3()
-                aabb.setFromObject(group)
-                const s1 = Math.max(dummy.scale.x, dummy.scale.y)
-                const s2 = Math.max(aabb.max.x, aabb.max.y)
-                group.scale.multiplyScalar(s1 / s2)
-                group.scale.y *= -1
-                // position
-                group.position.copy(dummy.position)
-                group.position.x -= dummy.scale.x / 2
-                group.position.y += dummy.scale.y / 2
-
                 group.name = 'SVG'
-                //group.userData.el = rect.el
-                mpos.var.group.add(group)
+                fitting(dummy, group)
                 res = group
               }
 
@@ -1120,6 +1126,57 @@ const mpos = {
             }
           )
         } else {
+          if (cv && cv.Mat) {
+            // todo: load order
+            const unset = { transform: 'initial', margin: 0 }
+            // unset...
+            toSvg(rect.el, { style: unset })
+              .then(function (dataUrl) {
+                const img = new Image()
+                img.onload = function () {
+                  let kmeans = mpos.add.opencv(img)
+
+                  Object.values(kmeans).forEach(function (label) {
+                    const contours = label.contours
+                    //console.log('contours', contours)
+
+                    for (let i = 0; i < contours.length; i++) {
+                      const path = contours[i]
+                      const poly = new THREE.Shape()
+                      for (let j = 0; j < path.length; j += 2) {
+                        const point = { x: path[j], y: path[j + 1] }
+                        //console.log('point', point)
+                        if (j === 0) {
+                          poly.moveTo(point.x, point.y)
+                        } else {
+                          poly.lineTo(point.x, point.y)
+                        }
+                      }
+                      const geometry = new THREE.ShapeGeometry(poly)
+                      const rgb = label.rgb
+                      const color = new THREE.Color('rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')')
+                      const material = new THREE.MeshBasicMaterial({ color: color })
+                      const mesh = new THREE.Mesh(geometry, material)
+                      group.add(mesh)
+                    }
+                  })
+
+                  group.name = 'OPENCV'
+                  fitting(dummy, group)
+                  res = group
+                }
+
+                img.src = dataUrl
+
+                resolve(res)
+                reject(res)
+              })
+              .catch(function (e) {
+                // src problem...
+                console.log('error', e.target)
+              })
+          }
+
           resolve('no file')
         }
       })
@@ -1129,6 +1186,149 @@ const mpos = {
         mpos.ux.render()
         return res
       })
+    },
+    opencv: function (img) {
+      const src = cv.imread(img)
+
+      //
+      // KMEANS
+      const sample = new cv.Mat(src.rows * src.cols, 3, cv.CV_32F)
+      for (let y = 0; y < src.rows; y++) {
+        for (let x = 0; x < src.cols; x++) {
+          for (let z = 0; z < 3; z++) {
+            sample.floatPtr(y + x * src.rows)[z] = src.ucharPtr(y, x)[z]
+          }
+        }
+      }
+      const lim = 8
+      const labels = new cv.Mat()
+      const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 8, 0.9)
+      const centers = new cv.Mat()
+      cv.kmeans(sample, lim, labels, criteria, 4, cv.KMEANS_PP_CENTERS, centers)
+
+      // kmeans sort
+      const kmeans = {}
+      console.log('labels', labels.size().height)
+      for (let x = 0; x < labels.size().height; x++) {
+        const idx = labels.intAt(x, 0)
+        const redChan = centers.floatAt(idx, 0)
+        const greenChan = centers.floatAt(idx, 1)
+        const blueChan = centers.floatAt(idx, 2)
+        // initial pointer
+        if (kmeans[idx] === undefined) {
+          const hsv = new cv.Mat(1, 1, cv.CV_8UC3)
+          hsv.setTo([redChan, greenChan, blueChan, 255])
+          cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV)
+          // for color comparisons
+          kmeans[idx] = {
+            count: 0,
+            rgb: {
+              r: Math.round(redChan),
+              g: Math.round(greenChan),
+              b: Math.round(blueChan)
+            },
+            hsv: {
+              h: hsv.ucharPtr(0, 0)[0],
+              s: hsv.ucharPtr(0, 0)[1],
+              v: hsv.ucharPtr(0, 0)[2]
+            }
+          }
+          hsv.delete()
+        }
+        // combined
+        kmeans[idx].count++
+      }
+
+      sample.delete()
+      labels.delete()
+      centers.delete()
+
+      // kmeans show
+      //const canvas = document.getElementById('kmeans')
+      //const ctx = canvas.getContext('2d')
+      //const lab = canvas.height / lim
+      //ctx.font = '22px monospace'
+
+      //
+      // INRANGE
+      const dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3)
+      const range = new cv.Mat(src.rows, src.cols, 0)
+      const pad = 32
+      for (let i = 0; i < lim; i++) {
+        const label = kmeans[i]
+        const rgb = label.rgb
+        // kmeans key results
+        //ctx.fillStyle = 'rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')'
+        //ctx.fillRect(0, lab * i, canvas.width, lab)
+        //ctx.fillStyle = 'black'
+        //ctx.fillText(label.count, 0, lab * i + lab)
+        //
+
+        // mask and draw
+        // ...use HSV
+
+        const lo = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r - pad, rgb.g - pad, rgb.b - pad, 0])
+        const hi = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r + pad, rgb.g + pad, rgb.b + pad, 255])
+        const mask = new cv.Mat.zeros(src.rows, src.cols, 0)
+
+        // mask and fill
+        cv.inRange(src, lo, hi, mask)
+        const color = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r, rgb.g, rgb.b, 255])
+
+        // contours
+        const contours = new cv.MatVector()
+        const hierarchy = new cv.Mat()
+        cv.findContours(
+          mask,
+          contours,
+          hierarchy,
+          cv.RETR_CCOMP, //cv.RETR_EXTERNAL, cv.RETR_CCOMP
+          cv.CHAIN_APPROX_SIMPLE
+        )
+
+        // approximate polygon
+        const poly = new cv.MatVector()
+        for (let j = 0; j < contours.size(); ++j) {
+          const tmp = new cv.Mat()
+          const cnt = contours.get(j)
+          // update
+          cv.approxPolyDP(cnt, tmp, 2, true)
+          poly.push_back(tmp)
+          cnt.delete()
+          tmp.delete()
+        }
+
+        // outputs
+        label.contours = []
+        const fill = new cv.Scalar(rgb.r, rgb.g, rgb.b)
+        for (let j = 0; j < contours.size(); ++j) {
+          const cnt = poly.get(j)
+          label.contours.push(cnt.data32S)
+
+          cv.drawContours(dst, poly, j, fill, -1, cv.LINE_4, hierarchy, 2)
+        }
+        contours.delete()
+        poly.delete()
+        hierarchy.delete()
+
+        // composite
+        color.copyTo(range, mask)
+
+        lo.delete()
+        hi.delete()
+        mask.delete()
+        color.delete()
+      }
+      //cv.imshow('inrange', range)
+      range.delete()
+
+      // output
+      //cv.imshow('contours', dst)
+      src.delete()
+      dst.delete()
+
+      console.log('kmeans', kmeans)
+      return kmeans
     }
   }
 }
