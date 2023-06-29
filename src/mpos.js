@@ -1,5 +1,6 @@
 import './mpos.scss'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
@@ -85,7 +86,7 @@ const mpos = {
     raycaster: new THREE.Raycaster(),
     pointer: new THREE.Vector2()
   },
-  init: function () {
+  init: function (opencv) {
     const vars = mpos.var
     // containers
     const template = document.createElement('template')
@@ -173,6 +174,8 @@ const mpos = {
       gui.add(vars.opt, key, ...param)
     })
     gui.domElement.classList.add('mp-native')
+
+    vars.cv = opencv
   },
   ux: {
     reflow: function (e) {
@@ -1075,17 +1078,19 @@ const mpos = {
 
       const promise = new Promise((resolve, reject) => {
         let res
-        if (file) {
-          // instantiate a loader: File, Audio, Object...
-          let handler = file.match(/\.[0-9a-z]+$/i)
-          handler = handler && dummy && group ? handler[0].toUpperCase() : 'File'
-          const loader = handler === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
 
+        // instantiate a loader: File, Audio, Object...
+        let handler = file ? file.match(/\.[0-9a-z]+$/i) : false
+        handler = handler && dummy && group ? handler[0].toUpperCase() : 'File'
+        const loader = handler === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
+
+        if (file && handler !== '.JPG') {
           loader.load(
             file,
             function (data) {
+              res = data
               if (handler === 'File') {
-                res = data
+                // set attribute
               } else if (handler === '.SVG') {
                 const paths = data.paths
 
@@ -1108,13 +1113,12 @@ const mpos = {
                   }
                 }
 
-                group.name = 'SVG'
                 fitting(dummy, group)
+                group.name = 'SVG'
                 res = group
               }
 
               resolve(res)
-              reject(data)
             },
             // called when loading is in progresses
             function (xhr) {
@@ -1126,7 +1130,7 @@ const mpos = {
             }
           )
         } else {
-          if (cv && cv.Mat) {
+          if (window.cv2) {
             // todo: load order
             const unset = { transform: 'initial', margin: 0 }
             // unset...
@@ -1136,10 +1140,12 @@ const mpos = {
                 img.onload = function () {
                   let kmeans = mpos.add.opencv(img)
 
+                  const material = new THREE.MeshBasicMaterial()
                   Object.values(kmeans).forEach(function (label) {
                     const contours = label.contours
                     //console.log('contours', contours)
 
+                    var mergedGeoms = []
                     for (let i = 0; i < contours.length; i++) {
                       const path = contours[i]
                       const poly = new THREE.Shape()
@@ -1153,31 +1159,35 @@ const mpos = {
                         }
                       }
                       const geometry = new THREE.ShapeGeometry(poly)
-                      const rgb = label.rgb
-                      const color = new THREE.Color('rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')')
-                      const material = new THREE.MeshBasicMaterial({ color: color })
-                      const mesh = new THREE.Mesh(geometry, material)
-                      group.add(mesh)
+                      mergedGeoms.push(geometry)
                     }
+
+                    // kmeans label color
+                    const rgb = label.rgb
+                    const color = new THREE.Color('rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')')
+                    const mat = material.clone()
+                    mat.color = color
+
+                    const mergedBoxes = mergeGeometries(mergedGeoms)
+                    const mesh = new THREE.Mesh(mergedBoxes, mat)
+                    group.add(mesh)
                   })
 
-                  group.name = 'OPENCV'
                   fitting(dummy, group)
+                  group.name = 'OPENCV'
                   res = group
+                  resolve(res)
                 }
 
                 img.src = dataUrl
-
-                resolve(res)
-                reject(res)
               })
               .catch(function (e) {
                 // src problem...
                 console.log('error', e.target)
               })
+          } else {
+            resolve('no OpenCV')
           }
-
-          resolve('no file')
         }
       })
 
@@ -1188,40 +1198,47 @@ const mpos = {
       })
     },
     opencv: function (img) {
+      const cv = window.cv2
       const src = cv.imread(img)
 
-      //
+      const max = 16
+      const pyr = src.clone()
+      cv.resize(pyr, pyr, new cv.Size(max, pyr.rows * (max / pyr.cols)), 0, 0, cv.INTER_NEAREST)
       // KMEANS
-      const sample = new cv.Mat(src.rows * src.cols, 3, cv.CV_32F)
-      for (let y = 0; y < src.rows; y++) {
-        for (let x = 0; x < src.cols; x++) {
+      const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
+      for (let y = 0; y < pyr.rows; y++) {
+        for (let x = 0; x < pyr.cols; x++) {
           for (let z = 0; z < 3; z++) {
-            sample.floatPtr(y + x * src.rows)[z] = src.ucharPtr(y, x)[z]
+            sample.floatPtr(y + x * pyr.rows)[z] = pyr.ucharPtr(y, x)[z]
           }
         }
       }
-      const lim = 8
+      const lim = 16
       const labels = new cv.Mat()
-      const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 8, 0.9)
+      const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 32, 0.5)
       const centers = new cv.Mat()
-      cv.kmeans(sample, lim, labels, criteria, 4, cv.KMEANS_PP_CENTERS, centers)
+      cv.kmeans(sample, lim, labels, criteria, 32, cv.KMEANS_PP_CENTERS, centers)
 
       // kmeans sort
       const kmeans = {}
-      console.log('labels', labels.size().height)
       for (let x = 0; x < labels.size().height; x++) {
         const idx = labels.intAt(x, 0)
-        const redChan = centers.floatAt(idx, 0)
-        const greenChan = centers.floatAt(idx, 1)
-        const blueChan = centers.floatAt(idx, 2)
         // initial pointer
         if (kmeans[idx] === undefined) {
+          // colors
+          const redChan = centers.floatAt(idx, 0)
+          const greenChan = centers.floatAt(idx, 1)
+          const blueChan = centers.floatAt(idx, 2)
+          const alpha = centers.floatAt(idx, 3)
+
+          //
           const hsv = new cv.Mat(1, 1, cv.CV_8UC3)
           hsv.setTo([redChan, greenChan, blueChan, 255])
           cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV)
           // for color comparisons
           kmeans[idx] = {
             count: 0,
+            alpha: alpha,
             rgb: {
               r: Math.round(redChan),
               g: Math.round(greenChan),
@@ -1239,6 +1256,7 @@ const mpos = {
         kmeans[idx].count++
       }
 
+      pyr.delete()
       sample.delete()
       labels.delete()
       centers.delete()
@@ -1251,12 +1269,17 @@ const mpos = {
 
       //
       // INRANGE
-      const dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3)
-      const range = new cv.Mat(src.rows, src.cols, 0)
-      const pad = 32
-      for (let i = 0; i < lim; i++) {
-        const label = kmeans[i]
+      //const dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3)
+      //const range = new cv.Mat(src.rows, src.cols, 0)
+      const pad = 16
+      Object.keys(kmeans).forEach(function (key) {
+        let label = kmeans[key]
         const rgb = label.rgb
+        label.contours = []
+        if (label.alpha === 0 && rgb.r === 0 && rgb.g === 0 && rgb.b === 0) {
+          delete kmeans[key]
+          return
+        }
         // kmeans key results
         //ctx.fillStyle = 'rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')'
         //ctx.fillRect(0, lab * i, canvas.width, lab)
@@ -1267,13 +1290,13 @@ const mpos = {
         // mask and draw
         // ...use HSV
 
-        const lo = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r - pad, rgb.g - pad, rgb.b - pad, 0])
+        const lo = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r - pad, rgb.g - pad, rgb.b - pad, 1])
         const hi = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r + pad, rgb.g + pad, rgb.b + pad, 255])
         const mask = new cv.Mat.zeros(src.rows, src.cols, 0)
 
         // mask and fill
         cv.inRange(src, lo, hi, mask)
-        const color = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r, rgb.g, rgb.b, 255])
+        //const color = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r, rgb.g, rgb.b, 255])
 
         // contours
         const contours = new cv.MatVector()
@@ -1292,42 +1315,51 @@ const mpos = {
           const tmp = new cv.Mat()
           const cnt = contours.get(j)
           // update
-          cv.approxPolyDP(cnt, tmp, 2, true)
+          cv.approxPolyDP(cnt, tmp, 0, true)
           poly.push_back(tmp)
           cnt.delete()
           tmp.delete()
         }
 
         // outputs
-        label.contours = []
-        const fill = new cv.Scalar(rgb.r, rgb.g, rgb.b)
+
+        //const fill = new cv.Scalar(rgb.r, rgb.g, rgb.b)
         for (let j = 0; j < contours.size(); ++j) {
           const cnt = poly.get(j)
-          label.contours.push(cnt.data32S)
 
-          cv.drawContours(dst, poly, j, fill, -1, cv.LINE_4, hierarchy, 2)
+          const area = Math.sqrt(cv.contourArea(cnt))
+          const small = area / ((src.rows + src.cols) / 2) < 0.025
+          if (!small) {
+            label.contours.push(cnt.data32S)
+          }
+
+          //cv.drawContours(dst, poly, j, fill, -1, cv.LINE_4, hierarchy, 0)
         }
         contours.delete()
         poly.delete()
         hierarchy.delete()
 
         // composite
-        color.copyTo(range, mask)
+        //color.copyTo(range, mask)
 
         lo.delete()
         hi.delete()
         mask.delete()
-        color.delete()
-      }
+        //color.delete()
+
+        if (!label.contours.length) {
+          delete kmeans[key]
+        }
+      })
       //cv.imshow('inrange', range)
-      range.delete()
+      //range.delete()
 
       // output
       //cv.imshow('contours', dst)
       src.delete()
-      dst.delete()
+      //dst.delete()
 
-      console.log('kmeans', kmeans)
+      //console.log('kmeans', kmeans)
       return kmeans
     }
   }

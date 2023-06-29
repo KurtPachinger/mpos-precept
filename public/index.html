@@ -45,7 +45,7 @@
     </section>
     <section id="media" class="sub">
       <h2>section<span>#media</span></h2>
-      <img src="./OIG.jpg" />
+      <img src="./OIG.jpg" class="mp-loader" />
       <article id="nest">
         <div>
           <div>
@@ -125,10 +125,7 @@
                 src="//modelviewer.dev/shared-assets/models/Astronaut.glb"
                 alt="A 3D model of an astronaut"
               >
-                <button
-                  slot="ar-button"
-                  style="background-color: white; border-radius: 4px; border: none; position: absolute; top: 16px; right: 16px;"
-                >
+                <button slot="ar-button" style="border: none; position: absolute; top: 16px; right: 16px;">
                   👋 Activate AR
                 </button>
               </model-viewer>
@@ -156,12 +153,13 @@
     wasmBinaryFile: './opencv_js.wasm',
     preRun: [
       function () {
+        console.log('pre-load')
         //huningxin.github.io/opencv.js/samples/index.html
       }
     ],
     _main: function () {
-      cv = Module
-      console.log('OpenCV ready!', cv)
+      window.cv2 = Module
+      console.log('OPENCV', window.cv2)
     }
   }
 </script>
