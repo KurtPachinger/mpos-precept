@@ -1,6 +1,7 @@
 <details id="tools" class="mp-allow" open>
   <main>
     <h2><span>main</span></h2>
+    <div id="errorMessage"></div>
     <form onSubmit="return false;" class="w" style="transform: scale(0.75) rotate(-7.5deg);">
       <fieldset class="sub">
         <legend>form</legend>
@@ -45,7 +46,8 @@
     </section>
     <section id="media" class="sub">
       <h2>section<span>#media</span></h2>
-      <img src="./OIG.jpg" class="mp-loader" />
+      <img id="src" src="./GIA.jpg" class="mp-loader" crossorigin="anonymous" />
+      <canvas id="dst"></canvas>
       <article id="nest">
         <div>
           <div>
@@ -148,19 +150,3 @@
     <a name="anchor"></a>
   </main>
 </details>
-<script>
-  let Module = {
-    wasmBinaryFile: './opencv_js.wasm',
-    preRun: [
-      function () {
-        console.log('pre-load')
-        //huningxin.github.io/opencv.js/samples/index.html
-      }
-    ],
-    _main: function () {
-      window.cv2 = Module
-      console.log('OPENCV', window.cv2)
-    }
-  }
-</script>
-<script async src="./opencv.js"></script>

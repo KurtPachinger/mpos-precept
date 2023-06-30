@@ -1,11 +1,11 @@
 import './mpos.scss'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
-import { toSvg } from 'html-to-image'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { toSvg, toJpeg } from 'html-to-image'
 
 const mpos = {
   var: {
@@ -86,7 +86,7 @@ const mpos = {
     raycaster: new THREE.Raycaster(),
     pointer: new THREE.Vector2()
   },
-  init: function (opencv) {
+  init: function () {
     const vars = mpos.var
     // containers
     const template = document.createElement('template')
@@ -174,8 +174,6 @@ const mpos = {
       gui.add(vars.opt, key, ...param)
     })
     gui.domElement.classList.add('mp-native')
-
-    vars.cv = opencv
   },
   ux: {
     reflow: function (e) {
@@ -904,7 +902,13 @@ const mpos = {
           // async
 
           obj = new THREE.Group()
-          mpos.add.loader(rect, object, obj)
+
+          requestIdleCallback(
+            function () {
+              mpos.add.loader(rect, object, obj)
+            },
+            { time: 2000 }
+          )
         } else {
           // general (native, wire)
           vars.group.add(object)
@@ -1076,291 +1080,320 @@ const mpos = {
         mpos.var.group.add(group)
       }
 
-      const promise = new Promise((resolve, reject) => {
-        let res
+      //const promise = new Promise((resolve, reject) => {
+      //let res
 
-        // instantiate a loader: File, Audio, Object...
-        let handler = file ? file.match(/\.[0-9a-z]+$/i) : false
-        handler = handler && dummy && group ? handler[0].toUpperCase() : 'File'
-        const loader = handler === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
+      // instantiate a loader: File, Audio, Object...
+      // todo: url query string pramaters
+      let type = file ? file.match(/\.[0-9a-z]+$/i) : false
+      let handler = type && dummy && group ? type[0].toUpperCase() : 'File'
+      console.log(type, handler)
+      const loader = type === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
 
-        if (file && handler !== '.JPG') {
-          loader.load(
-            file,
-            function (data) {
-              res = data
-              if (handler === 'File') {
-                // set attribute
-              } else if (handler === '.SVG') {
-                const paths = data.paths
+      if (file && handler !== '.JPG') {
+        loader.load(
+          file,
+          function (data) {
+            console.log('data', data)
+            //res = data
+            if (handler === 'File') {
+              // set attribute
+            } else if (handler === '.SVG') {
+              const paths = data.paths || []
 
-                for (let i = 0; i < paths.length; i++) {
-                  const path = paths[i]
+              for (let i = 0; i < paths.length; i++) {
+                const path = paths[i]
 
-                  const material = new THREE.MeshBasicMaterial({
-                    color: path.color,
-                    side: THREE.FrontSide,
-                    depthWrite: false
-                  })
+                const material = new THREE.MeshBasicMaterial({
+                  color: path.color,
+                  side: THREE.FrontSide,
+                  depthWrite: false
+                })
 
-                  const shapes = SVGLoader.createShapes(path)
+                const shapes = SVGLoader.createShapes(path)
 
-                  for (let j = 0; j < shapes.length; j++) {
-                    const shape = shapes[j]
-                    const geometry = new THREE.ShapeGeometry(shape)
-                    const mesh = new THREE.Mesh(geometry, material)
-                    group.add(mesh)
-                  }
+                for (let j = 0; j < shapes.length; j++) {
+                  const shape = shapes[j]
+                  const geometry = new THREE.ShapeGeometry(shape)
+                  const mesh = new THREE.Mesh(geometry, material)
+                  group.add(mesh)
                 }
-
-                fitting(dummy, group)
-                group.name = 'SVG'
-                res = group
               }
 
-              resolve(res)
-            },
-            // called when loading is in progresses
-            function (xhr) {
-              console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
-            },
-            // called when loading has errors
-            function (error) {
-              console.log('error loading')
+              fitting(dummy, group)
+              group.name = 'SVG'
+              // res = group
+              mpos.ux.render()
             }
-          )
-        } else {
-          if (window.cv2) {
-            // todo: load order
-            const unset = { transform: 'initial', margin: 0 }
-            // unset...
-            toSvg(rect.el, { style: unset })
-              .then(function (dataUrl) {
-                const img = new Image()
-                img.onload = function () {
-                  let kmeans = mpos.add.opencv(img)
-
-                  const material = new THREE.MeshBasicMaterial()
-                  Object.values(kmeans).forEach(function (label) {
-                    const contours = label.contours
-                    //console.log('contours', contours)
-
-                    var mergedGeoms = []
-                    for (let i = 0; i < contours.length; i++) {
-                      const path = contours[i]
-                      const poly = new THREE.Shape()
-                      for (let j = 0; j < path.length; j += 2) {
-                        const point = { x: path[j], y: path[j + 1] }
-                        //console.log('point', point)
-                        if (j === 0) {
-                          poly.moveTo(point.x, point.y)
-                        } else {
-                          poly.lineTo(point.x, point.y)
-                        }
-                      }
-                      const geometry = new THREE.ShapeGeometry(poly)
-                      mergedGeoms.push(geometry)
-                    }
-
-                    // kmeans label color
-                    const rgb = label.rgb
-                    const color = new THREE.Color('rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')')
-                    const mat = material.clone()
-                    mat.color = color
-
-                    const mergedBoxes = mergeGeometries(mergedGeoms)
-                    const mesh = new THREE.Mesh(mergedBoxes, mat)
-                    group.add(mesh)
-                  })
-
-                  fitting(dummy, group)
-                  group.name = 'OPENCV'
-                  res = group
-                  resolve(res)
-                }
-
-                img.src = dataUrl
-              })
-              .catch(function (e) {
-                // src problem...
-                console.log('error', e.target)
-              })
-          } else {
-            resolve('no OpenCV')
+          },
+          // called when loading is in progresses
+          function (xhr) {
+            console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
+          },
+          // called when loading has errors
+          function (error) {
+            console.log('error loading')
           }
-        }
-      })
-
-      promise.then(function (res) {
-        console.log('loader', res)
-        mpos.ux.render()
-        return res
-      })
-    },
-    opencv: function (img) {
-      const cv = window.cv2
-      const src = cv.imread(img)
-
-      const max = 16
-      const pyr = src.clone()
-      cv.resize(pyr, pyr, new cv.Size(max, pyr.rows * (max / pyr.cols)), 0, 0, cv.INTER_NEAREST)
-      // KMEANS
-      const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
-      for (let y = 0; y < pyr.rows; y++) {
-        for (let x = 0; x < pyr.cols; x++) {
-          for (let z = 0; z < 3; z++) {
-            sample.floatPtr(y + x * pyr.rows)[z] = pyr.ucharPtr(y, x)[z]
-          }
-        }
-      }
-      const lim = 16
-      const labels = new cv.Mat()
-      const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 32, 0.5)
-      const centers = new cv.Mat()
-      cv.kmeans(sample, lim, labels, criteria, 32, cv.KMEANS_PP_CENTERS, centers)
-
-      // kmeans sort
-      const kmeans = {}
-      for (let x = 0; x < labels.size().height; x++) {
-        const idx = labels.intAt(x, 0)
-        // initial pointer
-        if (kmeans[idx] === undefined) {
-          // colors
-          const redChan = centers.floatAt(idx, 0)
-          const greenChan = centers.floatAt(idx, 1)
-          const blueChan = centers.floatAt(idx, 2)
-          const alpha = centers.floatAt(idx, 3)
-
-          //
-          const hsv = new cv.Mat(1, 1, cv.CV_8UC3)
-          hsv.setTo([redChan, greenChan, blueChan, 255])
-          cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV)
-          // for color comparisons
-          kmeans[idx] = {
-            count: 0,
-            alpha: alpha,
-            rgb: {
-              r: Math.round(redChan),
-              g: Math.round(greenChan),
-              b: Math.round(blueChan)
-            },
-            hsv: {
-              h: hsv.ucharPtr(0, 0)[0],
-              s: hsv.ucharPtr(0, 0)[1],
-              v: hsv.ucharPtr(0, 0)[2]
-            }
-          }
-          hsv.delete()
-        }
-        // combined
-        kmeans[idx].count++
-      }
-
-      pyr.delete()
-      sample.delete()
-      labels.delete()
-      centers.delete()
-
-      // kmeans show
-      //const canvas = document.getElementById('kmeans')
-      //const ctx = canvas.getContext('2d')
-      //const lab = canvas.height / lim
-      //ctx.font = '22px monospace'
-
-      //
-      // INRANGE
-      //const dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3)
-      //const range = new cv.Mat(src.rows, src.cols, 0)
-      const pad = 16
-      Object.keys(kmeans).forEach(function (key) {
-        let label = kmeans[key]
-        const rgb = label.rgb
-        label.contours = []
-        if (label.alpha === 0 && rgb.r === 0 && rgb.g === 0 && rgb.b === 0) {
-          delete kmeans[key]
-          return
-        }
-        // kmeans key results
-        //ctx.fillStyle = 'rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')'
-        //ctx.fillRect(0, lab * i, canvas.width, lab)
-        //ctx.fillStyle = 'black'
-        //ctx.fillText(label.count, 0, lab * i + lab)
-        //
-
-        // mask and draw
-        // ...use HSV
-
-        const lo = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r - pad, rgb.g - pad, rgb.b - pad, 1])
-        const hi = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r + pad, rgb.g + pad, rgb.b + pad, 255])
-        const mask = new cv.Mat.zeros(src.rows, src.cols, 0)
-
-        // mask and fill
-        cv.inRange(src, lo, hi, mask)
-        //const color = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r, rgb.g, rgb.b, 255])
-
-        // contours
-        const contours = new cv.MatVector()
-        const hierarchy = new cv.Mat()
-        cv.findContours(
-          mask,
-          contours,
-          hierarchy,
-          cv.RETR_CCOMP, //cv.RETR_EXTERNAL, cv.RETR_CCOMP
-          cv.CHAIN_APPROX_SIMPLE
         )
+      } else {
+        if (mpos.var.cv) {
+          console.log('loader has cv', mpos.var.cv)
 
-        // approximate polygon
-        const poly = new cv.MatVector()
-        for (let j = 0; j < contours.size(); ++j) {
-          const tmp = new cv.Mat()
-          const cnt = contours.get(j)
-          // update
-          cv.approxPolyDP(cnt, tmp, 0, true)
-          poly.push_back(tmp)
-          cnt.delete()
-          tmp.delete()
-        }
+          // todo: load order
+          const unset = { transform: 'initial', margin: 0 }
+          // unset...
+          toJpeg(rect.el, { style: unset, quality: 0.5 })
+            .then(function (dataUrl) {
+              const img = new Image()
+              img.onload = function () {
+                mpos.add.opencv(img, group)
 
-        // outputs
+                fitting(dummy, group)
+                group.name = 'OPENCV'
+                // res = group
+                //  resolve(res)
+                //  reject('OpenCV slow')
+                mpos.ux.render()
+              }
 
-        //const fill = new cv.Scalar(rgb.r, rgb.g, rgb.b)
-        for (let j = 0; j < contours.size(); ++j) {
-          const cnt = poly.get(j)
-
-          const area = Math.sqrt(cv.contourArea(cnt))
-          const small = area / ((src.rows + src.cols) / 2) < 0.025
-          if (!small) {
-            label.contours.push(cnt.data32S)
+              img.src = dataUrl
+            })
+            .catch(function (e) {
+              // src problem...
+              console.log('error', e.target)
+            })
+        } else {
+          if (mpos.var.cv === undefined) {
+            mpos.var.cv = false
+            // OPENCV WASM
+            //huningxin.github.io/opencv.js/samples/index.html
+            const script = document.createElement('script')
+            script.type = 'text/javascript'
+            script.async = true
+            script.onload = function () {
+              // remote script has loaded
+              console.log('OPENCV')
+              mpos.var.cv = true
+            }
+            script.src = './opencv.js?t=' + Date.now()
+            document.getElementsByTagName('head')[0].appendChild(script)
           }
-
-          //cv.drawContours(dst, poly, j, fill, -1, cv.LINE_4, hierarchy, 0)
         }
-        contours.delete()
-        poly.delete()
-        hierarchy.delete()
+      }
+      // })
 
-        // composite
-        //color.copyTo(range, mask)
+      // promise.then(function (res) {
+      //   console.log('loader', res)
 
-        lo.delete()
-        hi.delete()
-        mask.delete()
-        //color.delete()
+      //  return res
+      // })
+    },
+    opencv: function (img, group) {
+      let Module = {
+        wasmBinaryFile: './opencv_js.wasm',
+        preRun: [
+          function (e) {
+            console.log('pre-run', e)
+          }
+        ],
+        _main: function (c, v, o) {
+          console.log('_main', c, v, o)
+          const cv = this
+          //
+          let src2 = cv.imread('src')
+          cv.imshow('dst', src2)
+          src2.delete()
 
-        if (!label.contours.length) {
-          delete kmeans[key]
-        }
-      })
-      //cv.imshow('inrange', range)
-      //range.delete()
+          const kmeans = {}
 
-      // output
-      //cv.imshow('contours', dst)
-      src.delete()
-      //dst.delete()
+          return
+          console.log(cv, img, group, kmeans)
+          // _main: get [img, kmeans] in/out
+          // _main or postRun: get kmeans to THREE.Shape to THREE.Group
+          try {
+            const src = cv.imread(img)
+            const max = 16
+            const pyr = src.clone()
+            cv.resize(pyr, pyr, new cv.Size(max, pyr.rows * (max / pyr.cols)), 0, 0, cv.INTER_NEAREST)
+            // KMEANS
+            const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
+            for (let y = 0; y < pyr.rows; y++) {
+              for (let x = 0; x < pyr.cols; x++) {
+                for (let z = 0; z < 3; z++) {
+                  sample.floatPtr(y + x * pyr.rows)[z] = pyr.ucharPtr(y, x)[z]
+                }
+              }
+            }
+            const lim = 8
+            const labels = new cv.Mat()
+            const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 4, 0.5)
+            const centers = new cv.Mat()
+            cv.kmeans(sample, lim, labels, criteria, 4, cv.KMEANS_PP_CENTERS, centers)
 
-      //console.log('kmeans', kmeans)
-      return kmeans
+            // kmeans sort
+            for (let x = 0; x < labels.size().height; x++) {
+              const idx = labels.intAt(x, 0)
+              // initial pointer
+              if (kmeans[idx] === undefined) {
+                // color RGB
+                const redChan = centers.floatAt(idx, 0)
+                const greenChan = centers.floatAt(idx, 1)
+                const blueChan = centers.floatAt(idx, 2)
+                const alpha = centers.floatAt(idx, 3)
+                // color HSV
+                const hsv = new cv.Mat(1, 1, cv.CV_8UC3)
+                hsv.setTo([redChan, greenChan, blueChan, 255])
+                cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV)
+                // color for kmeans label
+                kmeans[idx] = {
+                  count: 0,
+                  alpha: alpha,
+                  rgb: {
+                    r: Math.round(redChan),
+                    g: Math.round(greenChan),
+                    b: Math.round(blueChan)
+                  },
+                  hsv: {
+                    h: hsv.ucharPtr(0, 0)[0],
+                    s: hsv.ucharPtr(0, 0)[1],
+                    v: hsv.ucharPtr(0, 0)[2]
+                  }
+                }
+                hsv.delete()
+              }
+              // kmeans label count
+              kmeans[idx].count++
+            }
+
+            pyr.delete()
+            sample.delete()
+            labels.delete()
+            centers.delete()
+
+            // INRANGE
+            const pad = 16
+            Object.keys(kmeans).forEach(function (key) {
+              let label = kmeans[key]
+              const rgb = label.rgb
+              label.contours = []
+              // remove transparent
+              if (label.alpha === 0 && rgb.r === 0 && rgb.g === 0 && rgb.b === 0) {
+                delete kmeans[key]
+                return
+              }
+
+              // range ...use HSV!
+              const lo = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r - pad, rgb.g - pad, rgb.b - pad, 1])
+              const hi = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r + pad, rgb.g + pad, rgb.b + pad, 255])
+              const mask = new cv.Mat.zeros(src.rows, src.cols, 0)
+
+              // mask or fill
+              cv.inRange(src, lo, hi, mask)
+
+              // CONTOURS
+              const contours = new cv.MatVector()
+              const hierarchy = new cv.Mat()
+              cv.findContours(
+                mask,
+                contours,
+                hierarchy,
+                cv.RETR_CCOMP, //cv.RETR_EXTERNAL, cv.RETR_CCOMP
+                cv.CHAIN_APPROX_SIMPLE
+              )
+
+              // approximate polygon
+              const poly = new cv.MatVector()
+              for (let j = 0; j < contours.size(); ++j) {
+                const tmp = new cv.Mat()
+                const cnt = contours.get(j)
+                // simplify
+                cv.approxPolyDP(cnt, tmp, 0, true)
+                poly.push_back(tmp)
+                cnt.delete()
+                tmp.delete()
+              }
+
+              // push xy positions
+              for (let j = 0; j < contours.size(); ++j) {
+                const cnt = poly.get(j)
+                // skip artefact
+                const area = Math.sqrt(cv.contourArea(cnt))
+                const small = area / ((src.rows + src.cols) / 2) < 0.025
+                if (!small) {
+                  label.contours.push(cnt.data32S)
+                }
+              }
+              // path
+              contours.delete()
+              poly.delete()
+              hierarchy.delete()
+              // color
+              lo.delete()
+              hi.delete()
+              mask.delete()
+
+              if (!label.contours.length) {
+                delete kmeans[key]
+              }
+            })
+
+            src.delete()
+
+            console.log('kmeans', kmeans)
+          } catch (error) {
+            console.warn(error)
+          }
+        },
+        postRun: [
+          function (e) {
+            console.log('post-run', e)
+          }
+        ]
+      }
+
+      /*
+      
+          */
+
+      /*
+          
+            const kmeans = mpos.var.kmeans
+
+            const material = new THREE.MeshBasicMaterial()
+            Object.values(kmeans).forEach(function (label) {
+              const contours = label.contours
+              //console.log('contours', contours)
+
+              var mergedGeoms = []
+              for (let i = 0; i < contours.length; i++) {
+                const path = contours[i]
+                const poly = new THREE.Shape()
+                for (let j = 0; j < path.length; j += 2) {
+                  const point = { x: path[j], y: path[j + 1] }
+                  //console.log('point', point)
+                  if (j === 0) {
+                    poly.moveTo(point.x, point.y)
+                  } else {
+                    poly.lineTo(point.x, point.y)
+                  }
+                }
+                const geometry = new THREE.ShapeGeometry(poly)
+                mergedGeoms.push(geometry)
+              }
+
+              // kmeans label color
+              const rgb = label.rgb
+              const color = new THREE.Color('rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')')
+              const mat = material.clone()
+              mat.color = color
+
+              const mergedBoxes = mergeGeometries(mergedGeoms)
+              const mesh = new THREE.Mesh(mergedBoxes, mat)
+              group.add(mesh)
+            })
+            */
+
+      opencv(Module)
     }
   }
 }
