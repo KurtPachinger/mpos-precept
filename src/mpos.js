@@ -441,7 +441,7 @@ const mpos = {
             toSvg(rect.el, { style: unset })
               .then(function (dataUrl) {
                 mpos.add.css(rect, false)
-                const img = new Image()
+                let img = new Image()
                 img.onload = function () {
                   // canvas xy: from block top (FIFO)
                   const x = (rect.atlas % grade.cells) * opts.step
@@ -453,6 +453,7 @@ const mpos = {
                   rect.y = (0.0001 + y + opts.step) / grade.maxRes
                   // recursive
                   next()
+                  dataUrl = img = null
                 }
 
                 img.src = dataUrl
@@ -903,12 +904,7 @@ const mpos = {
 
           obj = new THREE.Group()
 
-          requestIdleCallback(
-            function () {
-              mpos.add.loader(rect, object, obj)
-            },
-            { time: 2000 }
-          )
+          mpos.add.loader(rect, object, obj)
         } else {
           // general (native, wire)
           vars.group.add(object)
@@ -1060,41 +1056,38 @@ const mpos = {
       document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
       mpos.ux.observer.disconnect()
     },
+    fit: function (dummy, group) {
+      // scale
+      const aabb = new THREE.Box3()
+      aabb.setFromObject(group)
+      const s1 = Math.max(dummy.scale.x, dummy.scale.y)
+      const s2 = Math.max(aabb.max.x, aabb.max.y)
+      group.scale.multiplyScalar(s1 / s2)
+      group.scale.y *= -1
+      // position
+      group.position.copy(dummy.position)
+      group.position.x -= dummy.scale.x / 2
+      group.position.y += dummy.scale.y / 2
+
+      //group.userData.el = rect.el
+      mpos.var.group.add(group)
+      mpos.ux.render()
+    },
     loader: function (rect, dummy, group) {
       const file = rect.el.data || rect.el.src || rect.el.href
 
-      function fitting(dummy, group) {
-        // scale
-        const aabb = new THREE.Box3()
-        aabb.setFromObject(group)
-        const s1 = Math.max(dummy.scale.x, dummy.scale.y)
-        const s2 = Math.max(aabb.max.x, aabb.max.y)
-        group.scale.multiplyScalar(s1 / s2)
-        group.scale.y *= -1
-        // position
-        group.position.copy(dummy.position)
-        group.position.x -= dummy.scale.x / 2
-        group.position.y += dummy.scale.y / 2
-
-        //group.userData.el = rect.el
-        mpos.var.group.add(group)
-      }
-
-      //const promise = new Promise((resolve, reject) => {
-      //let res
-
       // instantiate a loader: File, Audio, Object...
       // todo: url query string pramaters
-      let type = file ? file.match(/\.[0-9a-z]+$/i) : false
-      let handler = type && dummy && group ? type[0].toUpperCase() : 'File'
-      console.log(type, handler)
-      const loader = type === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
+      let handler = file ? file.match(/\.[0-9a-z]+$/i) : false
+      handler = handler && dummy && group ? handler[0].toUpperCase() : 'File'
+      console.log(handler)
+      const loader = handler === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
 
       if (file && handler !== '.JPG') {
         loader.load(
           file,
           function (data) {
-            console.log('data', data)
+            //console.log('data', data)
             //res = data
             if (handler === 'File') {
               // set attribute
@@ -1119,11 +1112,8 @@ const mpos = {
                   group.add(mesh)
                 }
               }
-
-              fitting(dummy, group)
-              group.name = 'SVG'
-              // res = group
-              mpos.ux.render()
+              group.name = handler
+              mpos.add.fit(dummy, group)
             }
           },
           // called when loading is in progresses
@@ -1136,80 +1126,73 @@ const mpos = {
           }
         )
       } else {
-        if (mpos.var.cv) {
-          console.log('loader has cv', mpos.var.cv)
-
-          // todo: load order
-          const unset = { transform: 'initial', margin: 0 }
-          // unset...
-          toJpeg(rect.el, { style: unset, quality: 0.5 })
-            .then(function (dataUrl) {
-              const img = new Image()
-              img.onload = function () {
-                mpos.add.opencv(img, group)
-
-                fitting(dummy, group)
-                group.name = 'OPENCV'
-                // res = group
-                //  resolve(res)
-                //  reject('OpenCV slow')
-                mpos.ux.render()
-              }
-
-              img.src = dataUrl
-            })
-            .catch(function (e) {
-              // src problem...
-              console.log('error', e.target)
-            })
-        } else {
-          if (mpos.var.cv === undefined) {
-            mpos.var.cv = false
-            // OPENCV WASM
-            //huningxin.github.io/opencv.js/samples/index.html
-            const script = document.createElement('script')
-            script.type = 'text/javascript'
-            script.async = true
-            script.onload = function () {
-              // remote script has loaded
-              console.log('OPENCV')
-              mpos.var.cv = true
-            }
-            script.src = './opencv.js?t=' + Date.now()
-            document.getElementsByTagName('head')[0].appendChild(script)
+        if (mpos.var.cv === undefined) {
+          mpos.var.cv = false
+          // OPENCV WASM
+          //huningxin.github.io/opencv.js/samples/index.html
+          const script = document.createElement('script')
+          script.type = 'text/javascript'
+          script.async = true
+          script.onload = function () {
+            // remote script has loaded
+            console.log('OpenCV')
+            mpos.var.cv = true
           }
+          script.src = './opencv.js?t=' + Date.now()
+          document.getElementsByTagName('head')[0].appendChild(script)
         }
+
+        requestIdleCallback(
+          function () {
+            if (mpos.var.cv) {
+              const unset = { transform: 'initial', margin: 0 }
+              // unset...
+              toSvg(rect.el, { style: unset, quality: 0.5 })
+                .then(function (dataUrl) {
+                  let img = new Image()
+                  img.onload = function () {
+                    mpos.add.opencv(img, group, dummy)
+                    dataUrl = img = null
+                  }
+                  img.src = dataUrl
+                })
+                .catch(function (e) {
+                  // src problem...
+                  console.log('error', e.target)
+                })
+            }
+          },
+          { time: 5000 }
+        )
       }
-      // })
-
-      // promise.then(function (res) {
-      //   console.log('loader', res)
-
-      //  return res
-      // })
     },
-    opencv: function (img, group) {
+    opencv: function (img, group, dummy) {
+      console.log('opencv')
+
       let Module = {
+        use: { dummy: dummy, group: group, img: img, kmeans: {} },
         wasmBinaryFile: './opencv_js.wasm',
         preRun: [
           function (e) {
-            console.log('pre-run', e)
+            //console.log('pre-run', e)
           }
         ],
         _main: function (c, v, o) {
           console.log('_main', c, v, o)
           const cv = this
+          // WASM crash?
+          //const test = cv.imread('src')
+          //cv.imshow('dst', test)
+          //test.delete()
+
+          // use variables
+          let img = this.use.img
+          let kmeans = this.use.kmeans
+          const group = this.use.group
+          const dummy = this.use.dummy
+
           //
-          let src2 = cv.imread('src')
-          cv.imshow('dst', src2)
-          src2.delete()
-
-          const kmeans = {}
-
-          return
-          console.log(cv, img, group, kmeans)
-          // _main: get [img, kmeans] in/out
-          // _main or postRun: get kmeans to THREE.Shape to THREE.Group
+          //return
           try {
             const src = cv.imread(img)
             const max = 16
@@ -1340,24 +1323,9 @@ const mpos = {
             src.delete()
 
             console.log('kmeans', kmeans)
-          } catch (error) {
-            console.warn(error)
-          }
-        },
-        postRun: [
-          function (e) {
-            console.log('post-run', e)
-          }
-        ]
-      }
 
-      /*
-      
-          */
-
-      /*
-          
-            const kmeans = mpos.var.kmeans
+            //
+            // THREE Shapes
 
             const material = new THREE.MeshBasicMaterial()
             Object.values(kmeans).forEach(function (label) {
@@ -1391,7 +1359,21 @@ const mpos = {
               const mesh = new THREE.Mesh(mergedBoxes, mat)
               group.add(mesh)
             })
-            */
+
+            group.name = 'OPENCV'
+            mpos.add.fit(dummy, group)
+
+            kmeans = img = null
+          } catch (error) {
+            console.warn(error)
+          }
+        },
+        postRun: [
+          function (e) {
+            console.log('post-run', e)
+          }
+        ]
+      }
 
       opencv(Module)
     }
