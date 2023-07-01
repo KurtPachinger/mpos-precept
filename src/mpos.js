@@ -177,14 +177,22 @@ const mpos = {
   },
   ux: {
     reflow: function (e) {
+      // balance lag of input versus update
       const vars = mpos.var
       const grade = vars.group.userData.grade
       const queue = grade.r_.queue
 
       function enqueue(idx) {
+        if (queue.indexOf(idx) === -1) {
+          // immediately add unique
+          queue.push(idx)
+        }
         requestIdleCallback(
           function () {
-            mpos.precept.update(grade, idx)
+            if (queue.length) {
+              // debounce concurrent updates
+              mpos.precept.update(grade, idx)
+            }
           },
           { time: 125 }
         )
@@ -193,7 +201,6 @@ const mpos = {
       if (e.isIntersecting) {
         // enqueue visible element
         const idx = e.target.getAttribute('data-idx')
-        queue.push(idx)
         enqueue(idx)
       } else {
         // throttle event
@@ -214,9 +221,6 @@ const mpos = {
           } else if (e.type === 'scroll') {
             // soft-update visible area
             const idx = vars.opt.inPolar === 4 ? 'trim' : 'move'
-            if (queue.indexOf(idx) === -1) {
-              queue.push(idx)
-            }
 
             enqueue(idx)
           }
@@ -238,10 +242,10 @@ const mpos = {
       vars.renderer.render(vars.scene, vars.camera)
       vars.rendererCSS.render(vars.scene, vars.camera)
     },
-    raycast: function (event) {
+    raycast: function (e) {
       const vars = mpos.var
-      vars.pointer.x = (event.clientX / window.innerWidth) * 2 - 1
-      vars.pointer.y = -(event.clientY / window.innerHeight) * 2 + 1
+      vars.pointer.x = (e.clientX / window.innerWidth) * 2 - 1
+      vars.pointer.y = -(e.clientY / window.innerHeight) * 2 + 1
 
       if (vars.group) {
         const grade = vars.group.userData.grade
@@ -405,9 +409,12 @@ const mpos = {
               // HARD-update
               opts.array = Object.keys(r_atlas.rects)
             }
+
             opts.idx = opts.array.length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
             opts.step = opts.step || grade.maxRes / grade.cells
+            //
+            opts.paint = opts.idx >= 16 ? [opts.idx, Math.floor(opts.idx / 2)] : []
           }
 
           function next() {
@@ -417,10 +424,16 @@ const mpos = {
             }
 
             if (opts.idx > 0) {
+              // FPO FP FCP LCP: [0%, 50%]
+              if (opts.paint.indexOf(opts.idx) > -1) {
+                console.log('...paint')
+                transforms(grade, true)
+              }
+
               opts.idx--
-              setTimeout(() => {
-                atlas(grade, opts)
-              }, 0)
+              //setTimeout(() => {
+              atlas(grade, opts)
+              //}, 0)
             } else {
               if (!dataIdx) {
                 // atlas ends with blank key
@@ -468,10 +481,6 @@ const mpos = {
           }
         }
 
-        if (!dataIdx) {
-          // HARD-update: FCP FPO
-          transforms(grade, true)
-        }
         atlas(grade)
 
         function transforms(grade, paint) {
@@ -547,10 +556,11 @@ const mpos = {
             instanced.userData.shader.userData.t.needsUpdate = true
 
             // UI Atlas
-            const link = document.querySelector('#atlas a')
+            const atlas = document.querySelector('#atlas canvas')
             const name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
-            link.title = link.download = name
-            link.href = grade.canvas.toDataURL()
+            //const link = atlas.querySelector('a')
+            atlas.title = name
+            //link.href = grade.canvas.toDataURL('image/jpeg', 0.5)
             //link.appendChild(grade.canvas)
             //document.getElementById('atlas').appendChild(link)
 
@@ -1147,7 +1157,7 @@ const mpos = {
             if (mpos.var.cv) {
               const unset = { transform: 'initial', margin: 0 }
               // unset...
-              toSvg(rect.el, { style: unset, quality: 0.5 })
+              toSvg(rect.el, { style: unset, quality: 0.8 })
                 .then(function (dataUrl) {
                   let img = new Image()
                   img.onload = function () {
