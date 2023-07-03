@@ -413,36 +413,36 @@ const mpos = {
             opts.idx = opts.array.length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
             opts.step = opts.step || grade.maxRes / grade.cells
-            //
-            opts.paint = opts.idx >= 16 ? [opts.idx, Math.floor(opts.idx / 2)] : []
+            // FPO FP FCP LCP: [0%, 50%]
+            opts.paint = opts.idx >= 8 ? [opts.idx, Math.floor(opts.idx / 2)] : []
           }
 
           function next() {
-            if (dataIdx) {
-              // decrement queue
-              opts.array = opts.array.splice(0, opts.idx)
-            }
-
-            if (opts.idx > 0) {
-              // FPO FP FCP LCP: [0%, 50%]
-              if (opts.paint.indexOf(opts.idx) > -1) {
-                console.log('...paint')
-                transforms(grade, true)
+            setTimeout(() => {
+              if (dataIdx) {
+                // decrement queue
+                opts.array = opts.array.splice(0, opts.idx)
               }
 
-              opts.idx--
-              //setTimeout(() => {
-              atlas(grade, opts)
-              //}, 0)
-            } else {
-              if (!dataIdx) {
-                // atlas ends with blank key
-                opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
-                opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
+              if (opts.idx > 0) {
+                if (opts.paint.indexOf(opts.idx) > -1) {
+                  console.log('...paint')
+                  transforms(grade, true)
+                }
+
+                opts.idx--
+
+                atlas(grade, opts)
+              } else {
+                if (!dataIdx) {
+                  // atlas ends with blank key
+                  opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
+                  opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
+                }
+                // complete
+                transforms(grade)
               }
-              // complete
-              transforms(grade)
-            }
+            }, 0)
           }
 
           const rect = r_atlas.rects[opts.array[opts.idx]]
@@ -550,11 +550,14 @@ const mpos = {
           instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
           instanced.computeBoundingSphere()
 
-          if (!paint) {
-            // update shader
-            instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
-            instanced.userData.shader.userData.t.needsUpdate = true
+          // update shader
+          instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
+          instanced.userData.shader.userData.t.needsUpdate = true
 
+          //
+          mpos.ux.render()
+
+          if (!paint) {
             // UI Atlas
             const atlas = document.querySelector('#atlas canvas')
             const name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
@@ -567,7 +570,6 @@ const mpos = {
             resolve(grade)
             reject(grade)
           } else {
-            //mpos.ux.render()
           }
         }
       })
@@ -575,7 +577,7 @@ const mpos = {
       promise.catch((e) => console.log('error', e))
       promise.then(function (res) {
         console.log('update', res)
-        mpos.ux.render()
+
         return promise
       })
     }
@@ -1178,9 +1180,9 @@ const mpos = {
     },
     opencv: function (img, group, dummy) {
       console.log('opencv')
-
+      let kmeans = {}
       let Module = {
-        use: { dummy: dummy, group: group, img: img, kmeans: {} },
+        _stdin: { img: img, kmeans: kmeans },
         wasmBinaryFile: './opencv_js.wasm',
         preRun: [
           function (e) {
@@ -1196,10 +1198,8 @@ const mpos = {
           //test.delete()
 
           // use variables
-          let img = this.use.img
-          let kmeans = this.use.kmeans
-          const group = this.use.group
-          const dummy = this.use.dummy
+          let img = this._stdin.img
+          let kmeans = this._stdin.kmeans
 
           //
           //return
@@ -1332,11 +1332,16 @@ const mpos = {
 
             src.delete()
 
-            console.log('kmeans', kmeans)
-
+            img = null
+          } catch (error) {
+            console.warn(error)
+          }
+        },
+        postRun: [
+          function (e) {
+            console.log('post-run', e)
             //
             // THREE Shapes
-
             const material = new THREE.MeshBasicMaterial()
             Object.values(kmeans).forEach(function (label) {
               const contours = label.contours
@@ -1370,21 +1375,16 @@ const mpos = {
               group.add(mesh)
             })
 
+            console.log('kmeans', kmeans)
+            kmeans = null
             group.name = 'OPENCV'
             mpos.add.fit(dummy, group)
-
-            kmeans = img = null
-          } catch (error) {
-            console.warn(error)
-          }
-        },
-        postRun: [
-          function (e) {
-            console.log('post-run', e)
           }
         ]
       }
 
+      // run Module _main, with vars monkeyed into _stdin
+      // i.e. _stdin: { ivy: college, peep: blackbox }
       opencv(Module)
     }
   }

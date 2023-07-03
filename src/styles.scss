@@ -7,7 +7,9 @@
   --med: rgba( 128, 128, 128, 0.125 );
 }
 
-
+html, body {
+  height: 100%;
+}
 #tools {
   // RESET
   &, h2, h3, p, form {
