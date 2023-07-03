@@ -11,6 +11,7 @@ html, body {
   height: 100%;
 }
 #tools {
+  * { box-sizing: border-box; }
   // RESET
   &, h2, h3, p, form {
     margin: 0;
@@ -82,6 +83,13 @@ table tr, li, summary {
 img {
   width: 100%;
   height: auto;
+}
+
+#Lena{
+ animation: Lena 15s linear infinite; 
+}
+@keyframes Lena {
+  100% { transform: rotate(360deg); }
 }
 
 // containers

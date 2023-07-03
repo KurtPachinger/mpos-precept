@@ -5,17 +5,17 @@ import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { toSvg, toJpeg } from 'html-to-image'
+import { toSvg, toJpeg, toPng } from 'html-to-image'
 
 const mpos = {
   var: {
     opt: {
-      dispose: true,
       selector: 'body',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 2,
       arc: false,
+      animate: false,
       update: function () {
         mpos.add.dom(this.selector, this.depth)
       }
@@ -129,7 +129,7 @@ const mpos = {
     vars.controls = new MapControls(vars.camera, vars.rendererCSS.domElement)
     vars.controls.screenSpacePanning = true
 
-    const halfHeight = -((vars.fov.h / 2) * (1 / vars.fov.max))
+    const halfHeight = -(vars.fov.h / 2)
     vars.camera.position.setY(halfHeight + 0.125)
     vars.controls.target.setY(halfHeight)
     vars.controls.update()
@@ -617,8 +617,7 @@ const mpos = {
       }
 
       // OLD group
-      const dispose = vars.opt.dispose ? selector : false
-      mpos.add.old(dispose)
+      mpos.add.old(selector)
       // NEW group
       vars.group = new THREE.Group()
       vars.group.name = selector
@@ -1021,10 +1020,7 @@ const mpos = {
     },
     old: function (selector) {
       // dispose of scene and release listeners
-      let groups
-      if (selector) {
-        groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
-      }
+      let groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
 
       if (groups && groups.length) {
         for (let g = groups.length - 1; g >= 0; g--) {
@@ -1095,7 +1091,7 @@ const mpos = {
       console.log(handler)
       const loader = handler === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
 
-      if (file && handler !== '.JPG') {
+      if (file && (handler === '.SVG' || handler === 'File')) {
         loader.load(
           file,
           function (data) {
@@ -1159,13 +1155,14 @@ const mpos = {
             if (mpos.var.cv) {
               const unset = { transform: 'initial', margin: 0 }
               // unset...
-              toSvg(rect.el, { style: unset, quality: 0.8 })
+              toPng(rect.el, { style: unset })
                 .then(function (dataUrl) {
                   let img = new Image()
                   img.onload = function () {
                     mpos.add.opencv(img, group, dummy)
                     dataUrl = img = null
                   }
+                  // todo: animated gif?
                   img.src = dataUrl
                 })
                 .catch(function (e) {
@@ -1179,18 +1176,17 @@ const mpos = {
       }
     },
     opencv: function (img, group, dummy) {
-      console.log('opencv')
       let kmeans = {}
       let Module = {
         _stdin: { img: img, kmeans: kmeans },
         wasmBinaryFile: './opencv_js.wasm',
         preRun: [
           function (e) {
-            //console.log('pre-run', e)
+            console.log('opencv')
           }
         ],
         _main: function (c, v, o) {
-          console.log('_main', c, v, o)
+          //console.log('_main', c, v, o)
           const cv = this
           // WASM crash?
           //const test = cv.imread('src')
@@ -1204,10 +1200,16 @@ const mpos = {
           //
           //return
           try {
+            const clusters = 8
+            function release(mat) {
+              //cv.setTo([0, 0, 0, 0]) // <- pre-optimizes kmeans result to {}
+              cv.resize(mat, mat, new cv.Size(1, 1), 0, 0, cv.INTER_NEAREST)
+              mat.delete()
+            }
+
             const src = cv.imread(img)
-            const max = 16
             const pyr = src.clone()
-            cv.resize(pyr, pyr, new cv.Size(max, pyr.rows * (max / pyr.cols)), 0, 0, cv.INTER_NEAREST)
+            cv.resize(pyr, pyr, new cv.Size(clusters, pyr.cols * (clusters / pyr.cols)), 0, 0, cv.INTER_AREA)
             // KMEANS
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
             for (let y = 0; y < pyr.rows; y++) {
@@ -1217,16 +1219,20 @@ const mpos = {
                 }
               }
             }
-            const lim = 8
+            //pyr.delete()
+            release(pyr)
+
             const labels = new cv.Mat()
             const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 4, 0.5)
             const centers = new cv.Mat()
-            cv.kmeans(sample, lim, labels, criteria, 4, cv.KMEANS_PP_CENTERS, centers)
+            cv.kmeans(sample, clusters, labels, criteria, 4, cv.KMEANS_PP_CENTERS, centers)
+            //sample.delete()
+            release(sample)
 
-            // kmeans sort
+            // kmeans colors
             for (let x = 0; x < labels.size().height; x++) {
               const idx = labels.intAt(x, 0)
-              // initial pointer
+              // set key
               if (kmeans[idx] === undefined) {
                 // color RGB
                 const redChan = centers.floatAt(idx, 0)
@@ -1237,7 +1243,7 @@ const mpos = {
                 const hsv = new cv.Mat(1, 1, cv.CV_8UC3)
                 hsv.setTo([redChan, greenChan, blueChan, 255])
                 cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV)
-                // color for kmeans label
+                // color out
                 kmeans[idx] = {
                   count: 0,
                   alpha: alpha,
@@ -1258,21 +1264,19 @@ const mpos = {
               kmeans[idx].count++
             }
 
-            pyr.delete()
-            sample.delete()
             labels.delete()
             centers.delete()
 
             // INRANGE
             const pad = 16
             Object.keys(kmeans).forEach(function (key) {
-              let label = kmeans[key]
+              const label = kmeans[key]
               const rgb = label.rgb
               label.contours = []
               // remove transparent
               if (label.alpha === 0 && rgb.r === 0 && rgb.g === 0 && rgb.b === 0) {
                 delete kmeans[key]
-                return
+                // return
               }
 
               // range ...use HSV!
@@ -1303,7 +1307,8 @@ const mpos = {
                 cv.approxPolyDP(cnt, tmp, 0, true)
                 poly.push_back(tmp)
                 cnt.delete()
-                tmp.delete()
+                //tmp.delete()
+                release(tmp)
               }
 
               // push xy positions
@@ -1313,25 +1318,31 @@ const mpos = {
                 const area = Math.sqrt(cv.contourArea(cnt))
                 const small = area / ((src.rows + src.cols) / 2) < 0.025
                 if (!small) {
-                  label.contours.push(cnt.data32S)
+                  // Int32Array pointers memory?
+                  label.contours.push(Array.from(cnt.data32S))
                 }
+                cnt.delete()
               }
               // path
               contours.delete()
               poly.delete()
-              hierarchy.delete()
+              //hierarchy.delete()
+              release(hierarchy)
               // color
-              lo.delete()
-              hi.delete()
-              mask.delete()
+              //lo.delete()
+              //hi.delete()
+              //mask.delete()
+              release(lo)
+              release(hi)
+              release(mask)
 
               if (!label.contours.length) {
                 delete kmeans[key]
               }
             })
 
-            src.delete()
-
+            //src.delete()
+            release(src)
             img = null
           } catch (error) {
             console.warn(error)
@@ -1339,9 +1350,9 @@ const mpos = {
         },
         postRun: [
           function (e) {
-            console.log('post-run', e)
-            //
+            console.log('kmeans', kmeans)
             // THREE Shapes
+
             const material = new THREE.MeshBasicMaterial()
             Object.values(kmeans).forEach(function (label) {
               const contours = label.contours
@@ -1374,9 +1385,8 @@ const mpos = {
               const mesh = new THREE.Mesh(mergedBoxes, mat)
               group.add(mesh)
             })
-
-            console.log('kmeans', kmeans)
             kmeans = null
+
             group.name = 'OPENCV'
             mpos.add.fit(dummy, group)
           }
