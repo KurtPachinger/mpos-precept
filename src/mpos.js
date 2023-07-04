@@ -15,7 +15,7 @@ const mpos = {
       depth: 16,
       inPolar: 2,
       arc: false,
-      animate: false,
+      frame: false,
       update: function () {
         mpos.add.dom(this.selector, this.depth)
       }
@@ -83,6 +83,7 @@ const mpos = {
       }
       `
     }),
+    mat_shape: new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
     raycaster: new THREE.Raycaster(),
     pointer: new THREE.Vector2()
   },
@@ -577,6 +578,14 @@ const mpos = {
       promise.catch((e) => console.log('error', e))
       promise.then(function (res) {
         console.log('update', res)
+
+        //
+        if (mpos.var.opt.frame) {
+          grade.r_.queue.push('frame')
+          setTimeout(() => {
+            mpos.precept.update(grade, 'frame')
+          }, 1000)
+        }
 
         return promise
       })
@@ -1209,7 +1218,7 @@ const mpos = {
 
             const src = cv.imread(img)
             const pyr = src.clone()
-            cv.resize(pyr, pyr, new cv.Size(clusters, pyr.cols * (clusters / pyr.cols)), 0, 0, cv.INTER_AREA)
+            cv.resize(pyr, pyr, new cv.Size(2 * clusters, pyr.cols * ((2 * clusters) / pyr.cols)), 0, 0, cv.INTER_AREA)
             // KMEANS
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
             for (let y = 0; y < pyr.rows; y++) {
@@ -1223,9 +1232,9 @@ const mpos = {
             release(pyr)
 
             const labels = new cv.Mat()
-            const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 4, 0.5)
+            const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 16, 0.8)
             const centers = new cv.Mat()
-            cv.kmeans(sample, clusters, labels, criteria, 4, cv.KMEANS_PP_CENTERS, centers)
+            cv.kmeans(sample, clusters, labels, criteria, 1, cv.KMEANS_PP_CENTERS, centers)
             //sample.delete()
             release(sample)
 
@@ -1234,31 +1243,15 @@ const mpos = {
               const idx = labels.intAt(x, 0)
               // set key
               if (kmeans[idx] === undefined) {
-                // color RGB
-                const redChan = centers.floatAt(idx, 0)
-                const greenChan = centers.floatAt(idx, 1)
-                const blueChan = centers.floatAt(idx, 2)
-                const alpha = centers.floatAt(idx, 3)
-                // color HSV
-                const hsv = new cv.Mat(1, 1, cv.CV_8UC3)
-                hsv.setTo([redChan, greenChan, blueChan, 255])
-                cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV)
-                // color out
                 kmeans[idx] = {
                   count: 0,
-                  alpha: alpha,
-                  rgb: {
-                    r: Math.round(redChan),
-                    g: Math.round(greenChan),
-                    b: Math.round(blueChan)
-                  },
-                  hsv: {
-                    h: hsv.ucharPtr(0, 0)[0],
-                    s: hsv.ucharPtr(0, 0)[1],
-                    v: hsv.ucharPtr(0, 0)[2]
+                  rgba: {
+                    r: Math.round(centers.floatAt(idx, 0)),
+                    g: Math.round(centers.floatAt(idx, 1)),
+                    b: Math.round(centers.floatAt(idx, 2)),
+                    a: Math.round(centers.floatAt(idx, 3))
                   }
                 }
-                hsv.delete()
               }
               // kmeans label count
               kmeans[idx].count++
@@ -1271,17 +1264,19 @@ const mpos = {
             const pad = 16
             Object.keys(kmeans).forEach(function (key) {
               const label = kmeans[key]
-              const rgb = label.rgb
-              label.contours = []
+              const rgba = label.rgba
               // remove transparent
-              if (label.alpha === 0 && rgb.r === 0 && rgb.g === 0 && rgb.b === 0) {
+              if (label.rgba.a === 0) {
                 delete kmeans[key]
-                // return
+                return
               }
 
               // range ...use HSV!
-              const lo = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r - pad, rgb.g - pad, rgb.b - pad, 1])
-              const hi = new cv.Mat(src.rows, src.cols, src.type(), [rgb.r + pad, rgb.g + pad, rgb.b + pad, 255])
+              //H: 0-179, S: 0-255, V: 0-255
+              const lo = src.clone()
+              lo.setTo([rgba.r * 0.5, rgba.g * 0.5, rgba.b * 0.5, 1])
+              const hi = src.clone()
+              hi.setTo([(rgba.r + 255) / 2, (rgba.g + 255) / 2, (rgba.b + 255) / 2, 255])
               const mask = new cv.Mat.zeros(src.rows, src.cols, 0)
 
               // mask or fill
@@ -1290,39 +1285,54 @@ const mpos = {
               // CONTOURS
               const contours = new cv.MatVector()
               const hierarchy = new cv.Mat()
-              cv.findContours(
-                mask,
-                contours,
-                hierarchy,
-                cv.RETR_CCOMP, //cv.RETR_EXTERNAL, cv.RETR_CCOMP
-                cv.CHAIN_APPROX_SIMPLE
-              )
+              cv.findContours(mask, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_TC89_L1)
 
               // approximate polygon
+
               const poly = new cv.MatVector()
               for (let j = 0; j < contours.size(); ++j) {
                 const tmp = new cv.Mat()
                 const cnt = contours.get(j)
                 // simplify
-                cv.approxPolyDP(cnt, tmp, 0, true)
+                cv.approxPolyDP(cnt, tmp, 0.25, true)
                 poly.push_back(tmp)
                 cnt.delete()
                 //tmp.delete()
                 release(tmp)
               }
 
+              //console.log('hierarchy', hierarchy.size())
               // push xy positions
+              label.retr = {}
               for (let j = 0; j < contours.size(); ++j) {
                 const cnt = poly.get(j)
                 // skip artefact
-                const area = Math.sqrt(cv.contourArea(cnt))
-                const small = area / ((src.rows + src.cols) / 2) < 0.025
-                if (!small) {
+                const area = cv.contourArea(cnt)
+                const perc = area / (src.rows * src.cols)
+                if (perc > 0.001) {
                   // Int32Array pointers memory?
-                  label.contours.push(Array.from(cnt.data32S))
+                  const points = Array.from(cnt.data32S)
+
+                  //stackoverflow.com/questions/53102728/
+                  // [ next, prev, firstChild, parent ]
+                  const hier = Array.from(hierarchy.intPtr(0, j))
+                  const parent = hier[3]
+                  const rel = parent >= 0 ? parent : j
+                  if (label.retr[rel] === undefined) {
+                    label.retr[rel] = { points: null, holes: [] }
+                  }
+                  const retr = label.retr[rel]
+
+                  if (parent >= 0) {
+                    // hole
+                    retr.holes.push(points)
+                  } else {
+                    retr.points = points
+                  }
                 }
                 cnt.delete()
               }
+
               // path
               contours.delete()
               poly.delete()
@@ -1336,7 +1346,7 @@ const mpos = {
               release(hi)
               release(mask)
 
-              if (!label.contours.length) {
+              if (!Object.keys(label.retr).length) {
                 delete kmeans[key]
               }
             })
@@ -1353,17 +1363,14 @@ const mpos = {
             console.log('kmeans', kmeans)
             // THREE Shapes
 
-            const material = new THREE.MeshBasicMaterial()
             Object.values(kmeans).forEach(function (label) {
-              const contours = label.contours
-              //console.log('contours', contours)
-
-              var mergedGeoms = []
-              for (let i = 0; i < contours.length; i++) {
-                const path = contours[i]
+              let mergedGeoms = []
+              Object.values(label.retr).forEach(function (retr) {
+                const points = retr.points
                 const poly = new THREE.Shape()
-                for (let j = 0; j < path.length; j += 2) {
-                  const point = { x: path[j], y: path[j + 1] }
+
+                for (let j = 0; j < points.length; j += 2) {
+                  const point = { x: points[j], y: points[j + 1] }
                   //console.log('point', point)
                   if (j === 0) {
                     poly.moveTo(point.x, point.y)
@@ -1371,15 +1378,33 @@ const mpos = {
                     poly.lineTo(point.x, point.y)
                   }
                 }
+
+                poly.holes = []
+                // array of paths that define holes in the shape
+                for (let k = 0; k < retr.holes.length; k++) {
+                  const path = new THREE.Path()
+                  const hole = retr.holes[k]
+                  for (let l = 0; l < hole.length; l += 2) {
+                    let pt = { x: hole[l], y: hole[l + 1] }
+                    if (l === 0) {
+                      path.moveTo(pt.x, pt.y)
+                    } else {
+                      path.lineTo(pt.x, pt.y)
+                    }
+                  }
+                  poly.holes.push(path)
+                }
+
                 const geometry = new THREE.ShapeGeometry(poly)
                 mergedGeoms.push(geometry)
-              }
+              })
 
               // kmeans label color
-              const rgb = label.rgb
-              const color = new THREE.Color('rgb(' + [rgb.r, rgb.g, rgb.b].join(',') + ')')
-              const mat = material.clone()
+              const rgba = label.rgba
+              const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
+              const mat = mpos.var.mat_shape.clone()
               mat.color = color
+              mat.opacity = rgba.a / 255
 
               const mergedBoxes = mergeGeometries(mergedGeoms)
               const mesh = new THREE.Mesh(mergedBoxes, mat)
