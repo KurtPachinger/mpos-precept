@@ -175,26 +175,11 @@ const mpos = {
       const controller = gui.add(vars.opt, key, ...param)
 
       if (key === 'frame') {
-        // handler
-        mpos.ux.frame = function () {
-          vars.frame = setTimeout(function () {
-            console.log(vars.frame)
-            const grade = mpos.var.group.userData.grade
-            const queue = grade.r_.queue
-            if (queue.indexOf('frame') === -1) {
-              grade.r_.queue.push('frame')
-            }
-            mpos.precept.update(grade, 'frame')
-            mpos.ux.frame()
-          }, 1000)
-        }
-
-        //
         controller.onFinishChange(function (v) {
           if (v) {
-            mpos.ux.frame()
+            mpos.ux.reflow({ type: key })
           } else {
-            clearTimeout(vars.frame)
+            clearTimeout(vars[key])
           }
         })
       }
@@ -213,15 +198,22 @@ const mpos = {
           // immediately add unique
           queue.push(idx)
         }
-        requestIdleCallback(
-          function () {
-            if (queue.length) {
-              // debounce concurrent updates
-              mpos.precept.update(grade, idx)
-            }
-          },
-          { time: 125 }
-        )
+
+        if (idx === 'frame') {
+          // immediate schedule
+          mpos.ux.reflow({ type: idx })
+          mpos.precept.update(grade, idx)
+        } else {
+          // debounce concurrent
+          requestIdleCallback(
+            function () {
+              if (queue.length) {
+                mpos.precept.update(grade, idx)
+              }
+            },
+            { time: 125 }
+          )
+        }
       }
 
       if (e.isIntersecting) {
@@ -229,9 +221,11 @@ const mpos = {
         const idx = e.target.getAttribute('data-idx')
         enqueue(idx)
       } else {
-        // throttle event
-        clearTimeout(vars.reflow)
-        vars.reflow = setTimeout(function () {
+        // event schedule or throttle
+        const [timer, timeout] = e.type === 'frame' ? ['frame', 1000] : ['reflow', 250]
+
+        clearTimeout(vars[timer])
+        vars[timer] = setTimeout(function () {
           if (e.type === 'resize') {
             // ...recalculate inPolar and update?
             vars.fov.w = window.innerWidth
@@ -244,13 +238,15 @@ const mpos = {
             vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
 
             mpos.ux.render()
-          } else if (e.type === 'scroll') {
-            // soft-update visible area
-            const idx = vars.opt.inPolar === 4 ? 'trim' : 'move'
-
+          } else {
+            let idx = e.type
+            if (e.type === 'scroll') {
+              // update visibility?
+              idx = vars.opt.inPolar === 4 ? 'trim' : 'move'
+            }
             enqueue(idx)
           }
-        }, 250)
+        }, timeout)
       }
     },
     render: function () {
