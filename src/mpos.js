@@ -1262,7 +1262,7 @@ const mpos = {
 
               // INRANGE
               const mask = new cv.Mat.zeros(src.rows, src.cols, 0)
-              lo.setTo([rgba.r * 0.5, rgba.g * 0.5, rgba.b * 0.5, 1])
+              lo.setTo([rgba.r / 2, rgba.g / 2, rgba.b / 2, 1])
               hi.setTo([(rgba.r + 255) / 2, (rgba.g + 255) / 2, (rgba.b + 255) / 2, 255])
               cv.inRange(src, lo, hi, mask)
 
@@ -1331,58 +1331,66 @@ const mpos = {
         },
         postRun: [
           function (e) {
-            console.log('cv', kmeans)
-            // THREE.Shape from label contours
-            Object.values(kmeans).forEach(function (label) {
-              let mergedGeoms = []
-              Object.values(label.retr).forEach(function (retr) {
-                // hierarchy shape
-                const points = retr.shape
-                const poly = new THREE.Shape()
-                for (let p = 0; p < points.length; p += 2) {
-                  const pt = { x: points[p], y: points[p + 1] }
-                  if (p === 0) {
-                    poly.moveTo(pt.x, pt.y)
-                  } else {
-                    poly.lineTo(pt.x, pt.y)
-                  }
-                }
-                // hierarchy holes
-                poly.holes = []
-                for (let i = 0; i < retr.holes.length; i++) {
-                  const path = new THREE.Path()
-                  const hole = retr.holes[i]
-                  for (let p = 0; p < hole.length; p += 2) {
-                    let pt = { x: hole[p], y: hole[p + 1] }
-                    if (p === 0) {
-                      path.moveTo(pt.x, pt.y)
-                    } else {
-                      path.lineTo(pt.x, pt.y)
+            try {
+              console.log('cv', kmeans)
+              // THREE.Shape from label contours
+              Object.values(kmeans).forEach(function (label) {
+                let mergedGeoms = []
+                if (label.retr) {
+                  Object.values(label.retr).forEach(function (retr) {
+                    // hierarchy shape
+                    const points = retr.shape
+                    const poly = new THREE.Shape()
+                    for (let p = 0; p < points.length; p += 2) {
+                      const pt = { x: points[p], y: points[p + 1] }
+                      if (p === 0) {
+                        poly.moveTo(pt.x, pt.y)
+                      } else {
+                        poly.lineTo(pt.x, pt.y)
+                      }
                     }
-                  }
-                  poly.holes.push(path)
+                    // hierarchy holes
+                    poly.holes = []
+                    for (let i = 0; i < retr.holes.length; i++) {
+                      const path = new THREE.Path()
+                      const hole = retr.holes[i]
+                      for (let p = 0; p < hole.length; p += 2) {
+                        let pt = { x: hole[p], y: hole[p + 1] }
+                        if (p === 0) {
+                          path.moveTo(pt.x, pt.y)
+                        } else {
+                          path.lineTo(pt.x, pt.y)
+                        }
+                      }
+                      poly.holes.push(path)
+                    }
+                    // label contour
+                    let geometry = new THREE.ShapeGeometry(poly)
+                    geometry = mergeVertices(geometry)
+                    mergedGeoms.push(geometry)
+                  })
                 }
-                // label contour
-                let geometry = new THREE.ShapeGeometry(poly)
-                geometry = mergeVertices(geometry)
-                mergedGeoms.push(geometry)
+
+                if (mergedGeoms.length) {
+                  // label color
+                  const rgba = label.rgba
+                  const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
+                  const mat = mpos.var.mat_shape.clone()
+                  mat.color = color
+                  mat.opacity = rgba.a / 255
+                  // label contours
+                  const mergedBoxes = mergeGeometries(mergedGeoms)
+                  const mesh = new THREE.Mesh(mergedBoxes, mat)
+                  group.add(mesh)
+                }
               })
+              kmeans = null
 
-              // label color
-              const rgba = label.rgba
-              const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
-              const mat = mpos.var.mat_shape.clone()
-              mat.color = color
-              mat.opacity = rgba.a / 255
-              // label contours
-              const mergedBoxes = mergeGeometries(mergedGeoms)
-              const mesh = new THREE.Mesh(mergedBoxes, mat)
-              group.add(mesh)
-            })
-            kmeans = null
-
-            group.name = 'OPENCV'
-            mpos.add.fit(dummy, group)
+              group.name = 'OPENCV'
+              mpos.add.fit(dummy, group)
+            } catch (error) {
+              console.warn(error)
+            }
           }
         ]
       }
