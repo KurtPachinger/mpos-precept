@@ -4,7 +4,7 @@ import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { toSvg, toJpeg, toPng } from 'html-to-image'
 
 const mpos = {
@@ -1152,7 +1152,7 @@ const mpos = {
           script.async = true
           script.onload = function () {
             // remote script has loaded
-            console.log('OpenCV')
+            console.log('OpenCV.js')
             mpos.var.cv = true
           }
           script.src = './opencv.js?t=' + Date.now()
@@ -1191,23 +1191,15 @@ const mpos = {
         wasmBinaryFile: './opencv_js.wasm',
         preRun: [
           function (e) {
-            console.log('opencv')
+            //console.log('preRun')
           }
         ],
         _main: function (c, v, o) {
           //console.log('_main', c, v, o)
           const cv = this
-          // WASM crash?
-          //const test = cv.imread('src')
-          //cv.imshow('dst', test)
-          //test.delete()
-
-          // use variables
           let img = this._stdin.img
           let kmeans = this._stdin.kmeans
 
-          //
-          //return
           try {
             const clusters = 8
             function release(mat) {
@@ -1217,9 +1209,10 @@ const mpos = {
             }
 
             const src = cv.imread(img)
+
+            // KMEANS
             const pyr = src.clone()
             cv.resize(pyr, pyr, new cv.Size(2 * clusters, pyr.cols * ((2 * clusters) / pyr.cols)), 0, 0, cv.INTER_AREA)
-            // KMEANS
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
             for (let y = 0; y < pyr.rows; y++) {
               for (let x = 0; x < pyr.cols; x++) {
@@ -1228,20 +1221,17 @@ const mpos = {
                 }
               }
             }
-            //pyr.delete()
             release(pyr)
 
             const labels = new cv.Mat()
             const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 16, 0.8)
             const centers = new cv.Mat()
             cv.kmeans(sample, clusters, labels, criteria, 1, cv.KMEANS_PP_CENTERS, centers)
-            //sample.delete()
             release(sample)
 
             // kmeans colors
-            for (let x = 0; x < labels.size().height; x++) {
-              const idx = labels.intAt(x, 0)
-              // set key
+            for (let i = 0; i < labels.size().height; i++) {
+              const idx = labels.intAt(i, 0)
               if (kmeans[idx] === undefined) {
                 kmeans[idx] = {
                   count: 0,
@@ -1253,140 +1243,118 @@ const mpos = {
                   }
                 }
               }
-              // kmeans label count
               kmeans[idx].count++
             }
-
             labels.delete()
             centers.delete()
 
-            // INRANGE
-            const pad = 16
+            // inrange
+            const lo = src.clone()
+            const hi = src.clone()
             Object.keys(kmeans).forEach(function (key) {
               const label = kmeans[key]
               const rgba = label.rgba
-              // remove transparent
-              if (label.rgba.a === 0) {
+              // skip transparent
+              if (rgba.a === 0) {
                 delete kmeans[key]
                 return
               }
 
-              // range ...use HSV!
-              //H: 0-179, S: 0-255, V: 0-255
-              const lo = src.clone()
-              lo.setTo([rgba.r * 0.5, rgba.g * 0.5, rgba.b * 0.5, 1])
-              const hi = src.clone()
-              hi.setTo([(rgba.r + 255) / 2, (rgba.g + 255) / 2, (rgba.b + 255) / 2, 255])
+              // INRANGE
               const mask = new cv.Mat.zeros(src.rows, src.cols, 0)
-
-              // mask or fill
+              lo.setTo([rgba.r * 0.5, rgba.g * 0.5, rgba.b * 0.5, 1])
+              hi.setTo([(rgba.r + 255) / 2, (rgba.g + 255) / 2, (rgba.b + 255) / 2, 255])
               cv.inRange(src, lo, hi, mask)
 
               // CONTOURS
               const contours = new cv.MatVector()
+              const poly = new cv.MatVector()
               const hierarchy = new cv.Mat()
               cv.findContours(mask, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_TC89_L1)
+              release(mask)
 
-              // approximate polygon
-
-              const poly = new cv.MatVector()
-              for (let j = 0; j < contours.size(); ++j) {
+              // simplify path
+              for (let i = 0; i < contours.size(); ++i) {
                 const tmp = new cv.Mat()
-                const cnt = contours.get(j)
-                // simplify
+                const cnt = contours.get(i)
                 cv.approxPolyDP(cnt, tmp, 0.25, true)
                 poly.push_back(tmp)
                 cnt.delete()
-                //tmp.delete()
                 release(tmp)
               }
 
-              //console.log('hierarchy', hierarchy.size())
-              // push xy positions
+              // HIERARCHY
               label.retr = {}
-              for (let j = 0; j < contours.size(); ++j) {
-                const cnt = poly.get(j)
-                // skip artefact
+              for (let i = 0; i < contours.size(); ++i) {
+                const cnt = poly.get(i)
+                // minimum area
                 const area = cv.contourArea(cnt)
                 const perc = area / (src.rows * src.cols)
                 if (perc > 0.001) {
-                  // Int32Array pointers memory?
-                  const points = Array.from(cnt.data32S)
-
-                  //stackoverflow.com/questions/53102728/
-                  // [ next, prev, firstChild, parent ]
-                  const hier = Array.from(hierarchy.intPtr(0, j))
+                  // relationship
+                  const hier = Array.from(hierarchy.intPtr(0, i))
                   const parent = hier[3]
-                  const rel = parent >= 0 ? parent : j
+                  const rel = parent >= 0 ? parent : i
+                  // add shape or holes
                   if (label.retr[rel] === undefined) {
-                    label.retr[rel] = { points: null, holes: [] }
+                    label.retr[rel] = { shape: [], holes: [] }
                   }
                   const retr = label.retr[rel]
-
+                  const points = Array.from(cnt.data32S)
                   if (parent >= 0) {
-                    // hole
                     retr.holes.push(points)
                   } else {
-                    retr.points = points
+                    retr.shape = points
                   }
                 }
                 cnt.delete()
               }
-
               // path
               contours.delete()
               poly.delete()
-              //hierarchy.delete()
               release(hierarchy)
-              // color
-              //lo.delete()
-              //hi.delete()
-              //mask.delete()
-              release(lo)
-              release(hi)
-              release(mask)
 
               if (!Object.keys(label.retr).length) {
                 delete kmeans[key]
               }
             })
+            // inrange
+            release(lo)
+            release(hi)
 
-            //src.delete()
             release(src)
             img = null
+            // release memory: Int32Array, Mat, pointer...
           } catch (error) {
             console.warn(error)
           }
         },
         postRun: [
           function (e) {
-            console.log('kmeans', kmeans)
-            // THREE Shapes
-
+            console.log('cv', kmeans)
+            // THREE.Shape from label contours
             Object.values(kmeans).forEach(function (label) {
               let mergedGeoms = []
               Object.values(label.retr).forEach(function (retr) {
-                const points = retr.points
+                // hierarchy shape
+                const points = retr.shape
                 const poly = new THREE.Shape()
-
-                for (let j = 0; j < points.length; j += 2) {
-                  const point = { x: points[j], y: points[j + 1] }
-                  //console.log('point', point)
-                  if (j === 0) {
-                    poly.moveTo(point.x, point.y)
+                for (let p = 0; p < points.length; p += 2) {
+                  const pt = { x: points[p], y: points[p + 1] }
+                  if (p === 0) {
+                    poly.moveTo(pt.x, pt.y)
                   } else {
-                    poly.lineTo(point.x, point.y)
+                    poly.lineTo(pt.x, pt.y)
                   }
                 }
-
+                // hierarchy holes
                 poly.holes = []
-                // array of paths that define holes in the shape
-                for (let k = 0; k < retr.holes.length; k++) {
+                for (let i = 0; i < retr.holes.length; i++) {
                   const path = new THREE.Path()
-                  const hole = retr.holes[k]
-                  for (let l = 0; l < hole.length; l += 2) {
-                    let pt = { x: hole[l], y: hole[l + 1] }
-                    if (l === 0) {
+                  const hole = retr.holes[i]
+                  for (let p = 0; p < hole.length; p += 2) {
+                    let pt = { x: hole[p], y: hole[p + 1] }
+                    if (p === 0) {
                       path.moveTo(pt.x, pt.y)
                     } else {
                       path.lineTo(pt.x, pt.y)
@@ -1394,18 +1362,19 @@ const mpos = {
                   }
                   poly.holes.push(path)
                 }
-
-                const geometry = new THREE.ShapeGeometry(poly)
+                // label contour
+                let geometry = new THREE.ShapeGeometry(poly)
+                geometry = mergeVertices(geometry)
                 mergedGeoms.push(geometry)
               })
 
-              // kmeans label color
+              // label color
               const rgba = label.rgba
               const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
               const mat = mpos.var.mat_shape.clone()
               mat.color = color
               mat.opacity = rgba.a / 255
-
+              // label contours
               const mergedBoxes = mergeGeometries(mergedGeoms)
               const mesh = new THREE.Mesh(mergedBoxes, mat)
               group.add(mesh)
