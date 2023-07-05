@@ -54,6 +54,7 @@ a, img, obj, span {
     height: 100%;
   }
   #css3d, canvas[data-engine] {
+    cursor: crosshair;
     position: fixed;
   }
 

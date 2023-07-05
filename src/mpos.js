@@ -172,7 +172,32 @@ const mpos = {
       if (key === 'depth') param = [0, 32, 1]
       if (key === 'inPolar') param = [1, 4, 1]
 
-      gui.add(vars.opt, key, ...param)
+      const controller = gui.add(vars.opt, key, ...param)
+
+      if (key === 'frame') {
+        // handler
+        mpos.ux.frame = function () {
+          vars.frame = setTimeout(function () {
+            console.log(vars.frame)
+            const grade = mpos.var.group.userData.grade
+            const queue = grade.r_.queue
+            if (queue.indexOf('frame') === -1) {
+              grade.r_.queue.push('frame')
+            }
+            mpos.precept.update(grade, 'frame')
+            mpos.ux.frame()
+          }, 1000)
+        }
+
+        //
+        controller.onFinishChange(function (v) {
+          if (v) {
+            mpos.ux.frame()
+          } else {
+            clearTimeout(vars.frame)
+          }
+        })
+      }
     })
     gui.domElement.classList.add('mp-native')
   },
@@ -339,10 +364,11 @@ const mpos = {
     },
     update: function (grade, dataIdx) {
       const r_queue = grade.r_.queue
-      if (dataIdx && !r_queue.length) {
+      if ((dataIdx && !r_queue.length) || mpos.var.wait) {
         // redundant invocation
         return
       }
+      mpos.var.wait = true
       console.log('queue', grade.r_.queue, dataIdx)
 
       const r_atlas = grade.r_.atlas
@@ -579,14 +605,7 @@ const mpos = {
       promise.then(function (res) {
         console.log('update', res)
 
-        //
-        if (mpos.var.opt.frame) {
-          grade.r_.queue.push('frame')
-          setTimeout(() => {
-            mpos.precept.update(grade, 'frame')
-          }, 1000)
-        }
-
+        mpos.var.wait = false
         return promise
       })
     }
@@ -597,7 +616,7 @@ const mpos = {
       // get DOM node
       selector = selector || vars.opt.selector || 'body'
       const sel = document.querySelector(selector)
-      if (sel === null) {
+      if (sel === null || vars.wait) {
         return
       } else if (selector === 'address') {
         const obj = document.querySelector(selector + ' object')
@@ -1277,7 +1296,7 @@ const mpos = {
               for (let i = 0; i < contours.size(); ++i) {
                 const tmp = new cv.Mat()
                 const cnt = contours.get(i)
-                cv.approxPolyDP(cnt, tmp, 0.25, true)
+                cv.approxPolyDP(cnt, tmp, 0.125, true)
                 poly.push_back(tmp)
                 cnt.delete()
                 release(tmp)
