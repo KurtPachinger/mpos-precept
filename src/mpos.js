@@ -5,7 +5,7 @@ import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { toSvg, toJpeg, toPng } from 'html-to-image'
+import { toSvg, toPng } from 'html-to-image'
 
 const mpos = {
   var: {
@@ -13,7 +13,7 @@ const mpos = {
       selector: 'body',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
-      inPolar: 2,
+      inPolar: 3,
       arc: false,
       frame: false,
       update: function () {
@@ -202,7 +202,9 @@ const mpos = {
         if (idx === 'frame') {
           // immediate schedule
           mpos.ux.reflow({ type: idx })
-          mpos.precept.update(grade, idx)
+          if (!mpos.var.wait) {
+            mpos.precept.update(grade, idx)
+          }
         } else {
           // debounce concurrent
           requestIdleCallback(
@@ -222,10 +224,12 @@ const mpos = {
         enqueue(idx)
       } else {
         // event schedule or throttle
-        const [timer, timeout] = e.type === 'frame' ? ['frame', 1000] : ['reflow', 250]
+        const [timer, timeout] = e.type === 'frame' ? ['frame', 2000] : ['reflow', 250]
 
         clearTimeout(vars[timer])
         vars[timer] = setTimeout(function () {
+          // setTimeout is global scope, so strictly re-declare vars
+          const vars = mpos.var
           if (e.type === 'resize') {
             // ...recalculate inPolar and update?
             vars.fov.w = window.innerWidth
@@ -359,9 +363,9 @@ const mpos = {
       return vis
     },
     update: function (grade, dataIdx) {
-      const r_queue = grade.r_.queue
+      let r_queue = grade.r_.queue
       if ((dataIdx && !r_queue.length) || mpos.var.wait) {
-        // redundant invocation
+        // redundant invocation... frame?
         return
       }
       mpos.var.wait = true
@@ -369,7 +373,10 @@ const mpos = {
 
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
-
+      let r_frame = 0
+      //let r_polar = []
+      //
+      grade.inPolar = mpos.var.opt.inPolar
       if (dataIdx) {
         // SOFT-update
         let reflow = false
@@ -379,7 +386,8 @@ const mpos = {
             // Observer
             const rect = grade.rects[idx]
             rect.inPolar = mpos.precept.inPolar(rect.el)
-            const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
+            //const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
+            const type = rect.r_
 
             const r_ = grade.r_[type]
             if (!r_.rects[idx]) {
@@ -397,19 +405,32 @@ const mpos = {
             } else {
               r_.rects[idx].inPolar = rect.inPolar
             }
-          } else if (idx === 'trim') {
+          } else if (idx === 'trim' || idx === 'move' || idx === 'frame') {
             reflow = true
+            if (idx === 'frame') {
+              r_frame = mpos.var.frame
+            }
           }
         }
 
         if (reflow) {
           // update visibility
-          function vis(arr) {
-            Object.values(arr).forEach(function (rect) {
+          // rect was not forced (despite inPolar, un-observed)
+          function vis(rects, reQueue) {
+            Object.keys(rects).forEach(function (idx) {
+              const rect = rects[idx]
               rect.inPolar = mpos.precept.inPolar(rect.el)
+
+              if (reQueue && rect.inPolar >= grade.inPolar) {
+                // frame: rect parent may change, otherwise inPolar>=4 is minimal update
+                if (r_queue.indexOf(idx) === -1) {
+                  r_queue.push(idx)
+                }
+              }
             })
           }
-          vis(r_atlas.rects)
+          const reQueue = r_frame > 0
+          vis(r_atlas.rects, reQueue)
           vis(r_other.rects)
         }
       } else {
@@ -432,12 +453,12 @@ const mpos = {
               // HARD-update
               opts.array = Object.keys(r_atlas.rects)
             }
-
+            //console.log('atlas', r_frame, opts.array)
             opts.idx = opts.array.length
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
             opts.step = opts.step || grade.maxRes / grade.cells
-            // FPO FP FCP LCP: [0%, 50%]
-            opts.paint = opts.idx >= 8 ? [opts.idx, Math.floor(opts.idx / 2)] : []
+            // paint breakpoints, unless frame: [0%, 50%]
+            opts.paint = opts.idx >= 8 && r_frame === 0 ? [opts.idx, Math.floor(opts.idx / 2)] : []
           }
 
           function next() {
@@ -471,12 +492,13 @@ const mpos = {
           const rect = r_atlas.rects[opts.array[opts.idx]]
           if (rect && rect.atlas !== undefined) {
             // style needs no transform, and block
-            const unset = { transform: 'initial', margin: 0 }
+            const align = { transform: 'initial', margin: 0 }
             // bug: style display-inline is not honored by style override
-            mpos.add.css(rect, true)
-            toSvg(rect.el, { style: unset })
+            const inline = rect.el.matches('a, img, obj, span')
+            inline && (rect.el.style.display = 'inline-block')
+            toSvg(rect.el, { style: align })
               .then(function (dataUrl) {
-                mpos.add.css(rect, false)
+                inline && (rect.el.style.display = 'initial')
                 let img = new Image()
                 img.onload = function () {
                   // canvas xy: from block top (FIFO)
@@ -489,7 +511,7 @@ const mpos = {
                   rect.y = (0.0001 + y + opts.step) / grade.maxRes
                   // recursive
                   next()
-                  dataUrl = img = null
+                  //dataUrl = img = null
                 }
 
                 img.src = dataUrl
@@ -509,14 +531,13 @@ const mpos = {
         function transforms(grade, paint) {
           // apply cumulative updates
           grade.scroll = { x: window.scrollX, y: window.scrollY }
-          grade.inPolar = mpos.var.opt.inPolar
 
           // Mesh: CSS3D, loader, root...
           Object.values(r_other.rects).forEach(function (rect) {
             const add = !rect.obj && (dataIdx === undefined || rect.add)
             const scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
             // add (async) or transform
-            mpos.add.box(rect, { add: add, scroll: scroll })
+            mpos.add.box(rect, { add: add, scroll: scroll, frame: r_frame })
 
             if (rect.obj) {
               // filter visibility
@@ -537,7 +558,7 @@ const mpos = {
           let count = 0
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
             // Instance Matrix
-            const dummy = mpos.add.box(rect)
+            const dummy = mpos.add.box(rect, { frame: r_frame })
             instanced.setMatrixAt(count, dummy.matrix)
             // Instance Color
             const color = new THREE.Color()
@@ -632,6 +653,7 @@ const mpos = {
         // list, grade and sort
         txt: [],
         rects: {},
+        inPolar: vars.opt.inPolar,
         r_: {
           queue: [],
           atlas: { count: 0, rects: {} },
@@ -699,7 +721,7 @@ const mpos = {
           rect.mat = mat
           rect.z = z
 
-          if (rect.inPolar >= vars.opt.inPolar) {
+          if (rect.inPolar >= grade.inPolar) {
             grade.minEls++
 
             if (rect.mat === 'poster') {
@@ -716,6 +738,8 @@ const mpos = {
           if (unset) {
             rect.unset = true
           }
+
+          rect.r_ = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
         }
         return unset
       }
@@ -794,8 +818,9 @@ const mpos = {
 
       Object.values(grade.rects).forEach((rect) => {
         // begin two lists: atlas (instanced) || other (mesh)
-        if (rect.mat && rect.inPolar >= vars.opt.inPolar) {
-          const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
+        if (rect.mat && rect.inPolar >= grade.inPolar) {
+          //const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
+          const type = rect.r_
           const r_ = grade.r_[type]
           r_.count++
           r_.rects[rect.el.getAttribute('data-idx')] = rect
@@ -831,7 +856,8 @@ const mpos = {
       const vars = mpos.var
 
       // css: accumulate transforms
-      rect.css = mpos.add.css(rect)
+      rect.css = mpos.add.css(rect, opts.frame)
+      rect.frame = opts.frame || rect.frame
       // css: unset for box scale
       mpos.add.css(rect, true)
       let bound = rect.el.getBoundingClientRect()
@@ -954,10 +980,13 @@ const mpos = {
     },
     css: function (rect, traverse) {
       // css style transforms
-      // naive check (!rect.css) avoids expensive/live loops
       let el = rect.el
+      let frame = typeof traverse === 'number'
+      //console.log('frame', frame)
+      // naive check (!rect.css) avoids expensive/live loops
+
       const css = rect.css || { scale: 1, radian: 0, degree: 0, transform: [], style: {} }
-      if (traverse === undefined) {
+      if (traverse === undefined || frame) {
         // target element original style
         if (!rect.css) {
           const style = window.getComputedStyle(el)
@@ -981,7 +1010,7 @@ const mpos = {
       const rects = mpos.var.group.userData.grade.rects
       let els = []
       while (el && el !== document.body) {
-        if (traverse === undefined) {
+        if (traverse === undefined || frame) {
           if (!rect.css) {
             // accumulate ancestor matrix
             const cache = rects[el.getAttribute('data-idx')]?.css
@@ -1177,9 +1206,9 @@ const mpos = {
         requestIdleCallback(
           function () {
             if (mpos.var.cv) {
-              const unset = { transform: 'initial', margin: 0 }
-              // unset...
-              toPng(rect.el, { style: unset })
+              const align = { transform: 'initial', margin: 0 }
+              // to-do: limit size
+              toPng(rect.el, { style: align })
                 .then(function (dataUrl) {
                   let img = new Image()
                   img.onload = function () {

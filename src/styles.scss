@@ -86,10 +86,12 @@ img {
 }
 
 #Lena{
- animation: Lena 15s linear infinite; 
+  position: relative;
+  left: 0;
+  animation: Lena 15s linear infinite; 
 }
 @keyframes Lena {
-  100% { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); left: 12em; }
 }
 
 // containers

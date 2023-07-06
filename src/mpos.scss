@@ -23,7 +23,7 @@ pointer-events: none;
 a, img, obj, span {
   &.mp-unset {
   // manual size for toSvg
-  display: inline-block
+  //display: inline-block
   }
 }
 .mp-clone { /*backface-visibility: hidden;*/ }

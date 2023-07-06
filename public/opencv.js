@@ -72,8 +72,8 @@ var opencv = function(Module = {}) {
     }
   } else if (ENVIRONMENT_IS_SHELL) {
     if (!Module['print']) Module['print'] = print
-    if (typeof printErr != 'undefined') Module['printErr'] = printErr
-    if (typeof read != 'undefined') {
+    if (typeof printErr !== 'undefined') Module['printErr'] = printErr
+    if (typeof read !== 'undefined') {
       Module['read'] = read
     } else {
       Module['read'] = function shell_read() {
@@ -88,9 +88,9 @@ var opencv = function(Module = {}) {
       assert(typeof data === 'object')
       return data
     }
-    if (typeof scriptArgs != 'undefined') {
+    if (typeof scriptArgs !== 'undefined') {
       Module['arguments'] = scriptArgs
-    } else if (typeof arguments != 'undefined') {
+    } else if (typeof arguments !== 'undefined') {
       Module['arguments'] = arguments
     }
     if (typeof quit === 'function') {
@@ -119,7 +119,7 @@ var opencv = function(Module = {}) {
       xhr.open('GET', url, true)
       xhr.responseType = 'arraybuffer'
       xhr.onload = function xhr_onload() {
-        if (xhr.status == 200 || (xhr.status == 0 && xhr.response)) {
+        if (xhr.status === 200 || (xhr.status === 0 && xhr.response)) {
           onload(xhr.response)
         } else {
           onerror()
