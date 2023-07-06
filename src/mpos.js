@@ -15,7 +15,7 @@ const mpos = {
       depth: 16,
       inPolar: 3,
       arc: false,
-      frame: false,
+      frame: 0,
       update: function () {
         mpos.add.dom(this.selector, this.depth)
       }
@@ -171,15 +171,21 @@ const mpos = {
       if (key === 'selector') param = [['body', 'main', '#text', '#media', '#transform', 'address']]
       if (key === 'depth') param = [0, 32, 1]
       if (key === 'inPolar') param = [1, 4, 1]
+      if (key === 'frame') param = [0, 2000, 250]
 
       const controller = gui.add(vars.opt, key, ...param)
 
+      vars.reflow = []
+      vars.frame = []
       if (key === 'frame') {
         controller.onFinishChange(function (v) {
+          const timers = vars[key]
+          for (let i = timers.length - 1; i >= 0; i--) {
+            clearTimeout(vars[key][i])
+          }
+
           if (v) {
-            mpos.ux.reflow({ type: key })
-          } else {
-            clearTimeout(vars[key])
+            mpos.ux.reflow({ type: key, value: v })
           }
         })
       }
@@ -201,7 +207,7 @@ const mpos = {
 
         if (idx === 'frame') {
           // immediate schedule
-          mpos.ux.reflow({ type: idx })
+          mpos.ux.reflow({ type: e.type, value: e.value })
           if (!mpos.var.wait) {
             mpos.precept.update(grade, idx)
           }
@@ -224,33 +230,43 @@ const mpos = {
         enqueue(idx)
       } else {
         // event schedule or throttle
-        const [timer, timeout] = e.type === 'frame' ? ['frame', 2000] : ['reflow', 250]
+        const [timer, timeout] = e.type === 'frame' ? ['frame', e.value] : ['reflow', 250]
 
-        clearTimeout(vars[timer])
-        vars[timer] = setTimeout(function () {
-          // setTimeout is global scope, so strictly re-declare vars
-          const vars = mpos.var
-          if (e.type === 'resize') {
-            // ...recalculate inPolar and update?
-            vars.fov.w = window.innerWidth
-            vars.fov.h = window.innerHeight
-
-            vars.camera.aspect = vars.fov.w / vars.fov.h
-            vars.camera.updateProjectionMatrix()
-
-            vars.renderer.setSize(vars.fov.w, vars.fov.h)
-            vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
-
-            mpos.ux.render()
-          } else {
-            let idx = e.type
-            if (e.type === 'scroll') {
-              // update visibility?
-              idx = vars.opt.inPolar === 4 ? 'trim' : 'move'
-            }
-            enqueue(idx)
+        if (timer === 'frame') {
+          const timers = vars[timer]
+          for (let i = timers.length - 1; i >= 0; i--) {
+            clearTimeout(vars[timer][i])
           }
-        }, timeout)
+        }
+
+        vars[timer].push(
+          setTimeout(function () {
+            const vars = mpos.var
+
+            // setTimeout is global scope, so strictly re-declare vars
+
+            if (e.type === 'resize') {
+              // ...recalculate inPolar and update?
+              vars.fov.w = window.innerWidth
+              vars.fov.h = window.innerHeight
+
+              vars.camera.aspect = vars.fov.w / vars.fov.h
+              vars.camera.updateProjectionMatrix()
+
+              vars.renderer.setSize(vars.fov.w, vars.fov.h)
+              vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+
+              mpos.ux.render()
+            } else {
+              let idx = e.type
+              if (e.type === 'scroll') {
+                // update visibility?
+                idx = vars.opt.inPolar === 4 ? 'trim' : 'move'
+              }
+              enqueue(idx)
+            }
+          }, timeout)
+        )
       }
     },
     render: function () {
@@ -369,7 +385,7 @@ const mpos = {
         return
       }
       mpos.var.wait = true
-      console.log('queue', grade.r_.queue, dataIdx)
+      console.log('queue', grade.r_.queue.length, dataIdx)
 
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
@@ -622,8 +638,7 @@ const mpos = {
 
       promise.catch((e) => console.log('error', e))
       promise.then(function (res) {
-        console.log('update', res)
-
+        console.log('update', res.minEls)
         mpos.var.wait = false
         return promise
       })
@@ -792,6 +807,7 @@ const mpos = {
               const abort = grade.atlas >= grade.minRes
               if (block || abort) {
                 console.log('skip', node.nodeName)
+                rect.el = null
               } else {
                 if (rect.inPolar >= 1) {
                   const allow = node.matches(precept.allow)
@@ -806,8 +822,8 @@ const mpos = {
                     let mat = 'child'
                     // set box type
                     mat = setMat(node, mat, manual, child)
-
                     setRect(rect, z, mat, unset)
+                    //
                   }
                 }
               }
@@ -826,6 +842,8 @@ const mpos = {
           const r_ = grade.r_[type]
           r_.count++
           r_.rects[rect.el.getAttribute('data-idx')] = rect
+        } else if (!rect.mat) {
+          rect.el = null
         }
       })
       grade.key = { x: 1 - 1 / grade.cells, y: 0.0001 }
@@ -984,10 +1002,8 @@ const mpos = {
       // css style transforms
       let el = rect.el
       let frame = typeof traverse === 'number'
-      //console.log('frame', frame)
-      // naive check (!rect.css) avoids expensive/live loops
-
       const css = rect.css || { scale: 1, radian: 0, degree: 0, transform: [], style: {} }
+
       if (traverse === undefined || frame) {
         // target element original style
         if (!rect.css) {
@@ -1016,8 +1032,8 @@ const mpos = {
           if (!rect.css) {
             // accumulate ancestor matrix
             const cache = rects[el.getAttribute('data-idx')]?.css
-            const style = cache ? cache.style : window.getComputedStyle(el)
-            if (style.transform.startsWith('matrix')) {
+            const style = cache && cache.style.transform ? cache.style : window.getComputedStyle(el)
+            if (style.transform?.startsWith('matrix')) {
               const transform = style.transform.replace(/(matrix)|[( )]/g, '')
               // transform matrix
               const [a, b] = transform.split(',')

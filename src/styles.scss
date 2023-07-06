@@ -85,13 +85,13 @@ img {
   height: auto;
 }
 
-#Lena{
+#Lena,#src{
   position: relative;
   left: 0;
   animation: Lena 15s linear infinite; 
 }
 @keyframes Lena {
-  100% { transform: rotate(360deg); left: 12em; }
+  50% { transform: rotate(90deg); left: 50%; }
 }
 
 // containers
