@@ -97,7 +97,7 @@ const mpos = {
         <object></object>
       </address>
       <aside class='tool' id='atlas'>
-        <a><canvas></canvas></a>
+        <canvas></canvas>
         <hr id='carot' />
       </aside>
       <div id='css3d'></div>
@@ -496,8 +496,10 @@ const mpos = {
             // bug: style display-inline is not honored by style override
             const inline = rect.el.matches('a, img, obj, span')
             inline && (rect.el.style.display = 'inline-block')
+            //mpos.add.css(rect.el, true)
             toSvg(rect.el, { style: align })
               .then(function (dataUrl) {
+                //mpos.add.css(rect.el, false)
                 inline && (rect.el.style.display = 'initial')
                 let img = new Image()
                 img.onload = function () {
@@ -1199,7 +1201,7 @@ const mpos = {
             console.log('OpenCV.js')
             mpos.var.cv = true
           }
-          script.src = './opencv.js?t=' + Date.now()
+          script.src = './opencv.js' // + Date.now()
           document.getElementsByTagName('head')[0].appendChild(script)
         }
 

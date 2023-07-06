@@ -1,4 +1,4 @@
-var opencv = function(Module = {}) {
+var opencv = function (Module = {}) {
   let cv = Module
   var moduleOverrides = {}
   for (var key in Module) {
@@ -128,7 +128,7 @@ var opencv = function(Module = {}) {
       xhr.onerror = onerror
       xhr.send(null)
     }
-    if (typeof arguments != 'undefined') {
+    if (typeof arguments !== 'undefined') {
       Module['arguments'] = arguments
     }
     if (typeof console !== 'undefined') {
@@ -254,7 +254,7 @@ var opencv = function(Module = {}) {
       return ptr
     },
     getAlignSize: function (type, size, vararg) {
-      if (!vararg && (type == 'i64' || type == 'double')) return 8
+      if (!vararg && (type === 'i64' || type === 'double')) return 8
       if (!type) return Math.min(size, 8)
       return Math.min(size || (type ? Runtime.getNativeFieldSize(type) : 0), Runtime.QUANTUM_SIZE)
     },
@@ -569,7 +569,7 @@ var opencv = function(Module = {}) {
     }
     var singleType = typeof types === 'string' ? types : null
     var ret
-    if (allocator == ALLOC_NONE) {
+    if (allocator === ALLOC_NONE) {
       ret = ptr
     } else {
       ret = [typeof _malloc === 'function' ? _malloc : Runtime.staticAlloc, Runtime.stackAlloc, Runtime.staticAlloc, Runtime.dynamicAlloc][
@@ -579,7 +579,7 @@ var opencv = function(Module = {}) {
     if (zeroinit) {
       var ptr = ret,
         stop
-      assert((ret & 3) == 0)
+      assert((ret & 3) === 0)
       stop = ret + (size & ~3)
       for (; ptr < stop; ptr += 4) {
         HEAP32[ptr >> 2] = 0
@@ -612,7 +612,7 @@ var opencv = function(Module = {}) {
         i++
         continue
       }
-      if (type == 'i64') type = 'i32'
+      if (type === 'i64') type = 'i32'
       setValue(ret + i, curr, type)
       if (previousType !== type) {
         typeSize = Runtime.getNativeTypeSize(type)
@@ -637,9 +637,9 @@ var opencv = function(Module = {}) {
     while (1) {
       t = HEAPU8[(ptr + i) >> 0]
       hasUtf |= t
-      if (t == 0 && !length) break
+      if (t === 0 && !length) break
       i++
-      if (length && i == length) break
+      if (length && i === length) break
     }
     if (!length) length = i
     var ret = ''
@@ -687,20 +687,20 @@ var opencv = function(Module = {}) {
           continue
         }
         u1 = u8Array[idx++] & 63
-        if ((u0 & 224) == 192) {
+        if ((u0 & 224) === 192) {
           str += String.fromCharCode(((u0 & 31) << 6) | u1)
           continue
         }
         u2 = u8Array[idx++] & 63
-        if ((u0 & 240) == 224) {
+        if ((u0 & 240) === 224) {
           u0 = ((u0 & 15) << 12) | (u1 << 6) | u2
         } else {
           u3 = u8Array[idx++] & 63
-          if ((u0 & 248) == 240) {
+          if ((u0 & 248) === 240) {
             u0 = ((u0 & 7) << 18) | (u1 << 12) | (u2 << 6) | u3
           } else {
             u4 = u8Array[idx++] & 63
-            if ((u0 & 252) == 248) {
+            if ((u0 & 252) === 248) {
               u0 = ((u0 & 3) << 24) | (u1 << 18) | (u2 << 12) | (u3 << 6) | u4
             } else {
               u5 = u8Array[idx++] & 63
@@ -916,7 +916,7 @@ var opencv = function(Module = {}) {
       }
     }
     var replacement = Module['reallocBuffer'](TOTAL_MEMORY)
-    if (!replacement || replacement.byteLength != TOTAL_MEMORY) {
+    if (!replacement || replacement.byteLength !== TOTAL_MEMORY) {
       TOTAL_MEMORY = OLD_TOTAL_MEMORY
       return false
     }
@@ -967,7 +967,7 @@ var opencv = function(Module = {}) {
   function callRuntimeCallbacks(callbacks) {
     while (callbacks.length > 0) {
       var callback = callbacks.shift()
-      if (typeof callback == 'function') {
+      if (typeof callback === 'function') {
         callback()
         continue
       }
@@ -992,7 +992,7 @@ var opencv = function(Module = {}) {
   var runtimeExited = false
   function preRun() {
     if (Module['preRun']) {
-      if (typeof Module['preRun'] == 'function') Module['preRun'] = [Module['preRun']]
+      if (typeof Module['preRun'] === 'function') Module['preRun'] = [Module['preRun']]
       while (Module['preRun'].length) {
         addOnPreRun(Module['preRun'].shift())
       }
@@ -1013,7 +1013,7 @@ var opencv = function(Module = {}) {
   }
   function postRun() {
     if (Module['postRun']) {
-      if (typeof Module['postRun'] == 'function') Module['postRun'] = [Module['postRun']]
+      if (typeof Module['postRun'] === 'function') Module['postRun'] = [Module['postRun']]
       while (Module['postRun'].length) {
         addOnPostRun(Module['postRun'].shift())
       }
@@ -1151,7 +1151,7 @@ var opencv = function(Module = {}) {
     if (Module['monitorRunDependencies']) {
       Module['monitorRunDependencies'](runDependencies)
     }
-    if (runDependencies == 0) {
+    if (runDependencies === 0) {
       if (runDependencyWatcher !== null) {
         clearInterval(runDependencyWatcher)
         runDependencyWatcher = null
@@ -1241,7 +1241,7 @@ var opencv = function(Module = {}) {
       var ret = {}
       for (var i in imports) {
         var fixed = i
-        if (fixed[0] == '_') fixed = fixed.substr(1)
+        if (fixed[0] === '_') fixed = fixed.substr(1)
         ret[fixed] = imports[i]
       }
       return ret
@@ -1351,10 +1351,10 @@ var opencv = function(Module = {}) {
       if (method === 'interpret-binary') {
         code = getBinary()
       } else {
-        code = Module['read'](method == 'interpret-asm2wasm' ? asmjsCodeFile : wasmTextFile)
+        code = Module['read'](method === 'interpret-asm2wasm' ? asmjsCodeFile : wasmTextFile)
       }
       var temp
-      if (method == 'interpret-asm2wasm') {
+      if (method === 'interpret-asm2wasm') {
         temp = wasmJS['_malloc'](code.length + 1)
         wasmJS['writeAsciiToMemory'](code, temp)
         wasmJS['_load_asm2wasm'](temp)
@@ -2254,7 +2254,7 @@ var opencv = function(Module = {}) {
     ESTRPIPE: 86
   }
   function _pthread_key_create(key, destructor) {
-    if (key == 0) {
+    if (key === 0) {
       return ERRNO_CODES.EINVAL
     }
     HEAP32[key >> 2] = PTHREAD_SPECIFIC_NEXT_KEY
@@ -2589,7 +2589,7 @@ var opencv = function(Module = {}) {
             var BUFSIZE = 256
             var buf = new Buffer(BUFSIZE)
             var bytesRead = 0
-            var isPosixPlatform = process.platform != 'win32'
+            var isPosixPlatform = process.platform !== 'win32'
             var fd = process.stdin.fd
             if (isPosixPlatform) {
               var usingDevice = false
@@ -2601,7 +2601,7 @@ var opencv = function(Module = {}) {
             try {
               bytesRead = fs.readSync(fd, buf, 0, BUFSIZE, null)
             } catch (e) {
-              if (e.toString().indexOf('EOF') != -1) bytesRead = 0
+              if (e.toString().indexOf('EOF') !== -1) bytesRead = 0
               else throw e
             }
             if (usingDevice) {
@@ -2612,12 +2612,12 @@ var opencv = function(Module = {}) {
             } else {
               result = null
             }
-          } else if (typeof window != 'undefined' && typeof window.prompt == 'function') {
+          } else if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
             result = window.prompt('Input: ')
             if (result !== null) {
               result += '\n'
             }
-          } else if (typeof readline == 'function') {
+          } else if (typeof readline === 'function') {
             result = readline()
             if (result !== null) {
               result += '\n'
@@ -2635,7 +2635,7 @@ var opencv = function(Module = {}) {
           Module['print'](UTF8ArrayToString(tty.output, 0))
           tty.output = []
         } else {
-          if (val != 0) tty.output.push(val)
+          if (val !== 0) tty.output.push(val)
         }
       },
       flush: function (tty) {
@@ -2651,7 +2651,7 @@ var opencv = function(Module = {}) {
           Module['printErr'](UTF8ArrayToString(tty.output, 0))
           tty.output = []
         } else {
-          if (val != 0) tty.output.push(val)
+          if (val !== 0) tty.output.push(val)
         }
       },
       flush: function (tty) {
@@ -2751,7 +2751,7 @@ var opencv = function(Module = {}) {
         if (prevCapacity >= newCapacity) return
         var CAPACITY_DOUBLING_MAX = 1024 * 1024
         newCapacity = Math.max(newCapacity, (prevCapacity * (prevCapacity < CAPACITY_DOUBLING_MAX ? 2 : 1.125)) | 0)
-        if (prevCapacity != 0) newCapacity = Math.max(newCapacity, 256)
+        if (prevCapacity !== 0) newCapacity = Math.max(newCapacity, 256)
         var oldContents = node.contents
         node.contents = new Uint8Array(newCapacity)
         if (node.usedBytes > 0) node.contents.set(oldContents.subarray(0, node.usedBytes), 0)
@@ -2761,8 +2761,8 @@ var opencv = function(Module = {}) {
       while (node.contents.length < newCapacity) node.contents.push(0)
     },
     resizeFileStorage: function (node, newSize) {
-      if (node.usedBytes == newSize) return
-      if (newSize == 0) {
+      if (node.usedBytes === newSize) return
+      if (newSize === 0) {
         node.contents = null
         node.usedBytes = 0
         return
@@ -4169,7 +4169,7 @@ var opencv = function(Module = {}) {
         try {
           FS.mkdir(d, mode)
         } catch (e) {
-          if (e.errno != ERRNO_CODES.EEXIST) throw e
+          if (e.errno !== ERRNO_CODES.EEXIST) throw e
         }
       }
     },
@@ -4878,7 +4878,7 @@ var opencv = function(Module = {}) {
     },
     joinPath: function (parts, forceRelative) {
       var path = PATH.join.apply(null, parts)
-      if (forceRelative && path[0] == '/') path = path.substr(1)
+      if (forceRelative && path[0] === '/') path = path.substr(1)
       return path
     },
     absolutePath: function (relative, base) {
@@ -5080,7 +5080,7 @@ var opencv = function(Module = {}) {
           var xhr = new XMLHttpRequest()
           xhr.open('GET', url, false)
           if (datalength !== chunkSize) xhr.setRequestHeader('Range', 'bytes=' + from + '-' + to)
-          if (typeof Uint8Array != 'undefined') xhr.responseType = 'arraybuffer'
+          if (typeof Uint8Array !== 'undefined') xhr.responseType = 'arraybuffer'
           if (xhr.overrideMimeType) {
             xhr.overrideMimeType('text/plain; charset=x-user-defined')
           }
@@ -5214,7 +5214,7 @@ var opencv = function(Module = {}) {
         if (!handled) finish(byteArray)
       }
       addRunDependency(dep)
-      if (typeof url == 'string') {
+      if (typeof url === 'string') {
         Browser.asyncLoad(
           url,
           function (byteArray) {
@@ -5256,18 +5256,18 @@ var opencv = function(Module = {}) {
           fail = 0,
           total = paths.length
         function finish() {
-          if (fail == 0) onload()
+          if (fail === 0) onload()
           else onerror()
         }
         paths.forEach(function (path) {
           var putRequest = files.put(FS.analyzePath(path).object.contents, path)
           putRequest.onsuccess = function putRequest_onsuccess() {
             ok++
-            if (ok + fail == total) finish()
+            if (ok + fail === total) finish()
           }
           putRequest.onerror = function putRequest_onerror() {
             fail++
-            if (ok + fail == total) finish()
+            if (ok + fail === total) finish()
           }
         })
         transaction.onerror = onerror
@@ -5297,7 +5297,7 @@ var opencv = function(Module = {}) {
           fail = 0,
           total = paths.length
         function finish() {
-          if (fail == 0) onload()
+          if (fail === 0) onload()
           else onerror()
         }
         paths.forEach(function (path) {
@@ -5308,11 +5308,11 @@ var opencv = function(Module = {}) {
             }
             FS.createDataFile(PATH.dirname(path), PATH.basename(path), getRequest.result, true, true, true)
             ok++
-            if (ok + fail == total) finish()
+            if (ok + fail === total) finish()
           }
           getRequest.onerror = function getRequest_onerror() {
             fail++
-            if (ok + fail == total) finish()
+            if (ok + fail === total) finish()
           }
         })
         transaction.onerror = onerror
@@ -5514,18 +5514,18 @@ var opencv = function(Module = {}) {
     if (!Browser.mainLoop.func) {
       return 1
     }
-    if (mode == 0) {
+    if (mode === 0) {
       Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler_setTimeout() {
         var timeUntilNextTick = Math.max(0, Browser.mainLoop.tickStartTime + value - _emscripten_get_now()) | 0
         setTimeout(Browser.mainLoop.runner, timeUntilNextTick)
       }
       Browser.mainLoop.method = 'timeout'
-    } else if (mode == 1) {
+    } else if (mode === 1) {
       Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler_rAF() {
         Browser.requestAnimationFrame(Browser.mainLoop.runner)
       }
       Browser.mainLoop.method = 'rAF'
-    } else if (mode == 2) {
+    } else if (mode === 2) {
       if (!window['setImmediate']) {
         var setImmediates = []
         var emscriptenMainLoopMessageId = 'setimmediate'
@@ -5582,7 +5582,7 @@ var opencv = function(Module = {}) {
         blocker.func(blocker.arg)
         if (Browser.mainLoop.remainingBlockers) {
           var remaining = Browser.mainLoop.remainingBlockers
-          var next = remaining % 1 == 0 ? remaining - 1 : Math.floor(remaining)
+          var next = remaining % 1 === 0 ? remaining - 1 : Math.floor(remaining)
           if (blocker.counted) {
             Browser.mainLoop.remainingBlockers = next
           } else {
@@ -5599,13 +5599,13 @@ var opencv = function(Module = {}) {
       if (thisMainLoopId < Browser.mainLoop.currentlyRunningMainloop) return
       Browser.mainLoop.currentFrameNumber = (Browser.mainLoop.currentFrameNumber + 1) | 0
       if (
-        Browser.mainLoop.timingMode == 1 &&
+        Browser.mainLoop.timingMode === 1 &&
         Browser.mainLoop.timingValue > 1 &&
-        Browser.mainLoop.currentFrameNumber % Browser.mainLoop.timingValue != 0
+        Browser.mainLoop.currentFrameNumber % Browser.mainLoop.timingValue !== 0
       ) {
         Browser.mainLoop.scheduler()
         return
-      } else if (Browser.mainLoop.timingMode == 0) {
+      } else if (Browser.mainLoop.timingMode === 0) {
         Browser.mainLoop.tickStartTime = _emscripten_get_now()
       }
       if (Browser.mainLoop.method === 'timeout' && Module.ctx) {
@@ -5706,14 +5706,14 @@ var opencv = function(Module = {}) {
         console.log('warning: no blob constructor, cannot create blobs with mimetypes')
       }
       Browser.BlobBuilder =
-        typeof MozBlobBuilder != 'undefined'
+        typeof MozBlobBuilder !== 'undefined'
           ? MozBlobBuilder
-          : typeof WebKitBlobBuilder != 'undefined'
+          : typeof WebKitBlobBuilder !== 'undefined'
           ? WebKitBlobBuilder
           : !Browser.hasBlobConstructor
           ? console.log('warning: no BlobBuilder')
           : null
-      Browser.URLObject = typeof window != 'undefined' ? (window.URL ? window.URL : window.webkitURL) : undefined
+      Browser.URLObject = typeof window !== 'undefined' ? (window.URL ? window.URL : window.webkitURL) : undefined
       if (!Module.noImageDecoding && typeof Browser.URLObject === 'undefined') {
         console.log('warning: Browser does not support creating object URLs. Built-in browser image decoding will not be available.')
         Module.noImageDecoding = true
@@ -5810,10 +5810,10 @@ var opencv = function(Module = {}) {
                   ret += BASE[curr]
                 }
               }
-              if (leftbits == 2) {
+              if (leftbits === 2) {
                 ret += BASE[(leftchar & 3) << 4]
                 ret += PAD + PAD
-              } else if (leftbits == 4) {
+              } else if (leftbits === 4) {
                 ret += BASE[(leftchar & 15) << 2]
                 ret += PAD
               }
@@ -5832,14 +5832,17 @@ var opencv = function(Module = {}) {
       }
       Module['preloadPlugins'].push(audioPlugin)
       function pointerLockChange() {
+        /*
         Browser.pointerLock =
           document['pointerLockElement'] === Module['canvas'] ||
           document['mozPointerLockElement'] === Module['canvas'] ||
           document['webkitPointerLockElement'] === Module['canvas'] ||
           document['msPointerLockElement'] === Module['canvas']
+          */
       }
       var canvas = Module['canvas']
       if (canvas) {
+        /*
         canvas.requestPointerLock =
           canvas['requestPointerLock'] ||
           canvas['mozRequestPointerLock'] ||
@@ -5853,10 +5856,10 @@ var opencv = function(Module = {}) {
           document['msExitPointerLock'] ||
           function () {}
         canvas.exitPointerLock = canvas.exitPointerLock.bind(document)
-        document.addEventListener('pointerlockchange', pointerLockChange, false)
-        document.addEventListener('mozpointerlockchange', pointerLockChange, false)
-        document.addEventListener('webkitpointerlockchange', pointerLockChange, false)
-        document.addEventListener('mspointerlockchange', pointerLockChange, false)
+        //document.addEventListener('pointerlockchange', pointerLockChange, false)
+        //document.addEventListener('mozpointerlockchange', pointerLockChange, false)
+        //document.addEventListener('webkitpointerlockchange', pointerLockChange, false)
+        //document.addEventListener('mspointerlockchange', pointerLockChange, false)
         if (Module['elementPointerLock']) {
           canvas.addEventListener(
             'click',
@@ -5869,10 +5872,11 @@ var opencv = function(Module = {}) {
             false
           )
         }
+        */
       }
     },
     createContext: function (canvas, useWebGL, setInModule, webGLContextAttributes) {
-      if (useWebGL && Module.ctx && canvas == Module.canvas) return Module.ctx
+      if (useWebGL && Module.ctx && canvas === Module.canvas) return Module.ctx
       var ctx
       var contextHandle
       if (useWebGL) {
@@ -5947,10 +5951,10 @@ var opencv = function(Module = {}) {
       }
       if (!Browser.fullscreenHandlersInstalled) {
         Browser.fullscreenHandlersInstalled = true
-        document.addEventListener('fullscreenchange', fullscreenChange, false)
-        document.addEventListener('mozfullscreenchange', fullscreenChange, false)
-        document.addEventListener('webkitfullscreenchange', fullscreenChange, false)
-        document.addEventListener('MSFullscreenChange', fullscreenChange, false)
+        //document.addEventListener('fullscreenchange', fullscreenChange, false)
+        //document.addEventListener('mozfullscreenchange', fullscreenChange, false)
+        //document.addEventListener('webkitfullscreenchange', fullscreenChange, false)
+        //document.addEventListener('MSFullscreenChange', fullscreenChange, false)
       }
       var canvasContainer = document.createElement('div')
       canvas.parentNode.insertBefore(canvasContainer, canvas)
@@ -6108,14 +6112,15 @@ var opencv = function(Module = {}) {
     touches: {},
     lastTouches: {},
     calculateMouseEvent: function (event) {
+      /*
       if (Browser.pointerLock) {
-        if (event.type != 'mousemove' && 'mozMovementX' in event) {
+        if (event.type !== 'mousemove' && 'mozMovementX' in event) {
           Browser.mouseMovementX = Browser.mouseMovementY = 0
         } else {
           Browser.mouseMovementX = Browser.getMovementX(event)
           Browser.mouseMovementY = Browser.getMovementY(event)
         }
-        if (typeof SDL != 'undefined') {
+        if (typeof SDL !== 'undefined') {
           Browser.mouseX = SDL.mouseX + Browser.mouseMovementX
           Browser.mouseY = SDL.mouseY + Browser.mouseMovementY
         } else {
@@ -6158,6 +6163,7 @@ var opencv = function(Module = {}) {
         Browser.mouseX = x
         Browser.mouseY = y
       }
+      */
     },
     asyncLoad: function (url, onload, onerror, noRunDep) {
       var dep = !noRunDep ? getUniqueRunDependency('al ' + url) : ''
@@ -6180,10 +6186,12 @@ var opencv = function(Module = {}) {
     },
     resizeListeners: [],
     updateResizeListeners: function () {
+      /*
       var canvas = Module['canvas']
       Browser.resizeListeners.forEach(function (listener) {
         listener(canvas.width, canvas.height)
       })
+      */
     },
     setCanvasSize: function (width, height, noUpdates) {
       var canvas = Module['canvas']
@@ -6193,7 +6201,7 @@ var opencv = function(Module = {}) {
     windowedWidth: 0,
     windowedHeight: 0,
     setFullscreenCanvasSize: function () {
-      if (typeof SDL != 'undefined') {
+      if (typeof SDL !== 'undefined') {
         var flags = HEAPU32[(SDL.screen + Runtime.QUANTUM_SIZE * 0) >> 2]
         flags = flags | 8388608
         HEAP32[(SDL.screen + Runtime.QUANTUM_SIZE * 0) >> 2] = flags
@@ -6201,7 +6209,7 @@ var opencv = function(Module = {}) {
       Browser.updateResizeListeners()
     },
     setWindowedCanvasSize: function () {
-      if (typeof SDL != 'undefined') {
+      if (typeof SDL !== 'undefined') {
         var flags = HEAPU32[(SDL.screen + Runtime.QUANTUM_SIZE * 0) >> 2]
         flags = flags & ~8388608
         HEAP32[(SDL.screen + Runtime.QUANTUM_SIZE * 0) >> 2] = flags
@@ -6231,24 +6239,24 @@ var opencv = function(Module = {}) {
           document['msFullscreenElement'] ||
           document['webkitFullscreenElement'] ||
           document['webkitCurrentFullScreenElement']) === canvas.parentNode &&
-        typeof screen != 'undefined'
+        typeof screen !== 'undefined'
       ) {
         var factor = Math.min(screen.width / w, screen.height / h)
         w = Math.round(w * factor)
         h = Math.round(h * factor)
       }
       if (Browser.resizeCanvas) {
-        if (canvas.width != w) canvas.width = w
-        if (canvas.height != h) canvas.height = h
-        if (typeof canvas.style != 'undefined') {
+        if (canvas.width !== w) canvas.width = w
+        if (canvas.height !== h) canvas.height = h
+        if (typeof canvas.style !== 'undefined') {
           canvas.style.removeProperty('width')
           canvas.style.removeProperty('height')
         }
       } else {
-        if (canvas.width != wNative) canvas.width = wNative
-        if (canvas.height != hNative) canvas.height = hNative
-        if (typeof canvas.style != 'undefined') {
-          if (w != wNative || h != hNative) {
+        if (canvas.width !== wNative) canvas.width = wNative
+        if (canvas.height !== hNative) canvas.height = hNative
+        if (typeof canvas.style !== 'undefined') {
+          if (w !== wNative || h !== hNative) {
             canvas.style.setProperty('width', w + 'px', 'important')
             canvas.style.setProperty('height', h + 'px', 'important')
           } else {
@@ -7285,7 +7293,7 @@ var opencv = function(Module = {}) {
       },
       '%I': function (date) {
         var twelveHour = date.tm_hour
-        if (twelveHour == 0) twelveHour = 12
+        if (twelveHour === 0) twelveHour = 12
         else if (twelveHour > 12) twelveHour -= 12
         return leadingNulls(twelveHour, 2)
       },
@@ -7732,7 +7740,7 @@ var opencv = function(Module = {}) {
         return (value << bitshift) >>> bitshift
       }
     }
-    var isUnsignedType = name.indexOf('unsigned') != -1
+    var isUnsignedType = name.indexOf('unsigned') !== -1
     registerType(primitiveType, {
       name: name,
       fromWireType: fromWireType,
@@ -8077,15 +8085,12 @@ var opencv = function(Module = {}) {
           stream.flags |= arg
           return 0
         }
-        case 12:
         case 12: {
           var arg = SYSCALLS.get()
           var offset = 0
           HEAP16[(arg + offset) >> 1] = 2
           return 0
         }
-        case 13:
-        case 14:
         case 13:
         case 14:
           return 0
@@ -10402,7 +10407,7 @@ var opencv = function(Module = {}) {
     } catch (e) {
       if (e instanceof ExitStatus) {
         return
-      } else if (e == 'SimulateInfiniteLoop') {
+      } else if (e === 'SimulateInfiniteLoop') {
         Module['noExitRuntime'] = true
         return
       } else {
@@ -10492,7 +10497,7 @@ var opencv = function(Module = {}) {
   }
   Module['abort'] = Module.abort = abort
   if (Module['preInit']) {
-    if (typeof Module['preInit'] == 'function') Module['preInit'] = [Module['preInit']]
+    if (typeof Module['preInit'] === 'function') Module['preInit'] = [Module['preInit']]
     while (Module['preInit'].length > 0) {
       Module['preInit'].pop()()
     }
@@ -10827,4 +10832,3 @@ var opencv = function(Module = {}) {
 
   return Module
 }
-
