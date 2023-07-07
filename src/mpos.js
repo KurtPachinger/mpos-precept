@@ -1,5 +1,32 @@
 import './mpos.scss'
-import * as THREE from 'three'
+//import * as THREE from 'three'
+import {
+  BoxGeometry,
+  MeshBasicMaterial,
+  LineBasicMaterial,
+  RawShaderMaterial,
+  FrontSide,
+  Raycaster,
+  Vector2,
+  Scene,
+  PerspectiveCamera,
+  WebGLRenderer,
+  AxesHelper,
+  Color,
+  InstancedBufferAttribute,
+  Group,
+  InstancedMesh,
+  StaticDrawUsage,
+  Object3D,
+  CanvasTexture,
+  NearestFilter,
+  Box3,
+  FileLoader,
+  ShapeGeometry,
+  Mesh,
+  Shape,
+  Path
+} from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
@@ -26,21 +53,21 @@ const mpos = {
       z: 8,
       max: 1024
     },
-    geo: new THREE.BoxGeometry(1, 1, 1),
-    mat: new THREE.MeshBasicMaterial({
+    geo: new BoxGeometry(1, 1, 1),
+    mat: new MeshBasicMaterial({
       transparent: true,
       wireframe: true,
       color: 'cyan',
-      side: THREE.FrontSide
+      side: FrontSide
     }),
-    mat_line: new THREE.LineBasicMaterial({
+    mat_line: new LineBasicMaterial({
       transparent: true,
       opacity: 0.5,
       color: 'cyan',
       depthWrite: false,
-      side: THREE.FrontSide
+      side: FrontSide
     }),
-    mat_shader: new THREE.RawShaderMaterial({
+    mat_shader: new RawShaderMaterial({
       transparent: true,
       depthWrite: false,
       uniforms: {
@@ -83,9 +110,9 @@ const mpos = {
       }
       `
     }),
-    mat_shape: new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
-    raycaster: new THREE.Raycaster(),
-    pointer: new THREE.Vector2()
+    mat_shape: new MeshBasicMaterial({ transparent: true, depthWrite: false }),
+    raycaster: new Raycaster(),
+    pointer: new Vector2()
   },
   init: function () {
     const vars = mpos.var
@@ -108,17 +135,17 @@ const mpos = {
     const mp = document.getElementById('mp')
 
     // THREE
-    vars.scene = new THREE.Scene()
-    vars.camera = new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
+    vars.scene = new Scene()
+    vars.camera = new PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
     vars.camera.layers.enableAll()
     vars.camera.position.z = vars.fov.max
 
-    vars.renderer = new THREE.WebGLRenderer()
+    vars.renderer = new WebGLRenderer()
     vars.renderer.setSize(vars.fov.w, vars.fov.h)
     mp.appendChild(vars.renderer.domElement)
     vars.renderer.setClearColor(0x00ff00, 0)
     // helpers
-    const axes = new THREE.AxesHelper(vars.fov.max)
+    const axes = new AxesHelper(vars.fov.max)
     vars.scene.add(axes)
 
     // CSS3D
@@ -171,19 +198,13 @@ const mpos = {
       if (key === 'selector') param = [['body', 'main', '#text', '#media', '#transform', 'address']]
       if (key === 'depth') param = [0, 32, 1]
       if (key === 'inPolar') param = [1, 4, 1]
-      if (key === 'frame') param = [0, 2000, 250]
+      if (key === 'frame') param = [0, 1000, 125]
 
       const controller = gui.add(vars.opt, key, ...param)
 
-      vars.reflow = []
-      vars.frame = []
       if (key === 'frame') {
         controller.onFinishChange(function (v) {
-          const timers = vars[key]
-          for (let i = timers.length - 1; i >= 0; i--) {
-            clearTimeout(vars[key][i])
-          }
-
+          mpos.ux.timers.clear(key)
           if (v) {
             mpos.ux.reflow({ type: key, value: v })
           }
@@ -193,6 +214,18 @@ const mpos = {
     gui.domElement.classList.add('mp-native')
   },
   ux: {
+    timers: {
+      reflow: [],
+      frame: [],
+      clear: function (key) {
+        const timers = this[key]
+        for (let i = timers.length - 1; i >= 0; i--) {
+          clearTimeout(timers[i])
+          timers[i] = null
+          timers.splice(i, 1)
+        }
+      }
+    },
     reflow: function (e) {
       // balance lag of input versus update
       const vars = mpos.var
@@ -232,14 +265,11 @@ const mpos = {
         // event schedule or throttle
         const [timer, timeout] = e.type === 'frame' ? ['frame', e.value] : ['reflow', 250]
 
-        if (timer === 'frame') {
-          const timers = vars[timer]
-          for (let i = timers.length - 1; i >= 0; i--) {
-            clearTimeout(vars[timer][i])
-          }
-        }
+        //if (timer === 'frame') {
+        mpos.ux.timers.clear(timer)
+        //}
 
-        vars[timer].push(
+        mpos.ux.timers[timer].push(
           setTimeout(function () {
             const vars = mpos.var
 
@@ -344,7 +374,7 @@ const mpos = {
     manual: `.mp-loader,.mp-native,.mp-poster`.split(','),
     unset: `.mp-offscreen`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
-    block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
+    block: `.mp-block,canvas[data-engine~='js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
       ','
     ),
@@ -510,12 +540,15 @@ const mpos = {
             // style needs no transform, and block
             const align = { transform: 'initial', margin: 0 }
             // bug: style display-inline is not honored by style override
-            const inline = rect.el.matches('a, img, obj, span')
+            const inline = rect.el.matches('a, img, obj, span, xml')
             inline && (rect.el.style.display = 'inline-block')
-            //mpos.add.css(rect.el, true)
-            toSvg(rect.el, { style: align })
+            // toSvg crisper, toPng smaller
+            toPng(rect.el, { style: align, preferredFontFormat: 'woff' })
               .then(function (dataUrl) {
-                //mpos.add.css(rect.el, false)
+                if (dataUrl === 'data:,') {
+                  const error = ['idx', rect.el.getAttribute('data-idx'), 'bad size'].join(' ')
+                  throw new Error(error)
+                }
                 inline && (rect.el.style.display = 'initial')
                 let img = new Image()
                 img.onload = function () {
@@ -529,14 +562,15 @@ const mpos = {
                   rect.y = (0.0001 + y + opts.step) / grade.maxRes
                   // recursive
                   next()
-                  //dataUrl = img = null
+                  img = null
                 }
 
                 img.src = dataUrl
+                dataUrl = null
               })
-              .catch(function (e) {
+              .catch(function (error) {
                 // src problem...
-                console.log('error', e.target)
+                console.log(error)
                 next()
               })
           } else {
@@ -579,7 +613,7 @@ const mpos = {
             const dummy = mpos.add.box(rect, { frame: r_frame })
             instanced.setMatrixAt(count, dummy.matrix)
             // Instance Color
-            const color = new THREE.Color()
+            const color = new Color()
             let bg = rect.css.style.backgroundColor || ''
             const rgba = bg.replace(/(rgba)|[( )]/g, '').split(',')
             const alpha = Number(rgba[3])
@@ -613,7 +647,7 @@ const mpos = {
           instanced.computeBoundingSphere()
 
           // update shader
-          instanced.geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 2))
+          instanced.geometry.setAttribute('uvOffset', new InstancedBufferAttribute(uvOffset, 2))
           instanced.userData.shader.userData.t.needsUpdate = true
 
           //
@@ -636,7 +670,7 @@ const mpos = {
         }
       })
 
-      promise.catch((e) => console.log('error', e))
+      promise.catch((error) => console.log(error))
       promise.then(function (res) {
         console.log('update', res.minEls)
         mpos.var.wait = false
@@ -682,7 +716,7 @@ const mpos = {
       // OLD group
       mpos.add.old(selector)
       // NEW group
-      vars.group = new THREE.Group()
+      vars.group = new Group()
       vars.group.name = selector
 
       // FLAT-GRADE: filter, grade, sanitize
@@ -807,7 +841,7 @@ const mpos = {
               const abort = grade.atlas >= grade.minRes
               if (block || abort) {
                 console.log('skip', node.nodeName)
-                rect.el = null
+                //rect.el = null
               } else {
                 if (rect.inPolar >= 1) {
                   const allow = node.matches(precept.allow)
@@ -843,6 +877,7 @@ const mpos = {
           r_.count++
           r_.rects[rect.el.getAttribute('data-idx')] = rect
         } else if (!rect.mat) {
+          // free memory
           rect.el = null
         }
       })
@@ -850,12 +885,8 @@ const mpos = {
 
       // Instanced Mesh, shader atlas
       const shader = mpos.add.shader(grade.canvas, grade.cells)
-      const instanced = new THREE.InstancedMesh(
-        vars.geo.clone(),
-        [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
-        grade.maxEls
-      )
-      instanced.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+      const instanced = new InstancedMesh(vars.geo.clone(), [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line], grade.maxEls)
+      instanced.instanceMatrix.setUsage(StaticDrawUsage)
       instanced.layers.set(2)
       instanced.userData.shader = shader
       instanced.userData.el = grade.sel
@@ -963,14 +994,14 @@ const mpos = {
       } else if (rect.mat === 'wire') {
         // mesh singleton
         const mat = vars.mat.clone()
-        mat.color = new THREE.Color('cyan')
-        const mesh = new THREE.Mesh(vars.geo, mat)
+        mat.color = new Color('cyan')
+        const mesh = new Mesh(vars.geo, mat)
         mesh.userData.el = rect.el
         mesh.animations = true
         object = mesh
       } else {
         // Instanced Mesh
-        object = new THREE.Object3D()
+        object = new Object3D()
       }
 
       transform(object)
@@ -983,7 +1014,7 @@ const mpos = {
         if (rect.mat === 'loader') {
           // async
 
-          obj = new THREE.Group()
+          obj = new Group()
 
           mpos.add.loader(rect, object, obj)
         } else {
@@ -1072,8 +1103,8 @@ const mpos = {
     },
     shader: function (canvas, texStep) {
       //discourse.threejs.org/t/13221/17
-      const texAtlas = new THREE.CanvasTexture(canvas)
-      texAtlas.minFilter = THREE.NearestFilter
+      const texAtlas = new CanvasTexture(canvas)
+      texAtlas.minFilter = NearestFilter
       // update
       const m = mpos.var.mat_shader.clone()
       m.uniforms.map.value = texAtlas
@@ -1137,7 +1168,7 @@ const mpos = {
     },
     fit: function (dummy, group) {
       // scale
-      const aabb = new THREE.Box3()
+      const aabb = new Box3()
       aabb.setFromObject(group)
       const s1 = Math.max(dummy.scale.x, dummy.scale.y)
       const s2 = Math.max(aabb.max.x, aabb.max.y)
@@ -1160,7 +1191,7 @@ const mpos = {
       let handler = file ? file.match(/\.[0-9a-z]+$/i) : false
       handler = handler && dummy && group ? handler[0].toUpperCase() : 'File'
       console.log(handler)
-      const loader = handler === '.SVG' ? new SVGLoader() : new THREE.FileLoader()
+      const loader = handler === '.SVG' ? new SVGLoader() : new FileLoader()
 
       if (file && (handler === '.SVG' || handler === 'File')) {
         loader.load(
@@ -1176,9 +1207,9 @@ const mpos = {
               for (let i = 0; i < paths.length; i++) {
                 const path = paths[i]
 
-                const material = new THREE.MeshBasicMaterial({
+                const material = new MeshBasicMaterial({
                   color: path.color,
-                  side: THREE.FrontSide,
+                  side: FrontSide,
                   depthWrite: false
                 })
 
@@ -1186,8 +1217,8 @@ const mpos = {
 
                 for (let j = 0; j < shapes.length; j++) {
                   const shape = shapes[j]
-                  const geometry = new THREE.ShapeGeometry(shape)
-                  const mesh = new THREE.Mesh(geometry, material)
+                  const geometry = new ShapeGeometry(shape)
+                  const mesh = new Mesh(geometry, material)
                   group.add(mesh)
                 }
               }
@@ -1225,7 +1256,7 @@ const mpos = {
           function () {
             if (mpos.var.cv) {
               const align = { transform: 'initial', margin: 0 }
-              // to-do: limit size
+              // to-do: limit size, use toJpeg if type
               toPng(rect.el, { style: align })
                 .then(function (dataUrl) {
                   let img = new Image()
@@ -1236,9 +1267,9 @@ const mpos = {
                   // todo: animated gif?
                   img.src = dataUrl
                 })
-                .catch(function (e) {
+                .catch(function (error) {
                   // src problem...
-                  console.log('error', e.target)
+                  console.log(error)
                 })
             }
           },
@@ -1395,14 +1426,14 @@ const mpos = {
           function (e) {
             try {
               console.log('cv', kmeans)
-              // THREE.Shape from label contours
+              // Shape from label contours
               Object.values(kmeans).forEach(function (label) {
                 let mergedGeoms = []
                 if (label.retr) {
                   Object.values(label.retr).forEach(function (retr) {
                     // hierarchy shape
                     const points = retr.shape
-                    const poly = new THREE.Shape()
+                    const poly = new Shape()
                     for (let p = 0; p < points.length; p += 2) {
                       const pt = { x: points[p], y: points[p + 1] }
                       if (p === 0) {
@@ -1414,7 +1445,7 @@ const mpos = {
                     // hierarchy holes
                     poly.holes = []
                     for (let i = 0; i < retr.holes.length; i++) {
-                      const path = new THREE.Path()
+                      const path = new Path()
                       const hole = retr.holes[i]
                       for (let p = 0; p < hole.length; p += 2) {
                         let pt = { x: hole[p], y: hole[p + 1] }
@@ -1427,7 +1458,7 @@ const mpos = {
                       poly.holes.push(path)
                     }
                     // label contour
-                    let geometry = new THREE.ShapeGeometry(poly)
+                    let geometry = new ShapeGeometry(poly)
                     geometry = mergeVertices(geometry)
                     mergedGeoms.push(geometry)
                   })
@@ -1436,13 +1467,13 @@ const mpos = {
                 if (mergedGeoms.length) {
                   // label color
                   const rgba = label.rgba
-                  const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
+                  const color = new Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
                   const mat = mpos.var.mat_shape.clone()
                   mat.color = color
                   mat.opacity = rgba.a / 255
                   // label contours
                   const mergedBoxes = mergeGeometries(mergedGeoms)
-                  const mesh = new THREE.Mesh(mergedBoxes, mat)
+                  const mesh = new Mesh(mergedBoxes, mat)
                   group.add(mesh)
                 }
               })
