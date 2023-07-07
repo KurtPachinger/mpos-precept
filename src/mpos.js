@@ -374,7 +374,7 @@ const mpos = {
     manual: `.mp-loader,.mp-native,.mp-poster`.split(','),
     unset: `.mp-offscreen`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
-    block: `.mp-block,canvas[data-engine~='js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
+    block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
     native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
       ','
     ),
