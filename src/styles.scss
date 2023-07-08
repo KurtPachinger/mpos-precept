@@ -36,6 +36,14 @@ html, body {
     background: var(--med);
     transform: rotate(15deg) scale(1.5);
   }
+  section#text h2 {
+    transform-origin: 0 50%;
+    animation: pulse 15s infinite alternate;
+  }
+  @keyframes pulse{
+    0% { z-index: -9; transform: scale(1.5) rotate(15deg); }
+    100% { z-index: 9; transform: scale(1.5) rotate(-15deg); }
+  }
   article#nest {
     div, span, section {
     float: left;
@@ -85,13 +93,17 @@ img {
   height: auto;
 }
 
-#Lena,#src{
+#Lena, #src {
   position: relative;
   left: 0;
   animation: Lena 15s linear infinite; 
 }
 @keyframes Lena {
   50% { transform: rotate(90deg); left: 50%; }
+}
+#gen img.w50:hover {
+  width: 100%;
+  transition: width 2s;
 }
 
 // containers

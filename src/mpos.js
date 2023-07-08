@@ -41,7 +41,7 @@ const mpos = {
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 3,
-      arc: false,
+      arc: 0,
       frame: 0,
       update: function () {
         mpos.add.dom(this.selector, this.depth)
@@ -115,7 +115,7 @@ const mpos = {
     pointer: new Vector2()
   },
   init: function () {
-    const vars = mpos.var
+    const vars = this.var
     // containers
     const template = document.createElement('template')
     template.innerHTML = `
@@ -131,7 +131,7 @@ const mpos = {
     </section>`
     document.body.appendChild(template.content)
     mpos.precept.canvas = document.querySelector('#atlas canvas')
-    mpos.var.carot = document.getElementById('carot')
+    vars.carot = document.getElementById('carot')
     const mp = document.getElementById('mp')
 
     // THREE
@@ -198,7 +198,8 @@ const mpos = {
       if (key === 'selector') param = [['body', 'main', '#text', '#media', '#transform', 'address']]
       if (key === 'depth') param = [0, 32, 1]
       if (key === 'inPolar') param = [1, 4, 1]
-      if (key === 'frame') param = [0, 1000, 125]
+      if (key === 'frame') param = [0, 500, 50]
+      if (key === 'arc') param = [0, 1, 0.25]
 
       const controller = gui.add(vars.opt, key, ...param)
 
@@ -241,7 +242,7 @@ const mpos = {
         if (idx === 'frame') {
           // immediate schedule
           mpos.ux.reflow({ type: e.type, value: e.value })
-          if (!mpos.var.wait) {
+          if (!vars.wait) {
             mpos.precept.update(grade, idx)
           }
         } else {
@@ -409,20 +410,20 @@ const mpos = {
       return vis
     },
     update: function (grade, dataIdx) {
+      const vars = mpos.var
       let r_queue = grade.r_.queue
-      if ((dataIdx && !r_queue.length) || mpos.var.wait) {
+      if ((dataIdx && !r_queue.length) || vars.wait) {
         // redundant invocation... frame?
+        console.log('wait')
         return
       }
-      mpos.var.wait = true
-      console.log('queue', grade.r_.queue.length, dataIdx)
+      vars.wait = true
 
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
       let r_frame = 0
-      //let r_polar = []
-      //
-      grade.inPolar = mpos.var.opt.inPolar
+
+      grade.inPolar = vars.opt.inPolar
       if (dataIdx) {
         // SOFT-update
         let reflow = false
@@ -451,10 +452,11 @@ const mpos = {
             } else {
               r_.rects[idx].inPolar = rect.inPolar
             }
-          } else if (idx === 'trim' || idx === 'move' || idx === 'frame') {
+          } else if (idx === 'frame' || idx === 'move' || idx === 'trim') {
             reflow = true
             if (idx === 'frame') {
-              r_frame = mpos.var.frame
+              const frame = mpos.ux.timers.frame
+              r_frame = frame[frame.length - 1]
             }
           }
         }
@@ -467,8 +469,8 @@ const mpos = {
               const rect = rects[idx]
               rect.inPolar = mpos.precept.inPolar(rect.el)
 
-              if (reQueue && rect.inPolar >= grade.inPolar) {
-                // frame: rect parent may change, otherwise inPolar>=4 is minimal update
+              if (reQueue && rect.inPolar >= 4) {
+                // frame: if rect parent changes, >= grade.inPolar, otherwise inPolar>=4 is minimal update
                 if (r_queue.indexOf(idx) === -1) {
                   r_queue.push(idx)
                 }
@@ -487,6 +489,9 @@ const mpos = {
         r_other.rects[idx] = rect
         r_other.count++
       }
+
+      console.log('queue', grade.r_.queue.length, dataIdx, r_frame)
+      //console.log('r_frame', r_frame)
 
       const promise = new Promise((resolve, reject) => {
         function atlas(grade, opts = {}) {
@@ -508,65 +513,70 @@ const mpos = {
           }
 
           function next() {
-            setTimeout(() => {
-              if (dataIdx) {
-                // decrement queue
-                opts.array = opts.array.splice(0, opts.idx)
+            //setTimeout(() => {
+            if (dataIdx) {
+              // decrement queue
+              opts.array = opts.array.splice(opts.array.length - opts.idx, opts.array.length)
+            }
+
+            if (opts.idx > 0) {
+              if (opts.paint.indexOf(opts.idx) > -1) {
+                console.log('...paint')
+                transforms(grade, true)
               }
 
-              if (opts.idx > 0) {
-                if (opts.paint.indexOf(opts.idx) > -1) {
-                  console.log('...paint')
-                  transforms(grade, true)
-                }
+              opts.idx--
 
-                opts.idx--
-
-                atlas(grade, opts)
-              } else {
-                if (!dataIdx) {
-                  // atlas ends with blank key
-                  opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
-                  opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
-                }
-                // complete
-                transforms(grade)
+              atlas(grade, opts)
+            } else {
+              if (!dataIdx) {
+                // atlas ends with blank key
+                opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
+                opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
               }
-            }, 0)
+              // complete
+              transforms(grade)
+            }
+            //}, 0)
           }
 
-          const rect = r_atlas.rects[opts.array[opts.idx]]
+          // queue indexes from end, but in reverse
+          const rect = r_atlas.rects[opts.array[opts.array.length - opts.idx]]
           if (rect && rect.atlas !== undefined) {
             // style needs no transform, and block
             const align = { transform: 'initial', margin: 0 }
             // bug: style display-inline is not honored by style override
-            const inline = rect.el.matches('a, img, obj, span, xml')
-            inline && (rect.el.style.display = 'inline-block')
+            const bbox = !rect.el.clientWidth && !rect.el.clientHeight && rect.el.matches('a, img, obj, span, xml, :is(:empty)')
+            bbox && (rect.el.style.display = 'inline-block')
             // toSvg crisper, toPng smaller
             toPng(rect.el, { style: align, preferredFontFormat: 'woff' })
               .then(function (dataUrl) {
                 if (dataUrl === 'data:,') {
-                  const error = ['idx', rect.el.getAttribute('data-idx'), 'bad size'].join(' ')
-                  throw new Error(error)
-                }
-                inline && (rect.el.style.display = 'initial')
-                let img = new Image()
-                img.onload = function () {
-                  // canvas xy: from block top (FIFO)
-                  const x = (rect.atlas % grade.cells) * opts.step
-                  const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * opts.step
-                  opts.ctx.drawImage(img, x, y, opts.step, opts.step)
-                  // shader xy: from block bottom
-                  // avoid 0 edge, so add 0.0001
-                  rect.x = (0.0001 + x) / grade.maxRes
-                  rect.y = (0.0001 + y + opts.step) / grade.maxRes
-                  // recursive
+                  //const error = ['idx', rect.el.getAttribute('data-idx'), 'bad size'].join(' ')
+                  //console.log('no box')
                   next()
-                  img = null
-                }
+                } else {
+                  bbox && (rect.el.style.display = 'initial')
+                  let img = new Image()
+                  img.onload = function () {
+                    const step = opts.step
+                    // canvas xy: from block top (FIFO)
+                    const x = (rect.atlas % grade.cells) * step
+                    const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
+                    r_frame && opts.ctx.clearRect(x, y, step, step)
+                    opts.ctx.drawImage(img, x, y, step, step)
+                    // shader xy: from block bottom
+                    // avoid 0 edge, so add 0.0001
+                    rect.x = (0.0001 + x) / grade.maxRes
+                    rect.y = (0.0001 + y + step) / grade.maxRes
+                    // recursive
+                    next()
+                    img = null
+                  }
 
-                img.src = dataUrl
-                dataUrl = null
+                  img.src = dataUrl
+                  dataUrl = null
+                }
               })
               .catch(function (error) {
                 // src problem...
@@ -671,9 +681,9 @@ const mpos = {
       })
 
       promise.catch((error) => console.log(error))
-      promise.then(function (res) {
-        console.log('update', res.minEls)
-        mpos.var.wait = false
+      promise.then(function (grade) {
+        console.log('update', grade.minEls)
+        vars.wait = false
         return promise
       })
     }
@@ -935,12 +945,7 @@ const mpos = {
       const sign = zIndex >= 0 ? 1 : -1
       zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
       zIndex *= sign
-      z += zIndex * (mpos.var.opt.depth * vars.fov.z)
-      // arc
-      const damp = 0.5
-      const mid = vars.fov.w / 2
-      const rad = (mid - x) / mid
-      const pos = mid * Math.abs(rad)
+      z += zIndex * (vars.opt.depth * vars.fov.z)
 
       function transform(obj) {
         // separation for portal
@@ -970,6 +975,11 @@ const mpos = {
         }
 
         if (vars.opt.arc) {
+          // arc
+          const damp = vars.opt.arc
+          const mid = vars.fov.w / 2
+          const rad = (mid - x) / mid
+          const pos = mid * Math.abs(rad)
           // bulge from view center
           obj.rotation.y = rad * damp * 2
           obj.position.setZ(z + pos * damp)
@@ -1029,15 +1039,20 @@ const mpos = {
 
       return obj
     },
-    css: function (rect, traverse) {
+    css: function (rect, progress) {
       // css style transforms
       let el = rect.el
-      let frame = typeof traverse === 'number'
-      const css = rect.css || { scale: 1, radian: 0, degree: 0, transform: [], style: {} }
+      const frame = typeof progress === 'number'
+      let css = rect.css
 
-      if (traverse === undefined || frame) {
+      if (rect.frame >= progress) {
+        //console.log('frame ok')
+      }
+      if (progress === undefined || frame) {
         // target element original style
-        if (!rect.css) {
+        if (!rect.css || rect.frame < progress) {
+          css = { scale: 1, radian: 0, degree: 0, transform: [], style: {} }
+          //console.log('frame<progress')
           const style = window.getComputedStyle(el)
           css.style = {
             transform: style.transform,
@@ -1049,7 +1064,7 @@ const mpos = {
       } else if (rect.unset) {
         // quirks of DOM
         if (el.matches('details')) {
-          el.open = traverse
+          el.open = progress
         }
         if (el.matches('.mp-offscreen')) {
           rect.z = rect.css.style.zIndex
@@ -1059,11 +1074,12 @@ const mpos = {
       const rects = mpos.var.group.userData.grade.rects
       let els = []
       while (el && el !== document.body) {
-        if (traverse === undefined || frame) {
-          if (!rect.css) {
+        //if (el.dataset.idx) {
+        if (progress === undefined || frame) {
+          if (!rect.css || rect.frame < progress) {
             // accumulate ancestor matrix
             const cache = rects[el.getAttribute('data-idx')]?.css
-            const style = cache && cache.style.transform ? cache.style : window.getComputedStyle(el)
+            const style = cache && cache.style.transform && !(frame && rect.frame < progress) ? cache.style : window.getComputedStyle(el)
             if (style.transform?.startsWith('matrix')) {
               const transform = style.transform.replace(/(matrix)|[( )]/g, '')
               // transform matrix
@@ -1076,7 +1092,7 @@ const mpos = {
               const bound = el.getBoundingClientRect()
 
               // Output
-              // original accrue (didnt work)
+              // accrue
               css.scale *= scale
               css.radian += radian
               css.degree += degree
@@ -1092,8 +1108,9 @@ const mpos = {
           }
         } else {
           // style override
-          traverse ? el.classList.add('mp-unset') : el.classList.remove('mp-unset')
+          el.classList.toggle('mp-unset', progress)
         }
+        //}
 
         els.unshift(el)
         el = el.parentNode
@@ -1532,6 +1549,7 @@ mpos.gen = function (num = 6, selector = 'main') {
   }
 
   const section = document.createElement('details')
+  section.id = 'gen'
   section.classList.add('mp-allow')
   const fragment = document.createDocumentFragment()
   for (let i = 0; i < num; i++) {
