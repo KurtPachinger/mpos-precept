@@ -3,7 +3,7 @@ Imposter DOM rects in THREE:
 ```js
 mpos.dom( 'aside#form', 16 )
 ```
-
+The result can reflect updates from source.
 ### Process
 ```mermaid
 flowchart TB
