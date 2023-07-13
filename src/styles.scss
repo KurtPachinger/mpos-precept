@@ -10,8 +10,8 @@
 html, body {
   height: 100%;
 }
+body * { box-sizing: border-box; }
 #tools {
-  * { box-sizing: border-box; }
   // RESET
   &, h2, h3, p, form {
     margin: 0;

@@ -44,7 +44,7 @@ const mpos = {
       arc: 0,
       frame: 0,
       update: function () {
-        mpos.add.dom(this.selector, this.depth)
+        mpos.add.dom(this.selector, { depth: this.depth })
       }
     },
     fov: {
@@ -192,7 +192,7 @@ const mpos = {
     }
     mpos.ux.observer = new IntersectionObserver(callback)
 
-    const gui = new GUI()
+    vars.gui = new GUI()
     Object.keys(vars.opt).forEach(function (key) {
       let param = []
       if (key === 'selector') param = [['body', 'main', '#text', '#media', '#transform', 'address']]
@@ -201,7 +201,7 @@ const mpos = {
       if (key === 'frame') param = [0, 500, 50]
       if (key === 'arc') param = [0, 1, 0.25]
 
-      const controller = gui.add(vars.opt, key, ...param)
+      const controller = vars.gui.add(vars.opt, key, ...param).listen()
 
       if (key === 'frame') {
         controller.onFinishChange(function (v) {
@@ -212,7 +212,7 @@ const mpos = {
         })
       }
     })
-    gui.domElement.classList.add('mp-native')
+    vars.gui.domElement.classList.add('mp-native')
   },
   ux: {
     timers: {
@@ -356,17 +356,30 @@ const mpos = {
       }
     },
     event: function (e) {
+      // event from CSS3D element
+      //github.com/mrdoob/three.js/blob/c4a35bf6dc662442ae8dc583a3b0321a26d10a60/examples/jsm/interactive/HTMLMesh.js#L500
+      const idx = e.target.getAttribute('data-idx')
+      const source = document.querySelector('body > :not(.mp-block) [data-idx="' + idx + '"]')
+      const isGUI = document.querySelector('#css3d .lil-gui').contains(e.target)
+      //console.log(e.type, e.target)
       if (e.type === 'pointerdown') {
-        // prevent drag Controls (...parentElement?)
-        if (e.target.matches([mpos.precept.native, mpos.precept.native3d])) {
-          console.log(e.target.tagName)
-          e.stopPropagation()
+        // don't prevent drag Controls
+        e.stopPropagation()
+        // emulate things: button, drag, quirks
+        if (isGUI && e.target.nodeName !== 'INPUT') {
+          source.click()
         }
       } else if (e.type === 'input') {
-        // clone form data
-        const idx = e.target.getAttribute('data-idx')
-        const node = document.querySelector('[data-idx="' + idx + '"]')
-        node.value = e.target.value
+        if (isGUI) {
+          // set custom
+          const widget = e.target.closest('.widget')
+          const key = widget.parentElement.querySelector('.name').innerText
+          // note: GUI uses listen, with quirks... and doesnt respect min/max!
+          mpos.var.opt[key] = e.target.value
+        } else {
+          // set generic
+          source.value = e.target.value
+        }
       }
     }
   },
@@ -376,7 +389,7 @@ const mpos = {
     unset: `.mp-offscreen`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
-    native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
+    native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls],.lil-gui,.widget`.split(
       ','
     ),
     poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
@@ -689,10 +702,19 @@ const mpos = {
     }
   },
   add: {
-    dom: async function (selector, layers = 8) {
+    dom: async function (selector, opts = {}) {
       const vars = mpos.var
-      // get DOM node
+
+      // options
       selector = selector || vars.opt.selector || 'body'
+      const depth = opts.depth || vars.opt.depth || 8
+      const parse =
+        opts.parse ||
+        function (node) {
+          console.log(node.nodeName, node.textContent)
+        }
+
+      // get DOM node or offscreen
       const sel = document.querySelector(selector)
       if (sel === null || vars.wait) {
         return
@@ -700,6 +722,11 @@ const mpos = {
         const obj = document.querySelector(selector + ' object')
         await mpos.add.src(obj, vars.opt.address, 'data')
       }
+      // OLD group
+      mpos.add.old(selector)
+      // NEW group
+      vars.group = new Group()
+      vars.group.name = selector
 
       // structure
       const precept = mpos.precept
@@ -723,19 +750,13 @@ const mpos = {
         scroll: { x: window.scrollX, y: -window.scrollY }
       }
 
-      // OLD group
-      mpos.add.old(selector)
-      // NEW group
-      vars.group = new Group()
-      vars.group.name = selector
-
       // FLAT-GRADE: filter, grade, sanitize
       const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
       let node = ni.nextNode()
       while (node) {
         if (node.nodeName === '#comment') {
           // #comment... (or CDATA, xml, php)
-          console.log('#comment', node.textContent)
+          parse(node)
         } else {
           let inPolar = precept.inPolar(node)
           if (inPolar) {
@@ -824,9 +845,9 @@ const mpos = {
         return mat
       }
 
-      function struct(sel, layer, unset) {
+      function struct(sel, deep, unset) {
         // DEEP-GRADE: type, count
-        const z = layers - layer
+        const z = depth - deep
 
         // SELF
         const rect = grade.rects[sel.getAttribute('data-idx')]
@@ -858,10 +879,10 @@ const mpos = {
                   const manual = node.matches(precept.manual)
                   const child = node.children.length
 
-                  if (layer >= 1 && allow && !manual && child) {
+                  if (deep >= 1 && allow && !manual && child) {
                     // selector structure output depth
-                    const depth = layer - 1
-                    struct(node, depth, unset)
+                    const D = deep - 1
+                    struct(node, D, unset)
                   } else {
                     let mat = 'child'
                     // set box type
@@ -876,7 +897,7 @@ const mpos = {
         }
       }
 
-      struct(sel, layers)
+      struct(sel, depth)
 
       Object.values(grade.rects).forEach((rect) => {
         // begin two lists: atlas (instanced) || other (mesh)
@@ -992,11 +1013,20 @@ const mpos = {
       } else if (rect.mat === 'native') {
         // note: element may not inherit some specific styles
         const el = rect.el.cloneNode(true)
-        // wrap prevents overwritten transform
-        const wrap = document.createElement('div')
+        // wrap prevents overwritten transform, and inherits some attributes
+        const stub = rect.el.parentElement
+        const tag = stub.tagName !== 'BODY' ? stub.tagName : 'DIV'
+        const wrap = document.createElement(tag)
         wrap.classList.add('mp-native')
         wrap.append(el)
         wrap.style.zIndex = rect.css.style.zIndex
+
+        // hack at some problems:
+        // relative width and height
+        // duplicate ids or data-idx
+        wrap.style.width = stub.clientWidth + 'px'
+        wrap.style.height = bound.height + 'px'
+
         const css3d = new CSS3DObject(wrap)
         // note: most userData.el reference an original, not a clone
         css3d.userData.el = el

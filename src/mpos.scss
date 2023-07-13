@@ -44,7 +44,7 @@ a, img, obj, span {
     padding: 0;
   }
 
-  #css3d { z-index: 1; }
+  #css3d { z-index: 1; .mp-native{ user-select: none; } }
   &, #css3d, canvas[data-engine] {
     overflow: hidden;
     //overflow-y: auto;
