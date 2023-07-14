@@ -3,22 +3,24 @@
   <head></head>
   <body>
     <details id="tools" class="mp-allow" open>
+      <div id="errorMessage"></div>
       <main>
         <h2><span>main</span></h2>
-        <div id="errorMessage"></div>
-        <form onSubmit="return false;" class="w tilt">
-          <fieldset class="sub">
-            <legend>form</legend>
-            <input class="w75" type="url" placeholder="touches" />
-            <input class="w25" type="button" value="Submit" />
-            <input class="w75" type="range" />
-            <input class="w25" type="reset" />
-          </fieldset>
-        </form>
-        <aside id="transform">
-          <h2>aside<span>#transform</span></h2>
-          <p>support air</p>
-        </aside>
+        <section id="native">
+          <aside>
+            <h2>section<span>#native</span></h2>
+            <p>support air</p>
+          </aside>
+          <form onSubmit="return false;" class="w tilt">
+            <fieldset class="sub">
+              <legend>form</legend>
+              <input class="w75" type="url" placeholder="touches" />
+              <input class="w25" type="button" value="Submit" />
+              <input class="w75" type="range" />
+              <input class="w25" type="reset" />
+            </fieldset>
+          </form>
+        </section>
         <section id="text">
           <h2>section<span>#text</span></h2>
           \n TEXT NODE \n

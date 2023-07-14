@@ -25,7 +25,8 @@ import {
   ShapeGeometry,
   Mesh,
   Shape,
-  Path
+  Path,
+  CullFaceNone
 } from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
@@ -37,7 +38,7 @@ import { toSvg, toPng } from 'html-to-image'
 const mpos = {
   var: {
     opt: {
-      selector: 'body',
+      selector: '#loader',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 3,
@@ -195,7 +196,7 @@ const mpos = {
     vars.gui = new GUI()
     Object.keys(vars.opt).forEach(function (key) {
       let param = []
-      if (key === 'selector') param = [['body', 'main', '#text', '#media', '#transform', 'address']]
+      if (key === 'selector') param = [['body', 'main', '#native', '#text', '#loader', '#media', 'address']]
       if (key === 'depth') param = [0, 32, 1]
       if (key === 'inPolar') param = [1, 4, 1]
       if (key === 'frame') param = [0, 500, 50]
@@ -556,16 +557,16 @@ const mpos = {
           // queue indexes from end, but in reverse
           const rect = r_atlas.rects[opts.array[opts.array.length - opts.idx]]
           if (rect && rect.atlas !== undefined) {
-            // style needs no transform, and block
+            // style needs no transform, no margin, maybe block... dont reset live animations
             const align = { transform: 'initial', margin: 0 }
             // bug: style display-inline is not honored by style override
             const bbox = !rect.el.clientWidth && !rect.el.clientHeight && rect.el.matches('a, img, obj, span, xml, :is(:empty)')
             bbox && (rect.el.style.display = 'inline-block')
-            //rect.el.classList.add('mp-unset')
             // toSvg crisper, toPng smaller
+            //rect.el.classList.add('mp-align')
             toPng(rect.el, { style: align, preferredFontFormat: 'woff' })
               .then(function (dataUrl) {
-                //rect.el.classList.remove('mp-unset')
+                //rect.el.classList.remove('mp-align')
                 if (dataUrl === 'data:,') {
                   //const error = ['idx', rect.el.getAttribute('data-idx'), 'bad size'].join(' ')
                   //console.log('no box')
@@ -975,9 +976,8 @@ const mpos = {
         const extrude = stencil ? vars.fov.z / 2 : 0
         z += extrude
 
-        obj.position.set(x, y, z)
-
         if (obj.isCSS3DObject) {
+          obj.position.set(x, y, z)
           // element does not scale like group
           obj.userData.el.style.width = w
           obj.userData.el.style.height = h
@@ -989,9 +989,14 @@ const mpos = {
           }
         } else if (obj.isGroup) {
           // group implies loader, with arbitrary scale
-          obj.position.x -= w / 2
-          obj.position.y += h / 2
+          const dummy = new Object3D()
+          dummy.position.set(x, y, z)
+          dummy.scale.set(w * rect.css.scale, h * rect.css.scale, d)
+          obj.rotation.z = -rect.css.radian
+          // dummy from element fits group
+          mpos.add.fit(dummy, obj)
         } else {
+          obj.position.set(x, y, z)
           obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
           obj.rotation.z = -rect.css.radian
         }
@@ -1214,22 +1219,29 @@ const mpos = {
       document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
       mpos.ux.observer.disconnect()
     },
-    fit: function (dummy, group) {
+    fit: function (dummy, group, opts = {}) {
       // scale
-      const aabb = new Box3()
-      aabb.setFromObject(group)
       const s1 = Math.max(dummy.scale.x, dummy.scale.y)
-      const s2 = Math.max(aabb.max.x, aabb.max.y)
-      group.scale.multiplyScalar(s1 / s2)
-      group.scale.y *= -1
+      let s2 = group.userData.s2
+      if (opts.add) {
+        const aabb = new Box3()
+        aabb.setFromObject(group)
+        s2 = Math.max(aabb.max.x, aabb.max.y)
+      }
+      const scalar = s1 / s2
+      group.scale.set(scalar, scalar * -1, scalar)
+
       // position
       group.position.copy(dummy.position)
       group.position.x -= dummy.scale.x / 2
       group.position.y += dummy.scale.y / 2
 
       //group.userData.el = rect.el
-      mpos.var.grade.group.add(group)
-      mpos.ux.render()
+      if (opts.add) {
+        mpos.var.grade.group.add(group)
+        group.userData.s2 = s2
+        mpos.ux.render()
+      }
     },
     loader: function (rect, dummy, group) {
       const file = rect.el.data || rect.el.src || rect.el.href
@@ -1271,7 +1283,7 @@ const mpos = {
                 }
               }
               group.name = handler
-              mpos.add.fit(dummy, group)
+              mpos.add.fit(dummy, group, { add: true })
             }
           },
           // called when loading is in progresses
@@ -1528,7 +1540,7 @@ const mpos = {
               kmeans = null
 
               group.name = 'OPENCV'
-              mpos.add.fit(dummy, group)
+              mpos.add.fit(dummy, group, { add: true })
             } catch (error) {
               console.warn(error)
             }

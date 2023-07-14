@@ -5,6 +5,11 @@
   > * { z-index: 0.999; }
   &.tool{ bottom: 8rem; }
 }
+.mp-align {
+  margin: 0;
+  transform: none;
+  //animation: none;
+}
 .mp-unset {
   // toggle CSS during transform
   // toSvg needs ClientRect without transforms
