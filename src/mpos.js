@@ -25,8 +25,7 @@ import {
   ShapeGeometry,
   Mesh,
   Shape,
-  Path,
-  CullFaceNone
+  Path
 } from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
@@ -38,7 +37,7 @@ import { toSvg, toPng } from 'html-to-image'
 const mpos = {
   var: {
     opt: {
-      selector: '#loader',
+      selector: 'main',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 3,

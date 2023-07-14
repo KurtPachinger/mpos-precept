@@ -40,7 +40,7 @@ body * { box-sizing: border-box; }
     transform: rotate(15deg) scale(1.5);
   }
 
-  article#nest {
+  #nest {
     div, span, section {
     float: left;
     width: 50%;
@@ -130,6 +130,8 @@ img {
   width: 100%;
   height: auto;
 }
+
+.resize{ overflow: auto; resize: horizontal; }
 
 #gen img.w50:hover {
   width: 100%;
