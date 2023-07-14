@@ -37,7 +37,7 @@ import { toSvg, toPng } from 'html-to-image'
 const mpos = {
   var: {
     opt: {
-      selector: 'main',
+      selector: 'body',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 3,
@@ -149,12 +149,14 @@ const mpos = {
     vars.scene.add(axes)
 
     // CSS3D
+
     const css3d = document.getElementById('css3d')
     vars.rendererCSS = new CSS3DRenderer()
     vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
     css3d.appendChild(vars.rendererCSS.domElement)
     css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
-    vars.controls = new MapControls(vars.camera, vars.rendererCSS.domElement)
+
+    vars.controls = new MapControls(vars.camera, vars.renderer.domElement)
     vars.controls.screenSpacePanning = true
 
     const halfHeight = -(vars.fov.h / 2)
@@ -167,12 +169,12 @@ const mpos = {
     mpos.ux.render()
 
     // user events: css
-    const cloneCSS = mp.querySelector('#css3d > div > div > div')
-    cloneCSS.addEventListener('pointerdown', mpos.ux.event, false)
-    cloneCSS.addEventListener('input', mpos.ux.event, false)
+    //const cloneCSS = mp.querySelector('#css3d > div > div > div')
+    vars.renderer.domElement.addEventListener('pointerdown', mpos.ux.event, false)
+    vars.renderer.domElement.addEventListener('input', mpos.ux.event, false)
     // user events: scene
     vars.controls.addEventListener('change', mpos.ux.render, false)
-    mp.addEventListener('pointermove', mpos.ux.raycast, false)
+    vars.renderer.domElement.addEventListener('pointermove', mpos.ux.raycast, false)
     window.addEventListener('scroll', mpos.ux.reflow, false)
 
     // resize
@@ -285,7 +287,7 @@ const mpos = {
               vars.camera.updateProjectionMatrix()
 
               vars.renderer.setSize(vars.fov.w, vars.fov.h)
-              vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+              //vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
 
               mpos.ux.render()
             } else {
@@ -360,7 +362,8 @@ const mpos = {
       //github.com/mrdoob/three.js/blob/c4a35bf6dc662442ae8dc583a3b0321a26d10a60/examples/jsm/interactive/HTMLMesh.js#L500
       const idx = e.target.getAttribute('data-idx')
       const source = document.querySelector('body > :not(.mp-block) [data-idx="' + idx + '"]')
-      const isGUI = document.querySelector('#css3d .lil-gui').contains(e.target)
+      //const isGUI = document.querySelector('#css3d .lil-gui').contains(e.target)
+      const isGUI = false
       //console.log(e.type, e.target)
       if (e.type === 'pointerdown') {
         // don't prevent drag Controls
@@ -389,9 +392,10 @@ const mpos = {
     unset: `.mp-offscreen`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
-    native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls],.lil-gui,.widget`.split(
+    native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
       ','
     ),
+    cors: `iframe,object`.split(','),
     poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
@@ -507,6 +511,8 @@ const mpos = {
       //console.log('r_frame', r_frame)
 
       const promise = new Promise((resolve, reject) => {
+        // style needs no transform, no margin, maybe block... dont reset live animations, etc...
+        const align = { display: 'block', margin: 0, transform: 'initial', left: 'initial', right: 'initial' }
         function atlas(grade, opts = {}) {
           // element mat conversion
           if (opts.array === undefined) {
@@ -556,10 +562,8 @@ const mpos = {
           // queue indexes from end, but in reverse
           const rect = r_atlas.rects[opts.array[opts.array.length - opts.idx]]
           if (rect && rect.atlas !== undefined) {
-            // style needs no transform, no margin, maybe block... dont reset live animations
-            const align = { transform: 'initial', margin: 0 }
             // bug: style display-inline is not honored by style override
-            const bbox = !rect.el.clientWidth && !rect.el.clientHeight && rect.el.matches('a, img, obj, span, xml, :is(:empty)')
+            const bbox = !rect.el.clientWidth && !rect.el.clientHeight && rect.el.matches('a, img, object, span, xml, :is(:empty)')
             bbox && (rect.el.style.display = 'inline-block')
             // toSvg crisper, toPng smaller
             //rect.el.classList.add('mp-align')
@@ -808,7 +812,7 @@ const mpos = {
           if (rect.inPolar >= grade.inPolar) {
             grade.minEls++
 
-            if (rect.mat === 'poster') {
+            if (rect.mat === 'poster' || rect.mat === 'native') {
               // shader
               rect.atlas = grade.atlas++
             }
@@ -823,7 +827,7 @@ const mpos = {
             rect.unset = true
           }
 
-          rect.r_ = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
+          rect.r_ = rect.mat === 'loader' || rect.mat === 'wire' || rect.el.matches([precept.cors, precept.native3d]) ? 'other' : 'atlas'
         }
         return unset
       }
@@ -940,7 +944,7 @@ const mpos = {
 
       // css: accumulate transforms
       rect.css = mpos.add.css(rect, opts.frame)
-      rect.frame = opts.frame || rect.frame
+      rect.frame = opts.frame || rect.frame || 0
       // css: unset for box scale
       mpos.add.css(rect, true)
       let bound = rect.el.getBoundingClientRect()
@@ -1015,7 +1019,7 @@ const mpos = {
       let object
       if (rect.obj) {
         object = rect.obj
-      } else if (rect.mat === 'native') {
+      } else if (rect.mat === 'native' && rect.r_ === 'other') {
         // note: element may not inherit some specific styles
         const el = rect.el.cloneNode(true)
         // wrap prevents overwritten transform, and inherits some attributes
@@ -1204,11 +1208,13 @@ const mpos = {
       }
 
       // CSS3D
+      /*
       const css3d = mpos.var.rendererCSS.domElement
       const clones = css3d.querySelectorAll(':not(.mp-block)')
       clones.forEach(function (el) {
         el.parentElement.removeChild(el)
       })
+      */
 
       // Shader Atlas
       //let atlas = document.getElementById('atlas').children
