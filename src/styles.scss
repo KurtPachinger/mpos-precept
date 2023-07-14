@@ -10,6 +10,9 @@
 html, body {
   height: 100%;
 }
+body {
+  counter-reset: section;
+}
 body * { box-sizing: border-box; }
 #tools {
   // RESET
@@ -30,26 +33,33 @@ body * { box-sizing: border-box; }
     width: 16rem;
     max-width: var(--unit);
   }
+
   aside#transform {
     position: absolute;
     left: 100%;
     background: var(--med);
     transform: rotate(15deg) scale(1.5);
   }
-  section#text h2 {
-    transform-origin: 0 50%;
-    animation: pulse 15s infinite alternate;
-  }
-  @keyframes pulse{
-    0% { z-index: -9; transform: scale(1.5) rotate(15deg); }
-    100% { z-index: 9; transform: scale(1.5) rotate(-15deg); }
-  }
+
   article#nest {
     div, span, section {
     float: left;
     width: 50%;
     height: 1em;
     background-color: rgba( 128, 128, 128, 0.25 );
+    }
+  }
+
+  // COUNTER
+  section, article {
+    &:after {
+      counter-increment: section;
+      content: '::' counter(section);
+      display: block;
+      clear: both;
+      //
+      font-size: 0.5em;
+      color: #808080;
     }
   }
 
@@ -82,10 +92,38 @@ table tr, li, summary {
 }
 
 
+
+
+// effects, animations
+.tilt {
+  transform: scale(0.75) rotate(-7.5deg);
+}
+
+.pulse {
+  animation: pulse 7.5s linear infinite alternate;
+}
+@keyframes pulse{
+  0% { z-index: -9; transform: scale(0.75) rotate(-15deg); }
+  100% { z-index: 9; transform: scale(1.25) rotate(15deg); }
+}
+
+.hinge {
+  transform-origin: right bottom;
+  animation: hinge 7.5s linear infinite alternate;
+}
+@keyframes hinge {
+  100% { transform: rotate(45deg); left: 50%; }
+}
+
+
+
+
 // framework
-.w25, .w50, .w75 { float: left; }
+.w25, .w33, .w50, .w66, .w75 { float: left; }
 .w25 { width: 25.0%; }
+.w33 { width: 33.3%; }
 .w50 { width: 50.0%; }
+.w66 { width: 66.6%; }
 .w75 { width: 75.0%; }
 .w100 { width: 100%; }
 img {
@@ -93,14 +131,6 @@ img {
   height: auto;
 }
 
-#Lena, #src {
-  position: relative;
-  left: 0;
-  animation: Lena 15s linear infinite; 
-}
-@keyframes Lena {
-  50% { transform: rotate(90deg); left: 50%; }
-}
 #gen img.w50:hover {
   width: 100%;
   transition: width 2s;

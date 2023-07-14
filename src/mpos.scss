@@ -1,7 +1,7 @@
 
 // MP SELECTORS
 .mp-offscreen {
-pointer-events: none;
+  pointer-events: none;
   > * { z-index: 0.999; }
   &.tool{ bottom: 8rem; }
 }
@@ -27,15 +27,15 @@ a, img, obj, span {
   }
 }
 .mp-clone { /*backface-visibility: hidden;*/ }
-.tool {
-  width: 8rem;
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  z-index: 3;
+  .tool {
+    width: 8rem;
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    z-index: 3;
 }
-
-
+  
+  
 //
 // MP INTERFACE
 #mp {
@@ -43,7 +43,7 @@ a, img, obj, span {
     margin: 0;
     padding: 0;
   }
-
+  
   #css3d { z-index: 1; .mp-native{ user-select: none; } }
   &, #css3d, canvas[data-engine] {
     overflow: hidden;
@@ -57,8 +57,8 @@ a, img, obj, span {
     cursor: crosshair;
     position: fixed;
   }
-
-  #atlas {
+  
+#atlas {
     background-color: rgba( 255, 255, 255, 0.75 );
     overflow: hidden;
     overflow-y: auto;
@@ -86,5 +86,5 @@ a, img, obj, span {
       transition: all 0.25s;
     }
   }
-
+  
 }

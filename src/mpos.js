@@ -230,7 +230,7 @@ const mpos = {
     reflow: function (e) {
       // balance lag of input versus update
       const vars = mpos.var
-      const grade = vars.group.userData.grade
+      const grade = vars.grade
       const queue = grade.r_.queue
 
       function enqueue(idx) {
@@ -320,10 +320,10 @@ const mpos = {
       vars.pointer.x = (e.clientX / window.innerWidth) * 2 - 1
       vars.pointer.y = -(e.clientY / window.innerHeight) * 2 + 1
 
-      if (vars.group) {
-        const grade = vars.group.userData.grade
+      const grade = vars.grade
+      if (grade) {
         vars.raycaster.setFromCamera(vars.pointer, vars.camera)
-        let intersects = vars.raycaster.intersectObjects(vars.group.children, false)
+        let intersects = vars.raycaster.intersectObjects(grade.group.children, false)
         intersects = intersects.filter(function (hit) {
           return grade.ray.indexOf(hit.instanceId) > -1
         })
@@ -561,9 +561,11 @@ const mpos = {
             // bug: style display-inline is not honored by style override
             const bbox = !rect.el.clientWidth && !rect.el.clientHeight && rect.el.matches('a, img, obj, span, xml, :is(:empty)')
             bbox && (rect.el.style.display = 'inline-block')
+            //rect.el.classList.add('mp-unset')
             // toSvg crisper, toPng smaller
             toPng(rect.el, { style: align, preferredFontFormat: 'woff' })
               .then(function (dataUrl) {
+                //rect.el.classList.remove('mp-unset')
                 if (dataUrl === 'data:,') {
                   //const error = ['idx', rect.el.getAttribute('data-idx'), 'bad size'].join(' ')
                   //console.log('no box')
@@ -725,13 +727,13 @@ const mpos = {
       // OLD group
       mpos.add.old(selector)
       // NEW group
-      vars.group = new Group()
-      vars.group.name = selector
+      const group = new Group()
+      group.name = selector
 
       // structure
       const precept = mpos.precept
       const grade = {
-        sel: sel,
+        group: group,
         canvas: precept.canvas,
         index: precept.index++,
         atlas: 0, // poster count, whereas r_.atlas includes self,child for instanceMesh
@@ -921,18 +923,17 @@ const mpos = {
       instanced.layers.set(2)
       instanced.userData.shader = shader
       instanced.userData.el = grade.sel
-      instanced.name = [grade.index, grade.sel.tagName].join('_')
+      instanced.name = [grade.index, selector.tagName].join('_')
       grade.instanced = instanced
 
       // OUTPUT
-      vars.group.userData.grade = grade
-      vars.group.add(instanced)
-      vars.scene.add(vars.group)
+      group.add(instanced)
+      vars.scene.add(group)
 
-      grade.group = vars.group
+      vars.grade = grade
 
       mpos.precept.update(grade)
-      return vars.group
+      return grade
     },
     box: function (rect, opts = {}) {
       const vars = mpos.var
@@ -1059,7 +1060,7 @@ const mpos = {
           mpos.add.loader(rect, object, obj)
         } else {
           // general (native, wire)
-          vars.group.add(object)
+          vars.grade.group.add(object)
         }
         const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
         obj.name = name
@@ -1101,7 +1102,7 @@ const mpos = {
         }
       }
 
-      const rects = mpos.var.group.userData.grade.rects
+      const rects = mpos.var.grade.rects
       let els = []
       while (el && el !== document.body) {
         //if (el.dataset.idx) {
@@ -1169,7 +1170,7 @@ const mpos = {
     },
     old: function (selector) {
       // dispose of scene and release listeners
-      let groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
+      const groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
 
       if (groups && groups.length) {
         for (let g = groups.length - 1; g >= 0; g--) {
@@ -1227,7 +1228,7 @@ const mpos = {
       group.position.y += dummy.scale.y / 2
 
       //group.userData.el = rect.el
-      mpos.var.group.add(group)
+      mpos.var.grade.group.add(group)
       mpos.ux.render()
     },
     loader: function (rect, dummy, group) {
