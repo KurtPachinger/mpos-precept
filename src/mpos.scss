@@ -46,12 +46,19 @@ a, img, obj, span {
 //
 // MP INTERFACE
 #mp {
+  position: fixed;
   &, .tool, .tool * {
     margin: 0;
     padding: 0;
   }
   
-  #css3d { z-index: 1; pointer-events:none; .mp-native{ user-select: none; } }
+  #css3d { 
+    z-index: 1; pointer-events:none; 
+     .mp-block, .mp-block > .mp-block > .mp-block > .mp-native{ 
+       pointer-events: none!important;
+       > * { pointer-events: initial; }
+       } 
+  }
   &, #css3d, canvas[data-engine] {
     overflow: hidden;
     //overflow-y: auto;
@@ -62,7 +69,7 @@ a, img, obj, span {
   }
   #css3d, canvas[data-engine] {
     cursor: crosshair;
-    position: fixed;
+    position: absolute;
   }
   
 #atlas {

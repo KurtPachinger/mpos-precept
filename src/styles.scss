@@ -12,10 +12,13 @@ html, body {
 }
 
 body * { box-sizing: border-box; }
-#tools {
+#tools, #css3d {
+  // user stylesheet duplicates targeted styles on css selector...?
+  &#css3d > .mp-block > .mp-block > .mp-block > *{ border: 0.125em dotted red; }
+
   counter-reset: section;
   // RESET
-  &, h2, h3, p, form {
+  &#tools, h2, h3, p, form {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -24,7 +27,7 @@ body * { box-sizing: border-box; }
   }
 
   // STRUCTURE
-  &, #main {
+  &#tools, #main {
     user-select: none;
     position: absolute;
     z-index: 2;

@@ -391,11 +391,13 @@ const mpos = {
     manual: `.mp-loader,.mp-native,.mp-poster`.split(','),
     unset: `.mp-offscreen`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
-    block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template`.split(','),
+    block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,iframe:not([src])`.split(
+      ','
+    ),
     native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
       ','
     ),
-    cors: `iframe,object`.split(','),
+    cors: `iframe,object,.yt`.split(','),
     poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (node, control) {
@@ -662,7 +664,7 @@ const mpos = {
                 uvOffset[stepSize] = rect.x || grade.key.x
                 uvOffset[stepSize + 1] = 1 - rect.y || grade.key.y
               }
-              if (rect.atlas !== undefined || rect.mat === 'child') {
+              if (rect.atlas !== undefined) {
                 // raycast filter
                 grade.ray.push(Number(idx))
               }
