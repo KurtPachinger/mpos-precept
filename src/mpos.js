@@ -326,17 +326,24 @@ const mpos = {
       if (grade) {
         vars.raycaster.setFromCamera(vars.pointer, vars.camera)
         let intersects = vars.raycaster.intersectObjects(grade.group.children, false)
+        if (!intersects.length) {
+          return
+        }
         intersects = intersects.filter(function (hit) {
-          return grade.ray.indexOf(hit.instanceId) > -1
+          // intersects.instanceId is any Instanced atlas (child, self...)
+          // grade.ray { instance: data-idx }
+          return Object.keys(grade.ray).indexOf(String(hit.instanceId)) > -1
         })
 
         if (intersects.length) {
           //console.log('intersects', intersects)
           const hit = intersects[0]
           const obj = hit.object
+          const uv = hit.uv
 
           if (obj) {
             const rect = Object.values(grade.r_.atlas.rects)[hit.instanceId]
+            console.log(hit.instanceId, rect, uv)
             //console.log('ray', hit.instanceId, rect)
             const carot = vars.carot.style
             // visibility
@@ -637,7 +644,7 @@ const mpos = {
           instanced.count = r_atlas.count
           const uvOffset = new Float32Array(instanced.count * 2).fill(-1)
 
-          grade.ray = []
+          grade.ray = {}
           let count = 0
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
             // Instance Matrix
@@ -666,7 +673,7 @@ const mpos = {
               }
               if (rect.atlas !== undefined) {
                 // raycast filter
-                grade.ray.push(Number(idx))
+                grade.ray[count] = Number(idx)
               }
             }
 
