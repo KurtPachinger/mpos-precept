@@ -46,6 +46,7 @@ a, img, obj, span {
 //
 // MP INTERFACE
 #mp {
+  user-select: none;
   position: fixed;
   &, .tool, .tool * {
     margin: 0;

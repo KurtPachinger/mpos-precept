@@ -142,7 +142,8 @@ const mpos = {
 
     vars.renderer = new WebGLRenderer()
     vars.renderer.setSize(vars.fov.w, vars.fov.h)
-    mp.appendChild(vars.renderer.domElement)
+    const domElement = vars.renderer.domElement
+    mp.appendChild(domElement)
     vars.renderer.setClearColor(0x00ff00, 0)
     // helpers
     const axes = new AxesHelper(vars.fov.max)
@@ -156,7 +157,7 @@ const mpos = {
     css3d.appendChild(vars.rendererCSS.domElement)
     css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
 
-    vars.controls = new MapControls(vars.camera, vars.renderer.domElement)
+    vars.controls = new MapControls(vars.camera, domElement)
     vars.controls.screenSpacePanning = true
 
     const halfHeight = -(vars.fov.h / 2)
@@ -170,11 +171,18 @@ const mpos = {
 
     // user events: css
     //const cloneCSS = mp.querySelector('#css3d > div > div > div')
-    vars.renderer.domElement.addEventListener('pointerdown', mpos.ux.event, false)
-    vars.renderer.domElement.addEventListener('input', mpos.ux.event, false)
+    //
+
+    const events = ['mousedown', 'mousemove', 'click']
+    events.forEach(function (event) {
+      domElement.addEventListener(event, mpos.ux.event, false)
+    })
+    //
+    //domElement.addEventListener('pointerdown', mpos.ux.event, false)
+    //domElement.addEventListener('input', mpos.ux.event, false)
     // user events: scene
     vars.controls.addEventListener('change', mpos.ux.render, false)
-    vars.renderer.domElement.addEventListener('pointermove', mpos.ux.raycast, false)
+    domElement.addEventListener('pointermove', mpos.ux.raycast, false)
     window.addEventListener('scroll', mpos.ux.reflow, false)
 
     // resize
@@ -326,9 +334,6 @@ const mpos = {
       if (grade) {
         vars.raycaster.setFromCamera(vars.pointer, vars.camera)
         let intersects = vars.raycaster.intersectObjects(grade.group.children, false)
-        if (!intersects.length) {
-          return
-        }
         intersects = intersects.filter(function (hit) {
           // intersects.instanceId is any Instanced atlas (child, self...)
           // grade.ray { instance: data-idx }
@@ -336,15 +341,16 @@ const mpos = {
         })
 
         if (intersects.length) {
-          //console.log('intersects', intersects)
           const hit = intersects[0]
           const obj = hit.object
           const uv = hit.uv
 
           if (obj) {
             const rect = Object.values(grade.r_.atlas.rects)[hit.instanceId]
-            console.log(hit.instanceId, rect, uv)
-            //console.log('ray', hit.instanceId, rect)
+            //console.log(hit.instanceId, rect.el, uv)
+            // note: raycast element may be non-interactive (atlas), but not CSS3D or loader (other)
+            vars.events = { x: uv.x, y: uv.y, target: rect.el, ux: rect.ux, position: rect.css.style.position }
+            //
             const carot = vars.carot.style
             // visibility
             const vis = mpos.precept.inPolar(rect.el) >= vars.opt.inPolar
@@ -361,36 +367,66 @@ const mpos = {
               carot.left = carot.bottom = 0
             }
           }
+        } else {
+          vars.events = {}
         }
       }
     },
     event: function (e) {
-      // event from CSS3D element
-      //github.com/mrdoob/three.js/blob/c4a35bf6dc662442ae8dc583a3b0321a26d10a60/examples/jsm/interactive/HTMLMesh.js#L500
-      const idx = e.target.getAttribute('data-idx')
-      const source = document.querySelector('body > :not(.mp-block) [data-idx="' + idx + '"]')
-      //const isGUI = document.querySelector('#css3d .lil-gui').contains(e.target)
-      const isGUI = false
-      //console.log(e.type, e.target)
-      if (e.type === 'pointerdown') {
-        // don't prevent drag Controls
-        e.stopPropagation()
-        // emulate things: button, drag, quirks
-        if (isGUI && e.target.nodeName !== 'INPUT') {
-          source.click()
+      mpos.var.controls.enablePan = true
+      //console.log(e.type)
+      const events = mpos.var.events
+      if (!events || !events.target || !events.ux) {
+        return
+      } else if (e.type === 'mousedown' || e.type === 'mousemove') {
+        mpos.var.controls.enablePan = false
+      }
+
+      //github.com/mrdoob/three.js/blob/dev/examples/jsm/interactive/HTMLMesh.js#L512C1-L563C2
+      // CSS3D
+      //const idx = e.target.getAttribute('data-idx')
+      //const source = document.querySelector('body > :not(.mp-block) [data-idx="' + idx + '"]')
+
+      // raycaster
+      const element = events.target
+      const rectX = events.x
+      const rectY = 1 - events.y
+      // eventListener
+      const event = e.type
+      //const pageX = e.offsetX
+      //const pageY = e.offsetY
+
+      const [scrollX, scrollY] = events.position === 'fixed' ? [0, 0] : [window.scrollX, window.scrollY]
+
+      const MouseEventInit = {
+        clientX: rectX * element.offsetWidth + element.offsetLeft + scrollX,
+        clientY: rectY * element.offsetHeight + element.offsetTop + scrollY,
+        view: element.ownerDocument.defaultView
+        //
+        //bubbles: true,
+        //cancelable: true
+      }
+
+      //window.dispatchEvent(new MouseEvent(event, MouseEventInit))
+      const rect = element.getBoundingClientRect()
+      let x = rectX * rect.width + rect.left + scrollX
+      let y = rectY * rect.height + rect.top + scrollY
+
+      //const el = document.elementFromPoint(x, y)
+      //el.dispatchEvent(new MouseEvent(event, MouseEventInit))
+
+      function traverse(element) {
+        const rect = element.getBoundingClientRect()
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          element.dispatchEvent(new MouseEvent(event, MouseEventInit))
         }
-      } else if (e.type === 'input') {
-        if (isGUI) {
-          // set custom
-          const widget = e.target.closest('.widget')
-          const key = widget.parentElement.querySelector('.name').innerText
-          // note: GUI uses listen, with quirks... and doesnt respect min/max!
-          mpos.var.opt[key] = e.target.value
-        } else {
-          // set generic
-          source.value = e.target.value
+
+        for (let i = 0; i < element.children.length; i++) {
+          traverse(element.children[i])
         }
       }
+
+      traverse(element)
     }
   },
   precept: {
@@ -440,7 +476,6 @@ const mpos = {
       let r_queue = grade.r_.queue
       if ((dataIdx && !r_queue.length) || vars.wait) {
         // redundant invocation... frame?
-        console.log('wait')
         return
       }
       vars.wait = true
@@ -836,6 +871,11 @@ const mpos = {
             rect.unset = true
           }
 
+          if (rect.mat === 'native') {
+            // denote interactive, since format may be coerced
+            // and unsubscribe events for performance
+            rect.ux = true
+          }
           rect.r_ = rect.mat === 'loader' || rect.mat === 'wire' || rect.el.matches([precept.cors, precept.native3d]) ? 'other' : 'atlas'
         }
         return unset
@@ -1106,7 +1146,8 @@ const mpos = {
             transform: style.transform,
             transformOrigin: style.transformOrigin,
             backgroundColor: style.backgroundColor,
-            zIndex: style.zIndex
+            zIndex: style.zIndex,
+            position: style.position // raycast events use position
           }
         }
       } else if (rect.unset) {
