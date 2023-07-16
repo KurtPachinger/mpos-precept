@@ -131,7 +131,7 @@ const mpos = {
     // inject mpos stage
     const template = document.createElement('template')
     template.innerHTML = `
-    <section id='mp' class='mp-block'>
+    <section id='mp'>
       <address class='tool mp-offscreen'>
         <object></object>
       </address>
@@ -146,6 +146,7 @@ const mpos = {
     mpos.precept.canvas = document.querySelector('#atlas canvas')
     vars.carot = document.getElementById('carot')
     const mp = vars.proxy ? container : document.getElementById('mp')
+    mp.classList.add('mp-block')
 
     vars.camera.layers.enableAll()
     if (!vars.proxy) {
