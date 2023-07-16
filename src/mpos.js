@@ -208,8 +208,8 @@ const mpos = {
     //const cloneCSS = mp.querySelector('#css3d > div > div > div')
     //domElement.addEventListener('input', mpos.ux.event, false)
 
-    vars.gui = new GUI()
-    vars.gui.domElement.classList.add('mp-native')
+    const gui = new GUI()
+    gui.domElement.classList.add('mp-native')
     Object.keys(vars.opt).forEach(function (key) {
       const params = {
         selector: [['body', 'main', '#native', '#text', '#loader', '#media', 'address']],
@@ -219,7 +219,7 @@ const mpos = {
         arc: [0, 1, 0.25]
       }
       const param = params[key] || []
-      const controller = vars.gui.add(vars.opt, key, ...param).listen()
+      const controller = gui.add(vars.opt, key, ...param).listen()
 
       if (key === 'frame') {
         controller.onFinishChange(function (v) {
@@ -456,8 +456,10 @@ const mpos = {
       let vis = node.tagName || node.textContent.trim() ? 1 : false
       if (typeof control === 'object') {
         // node relative in control plot
+
         vis = Object.values(control).some(function (tag) {
-          const unlist = node.parentElement.checkVisibility()
+          const parent = node.parentElement
+          const unlist = parent.offsetWidth && parent.offsetHeight
           return unlist && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
         })
       } else {
@@ -465,7 +467,8 @@ const mpos = {
         if (node.tagName) {
           // 2: node is tag
           vis++
-          if (node.checkVisibility()) {
+          //const style = window.getComputedStyle(node)
+          if (node.offsetWidth && node.offsetHeight) {
             // 3: tag not hidden
             vis++
             const rect = node.getBoundingClientRect()
@@ -754,7 +757,7 @@ const mpos = {
 
       promise.catch((error) => console.log(error))
       promise.then(function (grade) {
-        console.log('update', grade.minEls)
+        //console.log('update', grade.minEls)
         vars.wait = false
         return promise
       })
@@ -1685,5 +1688,30 @@ mpos.gen = function (num = 6, selector = 'main') {
 }
 
 window.mpos = mpos
+
+/**
+ * window.requestIdleCallback()
+ * version 0.0.0
+ * Browser Compatibility:
+ * https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback#browser_compatibility
+ */
+if (!window.requestIdleCallback) {
+  window.requestIdleCallback = function (callback, options) {
+    var options = options || {}
+    var relaxation = 1
+    var timeout = options.timeout || relaxation
+    var start = performance.now()
+    return setTimeout(function () {
+      callback({
+        get didTimeout() {
+          return options.timeout ? false : performance.now() - start - relaxation > timeout
+        },
+        timeRemaining: function () {
+          return Math.max(0, relaxation + (performance.now() - start))
+        }
+      })
+    }, relaxation)
+  }
+}
 
 export default mpos
