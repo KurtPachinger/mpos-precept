@@ -1,4 +1,5 @@
 import './mpos.scss'
+import { toPng, toSvg } from 'html-to-image'
 //import * as THREE from 'three'
 import {
   BoxGeometry,
@@ -30,9 +31,8 @@ import {
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { toSvg, toPng } from 'html-to-image'
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
 const mpos = {
   var: {
@@ -116,7 +116,7 @@ const mpos = {
   },
   init: function () {
     const vars = this.var
-    // containers
+    // inject mpos stage
     const template = document.createElement('template')
     template.innerHTML = `
     <section id='mp' class='mp-block'>
@@ -150,7 +150,6 @@ const mpos = {
     vars.scene.add(axes)
 
     // CSS3D
-
     const css3d = document.getElementById('css3d')
     vars.rendererCSS = new CSS3DRenderer()
     vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
@@ -169,29 +168,22 @@ const mpos = {
     vars.raycaster.layers.set(2)
     mpos.ux.render()
 
-    // user events: css
-    //const cloneCSS = mp.querySelector('#css3d > div > div > div')
-    //
-
+    // user events: scene
+    vars.controls.addEventListener('change', mpos.ux.render, false)
+    domElement.addEventListener('pointermove', mpos.ux.raycast, false)
     const events = ['mousedown', 'mousemove', 'click']
     events.forEach(function (event) {
       domElement.addEventListener(event, mpos.ux.event, false)
     })
-    //
-    //domElement.addEventListener('pointerdown', mpos.ux.event, false)
-    //domElement.addEventListener('input', mpos.ux.event, false)
-    // user events: scene
-    vars.controls.addEventListener('change', mpos.ux.render, false)
-    domElement.addEventListener('pointermove', mpos.ux.raycast, false)
-    window.addEventListener('scroll', mpos.ux.reflow, false)
 
+    // user events: window
+    window.addEventListener('scroll', mpos.ux.reflow, false)
     // resize
     const resize = new ResizeObserver((entries) => {
       mpos.ux.reflow({ type: 'resize' })
     })
     resize.observe(mp)
 
-    // scroll
     const callback = function (entries, observer) {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
@@ -202,15 +194,21 @@ const mpos = {
     }
     mpos.ux.observer = new IntersectionObserver(callback)
 
-    vars.gui = new GUI()
-    Object.keys(vars.opt).forEach(function (key) {
-      let param = []
-      if (key === 'selector') param = [['body', 'main', '#native', '#text', '#loader', '#media', 'address']]
-      if (key === 'depth') param = [0, 32, 1]
-      if (key === 'inPolar') param = [1, 4, 1]
-      if (key === 'frame') param = [0, 500, 50]
-      if (key === 'arc') param = [0, 1, 0.25]
+    // user events: css clone
+    //const cloneCSS = mp.querySelector('#css3d > div > div > div')
+    //domElement.addEventListener('input', mpos.ux.event, false)
 
+    vars.gui = new GUI()
+    vars.gui.domElement.classList.add('mp-native')
+    Object.keys(vars.opt).forEach(function (key) {
+      const params = {
+        selector: [['body', 'main', '#native', '#text', '#loader', '#media', 'address']],
+        depth: [0, 32, 1],
+        inPolar: [1, 4, 1],
+        frame: [0, 500, 50],
+        arc: [0, 1, 0.25]
+      }
+      const param = params[key] || []
       const controller = vars.gui.add(vars.opt, key, ...param).listen()
 
       if (key === 'frame') {
@@ -222,7 +220,6 @@ const mpos = {
         })
       }
     })
-    vars.gui.domElement.classList.add('mp-native')
   },
   ux: {
     timers: {
@@ -283,7 +280,6 @@ const mpos = {
         mpos.ux.timers[timer].push(
           setTimeout(function () {
             const vars = mpos.var
-
             // setTimeout is global scope, so strictly re-declare vars
 
             if (e.type === 'resize') {
@@ -295,7 +291,7 @@ const mpos = {
               vars.camera.updateProjectionMatrix()
 
               vars.renderer.setSize(vars.fov.w, vars.fov.h)
-              //vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
+              vars.rendererCSS.setSize(vars.fov.w, vars.fov.h)
 
               mpos.ux.render()
             } else {
@@ -1611,7 +1607,6 @@ const mpos = {
 }
 
 mpos.gen = function (num = 6, selector = 'main') {
-  // img,ul,embed
   const lipsum = [
     'Nunc at dolor lacus. ',
     'Lorem ipsum dolor sit amet. ',
@@ -1637,13 +1632,12 @@ mpos.gen = function (num = 6, selector = 'main') {
     return el
   }
   function color() {
-    // talk-over upper-lower
-    let TCOV = '#'
-    const URLR = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'a', 'b', 'c', 'd', 'e', 'f']
+    let hex = '#'
+    const col = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'a', 'b', 'c', 'd', 'e', 'f']
     for (let i = 0; i < 6; i++) {
-      TCOV += URLR[Math.round(Math.random() * (URLR.length - 1))]
+      hex += col[Math.round(Math.random() * (col.length - 1))]
     }
-    return TCOV
+    return hex
   }
 
   const section = document.createElement('details')

@@ -6,9 +6,9 @@
       <div id="errorMessage"></div>
       <main>
         <h2><span>main</span></h2>
-        <aside id="native">
+        <aside id="native" class="tilt scroll">
           <h2>aside<span>#native</span></h2>
-          <form onSubmit="return false;" class="tilt">
+          <form onSubmit="return false;">
             <fieldset class="sub">
               <legend>form</legend>
               <input class="w50" type="text" placeholder="listen" />
@@ -17,6 +17,15 @@
               <input class="w100" type="range" />
             </fieldset>
           </form>
+          <div>
+            <h2>tag cloud</h2>
+            <span style="position: relative; z-index: 9;">click</span>
+            <span style="position: relative; z-index: 0;">mousemove</span>
+            <span style="position: relative; z-index: -6;">mousedown</span>
+            <span style="position: relative; z-index: 6;">mouseup</span>
+            <span style="position: relative; z-index: -3;">mouseout</span>
+            <span style="position: relative; z-index: 3;">mouseover</span>
+          </div>
         </aside>
         <section id="text">
           <h2>section<span>#text</span></h2>
@@ -41,7 +50,6 @@
             <li>B. BBBBBBBB</li>
             <li>C. CCCCCCCC</li>
           </ul>
-
           <div id="nest" class="resize">
             <div>
               <div>
@@ -127,7 +135,7 @@
               <tr>
                 <td>model-viewer</td>
                 <td>
-                  <script type="module" src="//ajax.googleapis.com/ajax/libs/model-viewer/3.1.1/model-viewer.min.js"></script>
+                  <script type="module" src="//ajax.googleapis.com/ajax/libs/model-viewer/3.2.0/model-viewer.min.js"></script>
                   <model-viewer
                     ar
                     camera-controls

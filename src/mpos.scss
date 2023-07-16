@@ -1,23 +1,16 @@
-
+//
 // MP SELECTORS
 .mp-offscreen {
   pointer-events: none;
   > * { z-index: 0.999; }
-  &.tool{ bottom: 8rem; }
+  &.tool { bottom: 8rem; }
 }
-.mp-align {
-  //margin: 0;
-  //transform: none;
-  //right:initial!important;
-  //left:initial!important;
-  //animation: none;
-}
+
 .mp-unset {
-  // toggle CSS during transform
-  // toSvg needs ClientRect without transforms
+  // toggle CSS: toSvg, box/css, quirks, offscreen
   transform: initial!important;
   // pseudo states
-  &:hover{ background-color: initial; }
+  &:hover { background-color: initial; }
   &.mp-offscreen {
     // full-size box
     position: absolute;
@@ -27,19 +20,18 @@
     height: 100%;
   }
 }
-a, img, obj, span {
-  &.mp-unset {
-  // manual size for toSvg
-  //display: inline-block
-  }
+
+.mp-align {
+  // block, margin, transform, animation, left, right
+  // a, img, span, obj
 }
-.mp-clone { /*backface-visibility: hidden;*/ }
-  .tool {
-    width: 8rem;
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    z-index: 3;
+
+.tool {
+  width: 8rem;
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  z-index: 3;
 }
   
   
@@ -53,12 +45,13 @@ a, img, obj, span {
     padding: 0;
   }
   
-  #css3d { 
-    z-index: 1; pointer-events:none; 
-     .mp-block, .mp-block > .mp-block > .mp-block > .mp-native{ 
+  #css3d {
+    z-index: 1;
+    pointer-events: none; 
+    .mp-block, .mp-block > .mp-block > .mp-block > .mp-native { 
        pointer-events: none!important;
        > * { pointer-events: initial; }
-       } 
+    } 
   }
   &, #css3d, canvas[data-engine] {
     overflow: hidden;
@@ -69,11 +62,11 @@ a, img, obj, span {
     height: 100%;
   }
   #css3d, canvas[data-engine] {
-    cursor: crosshair;
     position: absolute;
+    cursor: crosshair;
   }
   
-#atlas {
+  #atlas {
     background-color: rgba( 255, 255, 255, 0.75 );
     overflow: hidden;
     overflow-y: auto;
@@ -98,7 +91,7 @@ a, img, obj, span {
       height: 100%;
       border: 0.01em solid transparent;
       pointer-events: none;
-      transition: all 0.25s;
+      transition: bottom 0.25s, left 0.25s, width 0.25s, height 0.25s, backgroundColor 0.25s;
     }
   }
   

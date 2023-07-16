@@ -12,13 +12,14 @@ html, body {
 }
 
 #tools, #css3d {
-  // user stylesheet duplicates targeted styles on css selector...?
-  &#css3d > .mp-block > .mp-block > .mp-block > *{ border: 0.125em dotted red; }
+  // CSS3D: added to user stylesheet to target cloned elements
+  // CSS3D: callout CORS media, such as injected iframes
+  &#css3d > .mp-block > .mp-block > .mp-block > * { border: 0.125rem dotted red; }
 
-  counter-reset: section;
+  //
+  // RESET
 
   &, * { box-sizing: border-box; }
-  // RESET
   &#tools, h2, h3, p, form {
     margin: 0;
     padding: 0;
@@ -27,7 +28,16 @@ html, body {
     font-size: 1rem;
   }
 
+  //
   // STRUCTURE
+
+  main, section, article, aside, fieldset { padding: var(--u2); }
+  section, aside, h2, p, ul, ol, form, table {
+    margin-bottom: var(--u2);
+  }
+  .resize { overflow: auto; resize: horizontal; }
+  .scroll { overflow: hidden; overflow-y: auto; max-height: 12rem; }
+
   &#tools, #main {
     user-select: none;
     position: absolute;
@@ -41,91 +51,74 @@ html, body {
     position: absolute;
     left: 100%;
     background: var(--med);
-    transform: rotate(-7.5deg) scale(1.5);
   }
 
-  #nest {
-    div, span, section {
-    float: left;
-    width: 50%;
-    height: 1em;
-    background-color: rgba( 128, 128, 128, 0.25 );
-    }
-  }
-
-  input, select { border: .125em solid transparent; border-radius: 0; }
-  input[type=text], input[type=button], input[type=reset], button, select { appearance: none; border-color: var(--med); }
-
-  // COUNTER
+  // counter
+  counter-reset: section;
   section, article {
     &:after {
+      // fix overflow height
       counter-increment: section;
       content: '::' counter(section);
       display: block;
       clear: both;
-      //
-      font-size: 0.5em;
+      // and troubleshoot toSvg
+      font-size: 0.5rem;
       color: #808080;
     }
   }
 
-  main { line-height: 1; }
-}
+  //
+  // ELEMENTS
 
-
-h2 { border-top: var(--u1) solid var(--sup); font-style: normal; font-weight: 600; }
-.sup, h2 span { background-color: var(--sup); }
-.sub { background-color: var(--sub); }
-
-main, section, article, aside, fieldset { padding: var(--u2); }
-section, aside, h2, p, ul, ol, form, table {
-  margin-bottom: var(--u2);
-}
-
-table {
-  border-collapse: collapse;
-  text-align: left; 
-  tr:nth-child(odd) { background-color: var(--med); }
-  td, th { padding: var(--u1); }
-}
-
-ul { padding-left: 1.75em; }
-
-table tr, li, summary {
-  &:hover {
-    background-color: var(--sub);
+  #nest {
+    div, span, section {
+      float: left;
+      width: 50%;
+      height: 1rem;
+      background-color: rgba( 128, 128, 128, 0.25 );
+    }
   }
+
+  // form
+  input, select {
+    border: 0.125rem solid transparent;
+    border-radius: 0;
+  }
+  input[type=text], input[type=button], input[type=reset], button, select {
+    appearance: none;
+    border-color: var(--med);
+  }
+
+  table {
+    border-collapse: collapse;
+    text-align: left; 
+    tr:nth-child(odd) { background-color: var(--med); }
+    td, th { padding: var(--u1); }
+  }
+  
+  ul { padding-left: 1.75em; }
+  
+  table tr, li, summary {
+    &:hover {
+      background-color: var(--sub);
+    }
+  }
+
+  main { line-height: 1; }
+
+  //
+  // STYLE
+
+  // accents
+  h2 { border-top: var(--u1) solid var(--sup); font-style: normal; font-weight: normal; }
+  .sup, h2 span { background-color: var(--sup); }
+  .sub { background-color: var(--sub); }
+
 }
 
-
-
-
-// effects, animations
-.tilt {
-  transform: scale(0.75) rotate(-7.5deg);
-}
-
-.pulse {
-  position: relative;
-  animation: pulse 7.5s linear infinite alternate;
-}
-@keyframes pulse{
-  0% { z-index: -9; transform: scale(0.75) rotate(-15deg); left: 0%; }
-  100% { z-index: 9; transform: scale(1.25) rotate(15deg); left: 50%; }
-}
-
-.hinge {
-  transform-origin: right bottom;
-  animation: hinge 7.5s linear infinite alternate;
-}
-@keyframes hinge {
-  100% { transform: rotate(45deg); left: 50%; }
-}
-
-
-
-
-// framework
+//
+// LAYOUT
 .w25, .w33, .w50, .w66, .w75 { float: left; }
 .w25 { width: 25.0%; }
 .w33 { width: 33.3%; }
@@ -136,13 +129,6 @@ table tr, li, summary {
 img {
   width: 100%;
   height: auto;
-}
-
-.resize{ overflow: auto; resize: horizontal; }
-
-#gen img.w50:hover {
-  width: 100%;
-  transition: width 2s;
 }
 
 // containers
@@ -164,4 +150,34 @@ model-viewer {
   height: 6em;
   position: relative;
   contain: strict;
+}
+
+//
+// EFFECTS, ANIMATION
+
+.tilt {
+  transform: rotate(-15deg);
+}
+
+.pulse {
+  position: relative;
+  animation: pulse 7.5s linear infinite alternate;
+}
+@keyframes pulse {
+  0% { z-index: -9; transform: scale(0.75) rotate(-15deg); left: 0%; }
+  100% { z-index: 9; transform: scale(1.25) rotate(15deg); left: 50%; }
+}
+
+.hinge {
+  transform-origin: right bottom;
+  animation: hinge 7.5s linear infinite alternate;
+}
+@keyframes hinge {
+  100% { transform: rotate(45deg); left: 50%; }
+}
+
+// test reflow
+#gen img.w50:hover {
+  width: 100%;
+  transition: width 2s;
 }
