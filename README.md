@@ -1,10 +1,24 @@
 # mpos-precept
-Imposter DOM rects in THREE:
+Imposter DOM rects in THREE. 
 ```js
-mpos.dom( 'aside#form', 16 )
+// use in standalone mode
+mpos.init()
+
+// use with existing scene
+mpos.init( { scene: scene, camera: camera, renderer: renderer } )
 ```
-The result can reflect updates from source.
-### Process
+
+```js
+
+const opts = {
+  depth: 32,
+  parse: function( comment ){ /*data*/ }
+}
+
+// add element to scene, and listen for updates
+mpos.dom( 'main', opts )
+```
+### Grade
 ```mermaid
 flowchart TB
 
@@ -25,8 +39,11 @@ subgraph type
   a-->b{interactive}
   b--no---poster("2x: img, text")
   b--yes---native("3x: form, video")
+  native-->c{cors}
 end
 
+c-.yes-.->CSS3DRenderer
+c--no--->html-to-image
 poster-->html-to-image
-native-->CSS3DRenderer
+
 ```
