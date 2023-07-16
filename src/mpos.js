@@ -114,8 +114,20 @@ const mpos = {
     raycaster: new Raycaster(),
     pointer: new Vector2()
   },
-  init: function () {
+  init: function (opts = {}) {
     const vars = this.var
+    vars.proxy = !!(opts.scene && opts.camera && opts.renderer)
+
+    // proxy mode or standalone
+    vars.scene = opts.scene || new Scene()
+    vars.renderer = opts.renderer || new WebGLRenderer()
+    const domElement = vars.renderer.domElement
+    const container = vars.proxy ? domElement.parentElement : document.body
+    console.log(domElement, container)
+    vars.fov.w = container.offsetWidth
+    vars.fov.h = container.offsetHeight
+    vars.camera = opts.camera || new PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
+
     // inject mpos stage
     const template = document.createElement('template')
     template.innerHTML = `
@@ -129,25 +141,22 @@ const mpos = {
       </aside>
       <div id='css3d'></div>
     </section>`
-    document.body.appendChild(template.content)
+
+    container.appendChild(template.content)
     mpos.precept.canvas = document.querySelector('#atlas canvas')
     vars.carot = document.getElementById('carot')
-    const mp = document.getElementById('mp')
+    const mp = vars.proxy ? container : document.getElementById('mp')
 
-    // THREE
-    vars.scene = new Scene()
-    vars.camera = new PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
     vars.camera.layers.enableAll()
-    vars.camera.position.z = vars.fov.max
-
-    vars.renderer = new WebGLRenderer()
-    vars.renderer.setSize(vars.fov.w, vars.fov.h)
-    const domElement = vars.renderer.domElement
-    mp.appendChild(domElement)
-    vars.renderer.setClearColor(0x00ff00, 0)
-    // helpers
-    const axes = new AxesHelper(vars.fov.max)
-    vars.scene.add(axes)
+    if (!vars.proxy) {
+      vars.camera.position.z = vars.fov.max
+      vars.renderer.setSize(vars.fov.w, vars.fov.h)
+      mp.appendChild(domElement)
+      vars.renderer.setClearColor(0x00ff00, 0)
+      // helpers
+      const axes = new AxesHelper(vars.fov.max)
+      vars.scene.add(axes)
+    }
 
     // CSS3D
     const css3d = document.getElementById('css3d')
@@ -284,8 +293,9 @@ const mpos = {
 
             if (e.type === 'resize') {
               // ...recalculate inPolar and update?
-              vars.fov.w = window.innerWidth
-              vars.fov.h = window.innerHeight
+              const container = vars.renderer.domElement.parentElement
+              vars.fov.w = container.offsetWidth
+              vars.fov.h = container.offsetHeight
 
               vars.camera.aspect = vars.fov.w / vars.fov.h
               vars.camera.updateProjectionMatrix()
@@ -308,18 +318,20 @@ const mpos = {
     },
     render: function () {
       const vars = mpos.var
+
       //requestAnimationFrame(vars.animate)
       const time = new Date().getTime() / 100
-      vars.scene.traverseVisible(function (obj) {
-        // step a frame tick
-        const animate = obj.animations === true
-        if (animate) {
-          obj.rotation.x = Math.sin(time) / 10
-          obj.rotation.y = Math.cos(time) / 10
-        }
-      })
-      vars.renderer.render(vars.scene, vars.camera)
-      vars.rendererCSS.render(vars.scene, vars.camera)
+      vars.scene &&
+        vars.scene.traverseVisible(function (obj) {
+          // step a frame tick
+          const animate = obj.animations === true
+          if (animate) {
+            obj.rotation.x = Math.sin(time) / 10
+            obj.rotation.y = Math.cos(time) / 10
+          }
+        })
+      vars.renderer && vars.renderer.render(vars.scene, vars.camera)
+      vars.rendererCSS && vars.rendererCSS.render(vars.scene, vars.camera)
     },
     raycast: function (e) {
       const vars = mpos.var
@@ -727,7 +739,7 @@ const mpos = {
             const atlas = document.querySelector('#atlas canvas')
             const name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
             //const link = atlas.querySelector('a')
-            atlas.title = name
+            atlas && (atlas.title = name)
             //link.href = grade.canvas.toDataURL('image/jpeg', 0.5)
             //link.appendChild(grade.canvas)
             //document.getElementById('atlas').appendChild(link)
@@ -778,7 +790,7 @@ const mpos = {
       const precept = mpos.precept
       const grade = {
         group: group,
-        canvas: precept.canvas,
+        canvas: precept.canvas || document.createElement('canvas'),
         index: precept.index++,
         atlas: 0, // poster count, whereas r_.atlas includes self,child for instanceMesh
         minEls: 0, // inPolar count, which Observers increment
@@ -858,7 +870,7 @@ const mpos = {
             }
           } else {
             // off-screen elements
-            mpos.ux.observer.observe(rect.el)
+            mpos.ux.observer?.observe(rect.el)
           }
 
           // unset inherits transform from class
@@ -977,7 +989,7 @@ const mpos = {
 
       // OUTPUT
       group.add(instanced)
-      vars.scene.add(group)
+      vars.scene && vars.scene.add(group)
 
       vars.grade = grade
 
@@ -1224,7 +1236,7 @@ const mpos = {
     },
     old: function (selector) {
       // dispose of scene and release listeners
-      const groups = mpos.var.scene.getObjectsByProperty('type', 'Group')
+      const groups = mpos.var.scene?.getObjectsByProperty('type', 'Group')
 
       if (groups && groups.length) {
         for (let g = groups.length - 1; g >= 0; g--) {
@@ -1268,7 +1280,7 @@ const mpos = {
       // atlas[c].parentElement.removeChild(atlas[c])
       //}
       document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
-      mpos.ux.observer.disconnect()
+      mpos.ux.observer?.disconnect()
     },
     fit: function (dummy, group, opts = {}) {
       // scale
