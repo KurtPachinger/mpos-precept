@@ -53,6 +53,7 @@ const mpos = {
       z: 8,
       max: 1024
     },
+    unset: { display: 'block', margin: 0, transform: 'initial', left: 'initial', right: 'initial' },
     geo: new BoxGeometry(1, 1, 1),
     mat: new MeshBasicMaterial({
       transparent: true,
@@ -137,14 +138,14 @@ const mpos = {
       </address>
       <aside class='tool' id='atlas'>
         <canvas></canvas>
-        <hr id='carot' />
+        <hr id='caret' />
       </aside>
       <div id='css3d'></div>
     </section>`
 
     container.appendChild(template.content)
     mpos.precept.canvas = document.querySelector('#atlas canvas')
-    vars.carot = document.getElementById('carot')
+    vars.caret = document.getElementById('caret')
     const mp = vars.proxy ? container : document.getElementById('mp')
     mp.classList.add('mp-block')
 
@@ -352,28 +353,27 @@ const mpos = {
         if (intersects.length) {
           const hit = intersects[0]
           const obj = hit.object
-          const uv = hit.uv
 
           if (obj) {
             const rect = Object.values(grade.r_.atlas.rects)[hit.instanceId]
             //console.log(hit.instanceId, rect.el, uv)
             // note: raycast element may be non-interactive (atlas), but not CSS3D or loader (other)
-            vars.events = { x: uv.x, y: uv.y, target: rect.el, ux: rect.ux, position: rect.css.style.position }
+            vars.events = { uv: hit.uv, el: rect.el, mat: rect.mat, position: rect.css.style.position, bound: rect.bound }
             //
-            const carot = vars.carot.style
+            const caret = vars.caret.style
             // visibility
             const vis = mpos.precept.inPolar(rect.el) >= vars.opt.inPolar
             const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
-            carot.backgroundColor = color
+            caret.backgroundColor = color
             // location
             const cell = 100 * (1 / grade.cells)
-            carot.width = carot.height = cell + '%'
-            carot.left = 100 * rect.x + '%'
-            carot.bottom = 100 * (1 - rect.y) + '%'
+            caret.width = caret.height = cell + '%'
+            caret.left = 100 * rect.x + '%'
+            caret.bottom = 100 * (1 - rect.y) + '%'
             if (!rect.atlas) {
               // child container
-              carot.width = '100%'
-              carot.left = carot.bottom = 0
+              caret.width = '100%'
+              caret.left = caret.bottom = 0
             }
           }
         } else {
@@ -385,7 +385,7 @@ const mpos = {
       mpos.var.controls.enablePan = true
       //console.log(e.type)
       const events = mpos.var.events
-      if (!events || !events.target || !events.ux) {
+      if (!events || !events.el || events.mat !== 'native') {
         return
       } else if (e.type === 'mousedown' || e.type === 'mousemove') {
         mpos.var.controls.enablePan = false
@@ -397,9 +397,9 @@ const mpos = {
       //const source = document.querySelector('body > :not(.mp-block) [data-idx="' + idx + '"]')
 
       // raycaster
-      const element = events.target
-      const rectX = events.x
-      const rectY = 1 - events.y
+      const element = events.el
+      const uv = { x: events.uv.x, y: 1 - events.uv.y }
+
       // eventListener
       const event = e.type
       //const pageX = e.offsetX
@@ -408,8 +408,8 @@ const mpos = {
       const [scrollX, scrollY] = events.position === 'fixed' ? [0, 0] : [window.scrollX, window.scrollY]
 
       const MouseEventInit = {
-        clientX: rectX * element.offsetWidth + element.offsetLeft + scrollX,
-        clientY: rectY * element.offsetHeight + element.offsetTop + scrollY,
+        clientX: uv.x * element.offsetWidth + element.offsetLeft + scrollX,
+        clientY: uv.y * element.offsetHeight + element.offsetTop + scrollY,
         view: element.ownerDocument.defaultView
         //
         //bubbles: true,
@@ -417,16 +417,16 @@ const mpos = {
       }
 
       //window.dispatchEvent(new MouseEvent(event, MouseEventInit))
-      const rect = element.getBoundingClientRect()
-      let x = rectX * rect.width + rect.left + scrollX
-      let y = rectY * rect.height + rect.top + scrollY
+      const bound = events.bound
+      let x = uv.x * bound.width + bound.left + scrollX
+      let y = uv.y * bound.height + bound.top + scrollY
 
       //const el = document.elementFromPoint(x, y)
       //el.dispatchEvent(new MouseEvent(event, MouseEventInit))
 
       function traverse(element) {
-        const rect = element.getBoundingClientRect()
-        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        const bound = element.getBoundingClientRect()
+        if (x >= bound.left && x <= bound.right && y >= bound.top && y <= bound.bottom) {
           element.dispatchEvent(new MouseEvent(event, MouseEventInit))
         }
 
@@ -568,7 +568,7 @@ const mpos = {
 
       const promise = new Promise((resolve, reject) => {
         // style needs no transform, no margin, maybe block... dont reset live animations, etc...
-        const align = { display: 'block', margin: 0, transform: 'initial', left: 'initial', right: 'initial' }
+        //const align = { display: 'block', margin: 0, transform: 'initial', left: 'initial', right: 'initial' }
         function atlas(grade, opts = {}) {
           // element mat conversion
           if (opts.array === undefined) {
@@ -623,7 +623,7 @@ const mpos = {
             bbox && (rect.el.style.display = 'inline-block')
             // toSvg crisper, toPng smaller
             //rect.el.classList.add('mp-align')
-            toPng(rect.el, { style: align, preferredFontFormat: 'woff' })
+            toPng(rect.el, { style: vars.unset, preferredFontFormat: 'woff' })
               .then(function (dataUrl) {
                 //rect.el.classList.remove('mp-align')
                 if (dataUrl === 'data:,') {
@@ -784,6 +784,7 @@ const mpos = {
         const obj = document.querySelector(selector + ' object')
         await mpos.add.src(obj, vars.opt.address, 'data')
       }
+
       // OLD group
       mpos.add.old(selector)
       // NEW group
@@ -820,6 +821,8 @@ const mpos = {
           // #comment... (or CDATA, xml, php)
           parse(node)
         } else {
+          //const rect = { el: node }
+
           let inPolar = precept.inPolar(node)
           if (inPolar) {
             let el = false
@@ -883,11 +886,7 @@ const mpos = {
             rect.unset = true
           }
 
-          if (rect.mat === 'native') {
-            // denote interactive, since format may be coerced
-            // and unsubscribe events for performance
-            rect.ux = true
-          }
+          // if rect mat.native matches cors, it is not added to atlas (with mat.poster)
           rect.r_ = rect.mat === 'loader' || rect.mat === 'wire' || rect.el.matches([precept.cors, precept.native3d]) ? 'other' : 'atlas'
         }
         return unset
@@ -1004,7 +1003,7 @@ const mpos = {
       const vars = mpos.var
 
       // css: accumulate transforms
-      rect.css = mpos.add.css(rect, opts.frame)
+      mpos.add.css(rect, opts.frame)
       rect.frame = opts.frame || rect.frame || 0
       // css: unset for box scale
       mpos.add.css(rect, true)
@@ -1017,7 +1016,7 @@ const mpos = {
       const h = bound.height
       const d = vars.fov.z
       // position
-      bound = rect.unset ? bound : rect.el.getBoundingClientRect()
+      bound = rect.unset ? bound : rect.bound
       let x = bound.width / 2
       let y = -bound.height / 2
       // scroll{0,0} is viewport, not document
@@ -1028,7 +1027,7 @@ const mpos = {
       }
 
       let z = rect.z * d
-      let zIndex = Number(rect.css.style.zIndex || 0)
+      let zIndex = Number(rect.css?.style?.zIndex || 0)
       const sign = zIndex >= 0 ? 1 : -1
       zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
       zIndex *= sign
@@ -1046,7 +1045,7 @@ const mpos = {
           obj.userData.el.style.width = w
           obj.userData.el.style.height = h
           // note: actually using cumulative
-          if (rect.css.transform.length) {
+          if (rect.css.transform) {
             const scale = 'scale(' + rect.css.scale + ')'
             const degree = 'rotate(' + rect.css.degree + 'deg)'
             obj.userData.el.style.transform = [scale, degree].join(' ')
@@ -1123,9 +1122,8 @@ const mpos = {
         // other custom process
         if (rect.mat === 'loader') {
           // async
-
           obj = new Group()
-
+          obj.userData.el = rect.el
           mpos.add.loader(rect, object, obj)
         } else {
           // general (native, wire)
@@ -1143,24 +1141,23 @@ const mpos = {
       // css style transforms
       let el = rect.el
       const frame = typeof progress === 'number'
-      let css = rect.css
+      // css style: transform, transformOrigin, backgroundColor, zIndex, position
+      const css = rect.css || { style: window.getComputedStyle(el) }
 
-      if (rect.frame >= progress) {
-        //console.log('frame ok')
-      }
       if (progress === undefined || frame) {
         // target element original style
         if (!rect.css || rect.frame < progress) {
-          css = { scale: 1, radian: 0, degree: 0, transform: [], style: {} }
-          //console.log('frame<progress')
-          const style = window.getComputedStyle(el)
-          css.style = {
-            transform: style.transform,
-            transformOrigin: style.transformOrigin,
-            backgroundColor: style.backgroundColor,
-            zIndex: style.zIndex,
-            position: style.position // raycast events use position
-          }
+          css.priority = css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
+
+          css.priority && el.classList.add('mp-unset')
+          rect.bound = el.getBoundingClientRect()
+          css.priority && el.classList.remove('mp-unset')
+
+          // reset transforms
+          css.scale = 1
+          css.radian = 0
+          css.degree = 0
+          css.transform = 0
         }
       } else if (rect.unset) {
         // quirks of DOM
@@ -1168,19 +1165,17 @@ const mpos = {
           el.open = progress
         }
         if (el.matches('.mp-offscreen')) {
-          rect.z = rect.css.style.zIndex
+          rect.z = css.style.zIndex
         }
       }
 
       const rects = mpos.var.grade.rects
       let els = []
       while (el && el !== document.body) {
-        //if (el.dataset.idx) {
         if (progress === undefined || frame) {
           if (!rect.css || rect.frame < progress) {
             // accumulate ancestor matrix
-            const cache = rects[el.getAttribute('data-idx')]?.css
-            const style = cache && cache.style.transform && !(frame && rect.frame < progress) ? cache.style : window.getComputedStyle(el)
+            const style = rects[el.getAttribute('data-idx')]?.css?.style || {} // window.getComputedStyle(el)
             if (style.transform?.startsWith('matrix')) {
               const transform = style.transform.replace(/(matrix)|[( )]/g, '')
               // transform matrix
@@ -1188,36 +1183,33 @@ const mpos = {
               const scale = Math.sqrt(a * a + b * b)
               const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
               const radian = degree * (Math.PI / 180)
-              // element origin and bounds
-              const origin = style.transformOrigin.replace(/(px)/g, '').split(' ')
-              const bound = el.getBoundingClientRect()
-
-              // Output
-              // accrue
+              // accrue transforms
               css.scale *= scale
               css.radian += radian
               css.degree += degree
-
-              css.transform.push({
-                scale: scale,
-                degree: degree,
-                radian: radian,
-                origin: { x: Number(origin[0]), y: Number(origin[1]) },
-                bound: bound
-              })
+              css.transform++
             }
           }
         } else {
           // style override
-          el.classList.toggle('mp-unset', progress)
+          // sets transform:initial for real box dimensions
+          const priority = rects[el.getAttribute('data-idx')]?.css?.priority
+          if (priority) {
+            el.classList.toggle('mp-unset', progress)
+          }
         }
-        //}
 
         els.unshift(el)
         el = el.parentNode
       }
 
-      return css
+      if (progress === undefined || frame) {
+        //if (!css.style) {
+        //  css.style = {}
+        //}
+        rect.css = css
+      }
+      //return css
     },
     shader: function (canvas, texStep) {
       //discourse.threejs.org/t/13221/17
@@ -1287,26 +1279,33 @@ const mpos = {
       mpos.ux.observer?.disconnect()
     },
     fit: function (dummy, group, opts = {}) {
-      // scale
-      const s1 = Math.max(dummy.scale.x, dummy.scale.y)
-      let s2 = group.userData.s2
-      if (opts.add) {
-        const aabb = new Box3()
-        aabb.setFromObject(group)
-        s2 = Math.max(aabb.max.x, aabb.max.y)
-      }
-      const scalar = s1 / s2
-      group.scale.set(scalar, scalar * -1, scalar)
+      //console.log('fit', group.children.length, opts.add)
 
-      // position
-      group.position.copy(dummy.position)
-      group.position.x -= dummy.scale.x / 2
-      group.position.y += dummy.scale.y / 2
+      // if (opts.add) {
 
       //group.userData.el = rect.el
-      if (opts.add) {
-        mpos.var.grade.group.add(group)
-        group.userData.s2 = s2
+      //}
+      //group needs to be refit later
+      if (group.children.length) {
+        let s2 = group.userData.s2
+        if (!s2) {
+          mpos.var.grade.group.add(group)
+          const aabb = new Box3()
+          aabb.setFromObject(group)
+          s2 = Math.max(aabb.max.x, aabb.max.y)
+          group.userData.s2 = s2
+        }
+
+        const s1 = Math.max(dummy.scale.x, dummy.scale.y)
+
+        const scalar = s1 / s2
+        group.scale.set(scalar, scalar * -1, scalar)
+
+        // position
+        group.position.copy(dummy.position)
+        group.position.x -= dummy.scale.x / 2
+        group.position.y += dummy.scale.y / 2
+
         mpos.ux.render()
       }
     },
@@ -1350,6 +1349,7 @@ const mpos = {
                 }
               }
               group.name = handler
+
               mpos.add.fit(dummy, group, { add: true })
             }
           },
@@ -1363,6 +1363,24 @@ const mpos = {
           }
         )
       } else {
+        function proceed() {
+          //requestIdleCallback(function () {}, { time: 5000 })
+          toPng(rect.el, { style: mpos.var.unset })
+            .then(function (dataUrl) {
+              let img = new Image()
+              img.onload = function () {
+                mpos.add.opencv(img, group, dummy)
+                dataUrl = img = null
+              }
+              // todo: animated gif?
+              img.src = dataUrl
+            })
+            .catch(function (error) {
+              // src problem...
+              console.log(error)
+            })
+        }
+
         if (mpos.var.cv === undefined) {
           mpos.var.cv = false
           // OPENCV WASM
@@ -1374,34 +1392,13 @@ const mpos = {
             // remote script has loaded
             console.log('OpenCV.js')
             mpos.var.cv = true
+            proceed()
           }
           script.src = './opencv.js' // + Date.now()
           document.getElementsByTagName('head')[0].appendChild(script)
+        } else if (mpos.var.cv === true) {
+          proceed()
         }
-
-        requestIdleCallback(
-          function () {
-            if (mpos.var.cv) {
-              const align = { transform: 'initial', margin: 0 }
-              // to-do: limit size, use toJpeg if type
-              toPng(rect.el, { style: align })
-                .then(function (dataUrl) {
-                  let img = new Image()
-                  img.onload = function () {
-                    mpos.add.opencv(img, group, dummy)
-                    dataUrl = img = null
-                  }
-                  // todo: animated gif?
-                  img.src = dataUrl
-                })
-                .catch(function (error) {
-                  // src problem...
-                  console.log(error)
-                })
-            }
-          },
-          { time: 5000 }
-        )
       }
     },
     opencv: function (img, group, dummy) {
