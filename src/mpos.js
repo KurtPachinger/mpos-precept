@@ -849,11 +849,8 @@ const mpos = {
 
           rect.inPolar = precept.inPolar(rect)
           if (rect.inPolar) {
-            rect.el = false
-            if (rect.inPolar >= 2) {
-              rect.el = node
-              // ...estimate
-            } else if (node.nodeName === '#text') {
+            // not empty
+            if (rect.inPolar === 1 && node.nodeName === '#text') {
               const orphan = node.parentNode.childElementCount >= 1 && node.parentNode.matches([precept.allow])
               if (orphan && precept.inPolar(rect, grade.rects)) {
                 // sanitize #text orphan (list or semantic) with parent visible
@@ -868,7 +865,7 @@ const mpos = {
               }
             }
 
-            if (rect.el) {
+            if (rect.inPolar >= 2) {
               // static list
               const idx = grade.maxEls
               rect.el.setAttribute('data-idx', idx)
@@ -1570,7 +1567,7 @@ const mpos = {
         postRun: [
           function (e) {
             try {
-              console.log('cv', kmeans)
+              console.log('cv', Object.keys(kmeans).length)
               // Shape from label contours
               Object.values(kmeans).forEach(function (label) {
                 let mergedGeoms = []
