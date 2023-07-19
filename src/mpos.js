@@ -468,7 +468,7 @@ const mpos = {
           // 2: node is tag
           vis++
           //const style = window.getComputedStyle(node)
-          if (node.offsetWidth && node.offsetHeight) {
+          if (node.checkVisibility()) {
             // 3: tag not hidden
             vis++
             const rect = node.getBoundingClientRect()
