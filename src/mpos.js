@@ -124,7 +124,7 @@ const mpos = {
     vars.renderer = opts.renderer || new WebGLRenderer()
     const domElement = vars.renderer.domElement
     const container = vars.proxy ? domElement.parentElement : document.body
-    console.log(domElement, container)
+
     vars.fov.w = container.offsetWidth
     vars.fov.h = container.offsetHeight
     vars.camera = opts.camera || new PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
@@ -249,6 +249,9 @@ const mpos = {
       // balance lag of input versus update
       const vars = mpos.var
       const grade = vars.grade
+      if (!grade) {
+        return
+      }
       const queue = grade.r_.queue
 
       function enqueue(idx) {
@@ -362,7 +365,7 @@ const mpos = {
             //
             const caret = vars.caret.style
             // visibility
-            const vis = mpos.precept.inPolar(rect.el) >= vars.opt.inPolar
+            const vis = mpos.precept.inPolar(rect) >= vars.opt.inPolar
             const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
             caret.backgroundColor = color
             // location
@@ -452,14 +455,16 @@ const mpos = {
     cors: `iframe,object,.yt`.split(','),
     poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
-    inPolar: function (node, control) {
-      let vis = node.tagName || node.textContent.trim() ? 1 : false
+    inPolar: function (rect, control) {
+      const node = rect.el
+
+      let vis = node && (node.tagName || node.textContent.trim()) ? 1 : false
       if (typeof control === 'object') {
         // node relative in control plot
 
         vis = Object.values(control).some(function (tag) {
           const parent = node.parentElement
-          const unlist = parent.offsetWidth && parent.offsetHeight
+          const unlist = parent && parent.offsetWidth && parent.offsetHeight
           return unlist && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
         })
       } else {
@@ -471,9 +476,9 @@ const mpos = {
           if (node.checkVisibility()) {
             // 3: tag not hidden
             vis++
-            const rect = node.getBoundingClientRect()
+            rect.bound = rect.bound || node.getBoundingClientRect()
             const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-            const scroll = !(rect.bottom < 0 || rect.top - viewHeight >= 0)
+            const scroll = !(rect.bound.bottom < 0 || rect.bound.top - viewHeight >= 0)
             if (scroll) {
               // 4: tag in viewport
               vis++
@@ -481,6 +486,7 @@ const mpos = {
           }
         }
       }
+      rect.inPolar = vis
       return vis
     },
     update: function (grade, dataIdx) {
@@ -491,10 +497,21 @@ const mpos = {
         return
       }
       vars.wait = true
+      let quality = 1
 
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
       let r_frame = 0
+
+      function pseudo(rect) {
+        let pseudo = false
+        if (rect.css) {
+          pseudo = rect.css.pseudo
+          rect.css.pseudo = rect.el.matches(':hover')
+          pseudo = pseudo || rect.css.pseudo
+        }
+        return pseudo
+      }
 
       grade.inPolar = vars.opt.inPolar
       if (dataIdx) {
@@ -505,7 +522,7 @@ const mpos = {
           if (isFinite(idx)) {
             // Observer
             const rect = grade.rects[idx]
-            rect.inPolar = mpos.precept.inPolar(rect.el)
+            rect.inPolar = mpos.precept.inPolar(rect)
             //const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
             const type = rect.r_
 
@@ -528,8 +545,14 @@ const mpos = {
           } else if (idx === 'frame' || idx === 'move' || idx === 'trim') {
             reflow = true
             if (idx === 'frame') {
-              const frame = mpos.ux.timers.frame
-              r_frame = frame[frame.length - 1]
+              const timers = mpos.ux.timers
+              r_frame = timers.frame[timers.frame.length - 1]
+              // quality limits pixelRatio of html-to-image
+              const now = performance.now()
+              const elapsed = now - timers.last
+              timers.last = now
+
+              quality = Math.max(mpos.var.opt.frame / elapsed, 0.5).toFixed(2)
             }
           }
         }
@@ -540,10 +563,10 @@ const mpos = {
           function vis(rects, reQueue) {
             Object.keys(rects).forEach(function (idx) {
               const rect = rects[idx]
-              rect.inPolar = mpos.precept.inPolar(rect.el)
+              rect.inPolar = mpos.precept.inPolar(rect)
 
-              if (reQueue && rect.inPolar >= 4) {
-                // frame: if rect parent changes, >= grade.inPolar, otherwise inPolar>=4 is minimal update
+              if (reQueue && rect.inPolar >= 4 && (rect.priority || pseudo(rect))) {
+                // frame && active view && significant
                 if (r_queue.indexOf(idx) === -1) {
                   r_queue.push(idx)
                 }
@@ -563,8 +586,7 @@ const mpos = {
         r_other.count++
       }
 
-      console.log('queue', grade.r_.queue.length, dataIdx, r_frame)
-      //console.log('r_frame', r_frame)
+      //console.log('queue', grade.r_.queue.length, dataIdx, r_frame)
 
       const promise = new Promise((resolve, reject) => {
         // style needs no transform, no margin, maybe block... dont reset live animations, etc...
@@ -623,7 +645,9 @@ const mpos = {
             bbox && (rect.el.style.display = 'inline-block')
             // toSvg crisper, toPng smaller
             //rect.el.classList.add('mp-align')
-            toPng(rect.el, { style: vars.unset, preferredFontFormat: 'woff' })
+            const pixelRatio = rect.priority ? quality : 0.8
+
+            toPng(rect.el, { style: vars.unset, pixelRatio: pixelRatio, preferredFontFormat: 'woff' })
               .then(function (dataUrl) {
                 //rect.el.classList.remove('mp-align')
                 if (dataUrl === 'data:,') {
@@ -821,34 +845,34 @@ const mpos = {
           // #comment... (or CDATA, xml, php)
           parse(node)
         } else {
-          //const rect = { el: node }
+          const rect = { el: node, inPolar: null }
 
-          let inPolar = precept.inPolar(node)
-          if (inPolar) {
-            let el = false
-            if (inPolar >= 2) {
-              el = node
+          rect.inPolar = precept.inPolar(rect)
+          if (rect.inPolar) {
+            rect.el = false
+            if (rect.inPolar >= 2) {
+              rect.el = node
               // ...estimate
             } else if (node.nodeName === '#text') {
               const orphan = node.parentNode.childElementCount >= 1 && node.parentNode.matches([precept.allow])
-              if (orphan && precept.inPolar(node, grade.rects)) {
+              if (orphan && precept.inPolar(rect, grade.rects)) {
                 // sanitize #text orphan (list or semantic) with parent visible
                 const wrap = document.createElement('span')
                 wrap.classList.add('mp-poster')
                 node.parentNode.insertBefore(wrap, node)
                 wrap.appendChild(node)
 
-                el = wrap
-                inPolar = precept.inPolar(el)
+                rect.el = wrap
+                rect.inPolar = precept.inPolar(rect)
                 grade.txt.push(node)
               }
             }
 
-            if (el) {
+            if (rect.el) {
               // static list
               const idx = grade.maxEls
-              el.setAttribute('data-idx', idx)
-              grade.rects[idx] = { el: el, inPolar: inPolar }
+              rect.el.setAttribute('data-idx', idx)
+              grade.rects[idx] = rect
               grade.maxEls++
             }
           }
@@ -874,6 +898,8 @@ const mpos = {
             if (rect.mat === 'poster' || rect.mat === 'native') {
               // shader
               rect.atlas = grade.atlas++
+              // update ux elevated
+              rect.priority = rect.mat === 'native' && rect.atlas
             }
           } else {
             // off-screen elements
@@ -902,6 +928,22 @@ const mpos = {
             }
             return classMat
           })
+
+          // inject OpenCV WASM
+          //huningxin.github.io/opencv.js/samples/index.html
+          if (mat === 'loader' && mpos.var.cv === undefined) {
+            mpos.var.cv = false
+            const script = document.createElement('script')
+            script.type = 'text/javascript'
+            script.async = true
+            script.onload = function () {
+              // remote script loaded
+              console.log('OpenCV.js')
+              mpos.var.cv = true
+            }
+            script.src = './opencv.js' // + Date.now()
+            document.getElementsByTagName('head')[0].appendChild(script)
+          }
         } else if (node.matches([precept.native, precept.native3d])) {
           // todo: shared 3d spaces
           mat = 'native'
@@ -1147,7 +1189,9 @@ const mpos = {
       if (progress === undefined || frame) {
         // target element original style
         if (!rect.css || rect.frame < progress) {
-          css.priority = css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
+          // ux priority may be escalated
+          css.priority =
+            css.priority || css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
 
           css.priority && el.classList.add('mp-unset')
           rect.bound = el.getBoundingClientRect()
@@ -1281,23 +1325,20 @@ const mpos = {
     fit: function (dummy, group, opts = {}) {
       //console.log('fit', group.children.length, opts.add)
 
-      // if (opts.add) {
-
-      //group.userData.el = rect.el
-      //}
-      //group needs to be refit later
       if (group.children.length) {
         let s2 = group.userData.s2
         if (!s2) {
           mpos.var.grade.group.add(group)
+
           const aabb = new Box3()
           aabb.setFromObject(group)
           s2 = Math.max(aabb.max.x, aabb.max.y)
+          // original scale
           group.userData.s2 = s2
+          mpos.var.wait = false
         }
 
         const s1 = Math.max(dummy.scale.x, dummy.scale.y)
-
         const scalar = s1 / s2
         group.scale.set(scalar, scalar * -1, scalar)
 
@@ -1313,13 +1354,13 @@ const mpos = {
       const file = rect.el.data || rect.el.src || rect.el.href
 
       // instantiate a loader: File, Audio, Object...
-      // todo: url query string pramaters
-      let handler = file ? file.match(/\.[0-9a-z]+$/i) : false
+      // todo: url query string paramaters
+      let handler = file ? file.match(/\.(gif|jpg|jpeg|png|svg|webp)(\?|$)/i) : false
       handler = handler && dummy && group ? handler[0].toUpperCase() : 'File'
       console.log(handler)
-      const loader = handler === '.SVG' ? new SVGLoader() : new FileLoader()
+      const loader = handler.match('.SVG') ? new SVGLoader() : new FileLoader()
 
-      if (file && (handler === '.SVG' || handler === 'File')) {
+      if (file && (handler.match('.SVG') || handler === 'File')) {
         loader.load(
           file,
           function (data) {
@@ -1327,7 +1368,7 @@ const mpos = {
             //res = data
             if (handler === 'File') {
               // set attribute
-            } else if (handler === '.SVG') {
+            } else if (handler.match('.SVG')) {
               const paths = data.paths || []
 
               for (let i = 0; i < paths.length; i++) {
@@ -1363,42 +1404,22 @@ const mpos = {
           }
         )
       } else {
-        function proceed() {
-          //requestIdleCallback(function () {}, { time: 5000 })
-          toPng(rect.el, { style: mpos.var.unset })
-            .then(function (dataUrl) {
-              let img = new Image()
-              img.onload = function () {
-                mpos.add.opencv(img, group, dummy)
-                dataUrl = img = null
-              }
-              // todo: animated gif?
-              img.src = dataUrl
-            })
-            .catch(function (error) {
-              // src problem...
-              console.log(error)
-            })
-        }
-
-        if (mpos.var.cv === undefined) {
-          mpos.var.cv = false
-          // OPENCV WASM
-          //huningxin.github.io/opencv.js/samples/index.html
-          const script = document.createElement('script')
-          script.type = 'text/javascript'
-          script.async = true
-          script.onload = function () {
-            // remote script has loaded
-            console.log('OpenCV.js')
-            mpos.var.cv = true
-            proceed()
-          }
-          script.src = './opencv.js' // + Date.now()
-          document.getElementsByTagName('head')[0].appendChild(script)
-        } else if (mpos.var.cv === true) {
-          proceed()
-        }
+        toPng(rect.el, { style: mpos.var.unset, pixelRatio: 1 })
+          .then(function (dataUrl) {
+            let img = new Image()
+            img.onload = function () {
+              // image process, or load script
+              mpos.add.opencv(img, group, dummy)
+              dataUrl = img = null
+            }
+            // todo: animated gif?
+            img.src = dataUrl
+          })
+          .catch(function (error) {
+            // src problem...
+            console.log('src problem')
+            //console.log(error)
+          })
       }
     },
     opencv: function (img, group, dummy) {
@@ -1614,7 +1635,14 @@ const mpos = {
 
       // run Module _main, with vars monkeyed into _stdin
       // i.e. _stdin: { ivy: college, peep: blackbox }
-      opencv(Module)
+      requestIdleCallback(
+        function () {
+          if (mpos.var.cv === true) {
+            opencv(Module)
+          }
+        },
+        { time: 500 }
+      )
     }
   }
 }
