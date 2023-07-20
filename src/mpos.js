@@ -9,6 +9,7 @@ import {
   FrontSide,
   Raycaster,
   Vector2,
+  Vector3,
   Scene,
   PerspectiveCamera,
   WebGLRenderer,
@@ -358,6 +359,8 @@ const mpos = {
           const obj = hit.object
 
           if (obj) {
+            // note: to update instanceMatrix, indexes would need to be constant from transforms()
+            // ... i.e. inPolar<3, noscroll, append only...
             const rect = Object.values(grade.r_.atlas.rects)[hit.instanceId]
             //console.log(hit.instanceId, rect.el, uv)
             // note: raycast element may be non-interactive (atlas), but not CSS3D or loader (other)
@@ -365,7 +368,7 @@ const mpos = {
             //
             const caret = vars.caret.style
             // visibility
-            const vis = mpos.precept.inPolar(rect) >= vars.opt.inPolar
+            const vis = rect.inPolar >= vars.opt.inPolar
             const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
             caret.backgroundColor = color
             // location
@@ -476,7 +479,7 @@ const mpos = {
           if (node.checkVisibility()) {
             // 3: tag not hidden
             vis++
-            rect.bound = rect.bound || node.getBoundingClientRect()
+            rect.bound = node.getBoundingClientRect()
             const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
             const scroll = !(rect.bound.bottom < 0 || rect.bound.top - viewHeight >= 0)
             if (scroll) {
@@ -522,7 +525,7 @@ const mpos = {
           if (isFinite(idx)) {
             // Observer
             const rect = grade.rects[idx]
-            rect.inPolar = mpos.precept.inPolar(rect)
+            //rect.inPolar = mpos.precept.inPolar(rect)
             //const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
             const type = rect.r_
 
@@ -540,7 +543,7 @@ const mpos = {
               r_.count++
               r_.rects[idx] = rect
             } else {
-              r_.rects[idx].inPolar = rect.inPolar
+              //r_.rects[idx].inPolar = rect.inPolar
             }
           } else if (idx === 'frame' || idx === 'move' || idx === 'trim') {
             reflow = true
@@ -563,7 +566,7 @@ const mpos = {
           function vis(rects, reQueue) {
             Object.keys(rects).forEach(function (idx) {
               const rect = rects[idx]
-              rect.inPolar = mpos.precept.inPolar(rect)
+              mpos.precept.inPolar(rect)
 
               if (reQueue && rect.inPolar >= 4 && (rect.priority || pseudo(rect))) {
                 // frame && active view && significant
@@ -581,6 +584,7 @@ const mpos = {
         // HARD-update: viewport
         const root = document.body
         const rect = { el: root, mat: 'wire', z: -16, fix: true }
+        rect.priority = true
         const idx = root.getAttribute('data-idx')
         r_other.rects[idx] = rect
         r_other.count++
@@ -721,15 +725,15 @@ const mpos = {
             // Instance Matrix
             const dummy = mpos.add.box(rect, { frame: r_frame })
             instanced.setMatrixAt(count, dummy.matrix)
+
             // Instance Color
             const color = new Color()
-            let bg = rect.css.style.backgroundColor || ''
-            const rgba = bg.replace(/(rgba)|[( )]/g, '').split(',')
-            const alpha = Number(rgba[3])
-            if (alpha <= 0.0) {
-              bg = null
-            } else {
-              // avoid warning
+            let bg = rect.css.style.backgroundColor
+            let rgba = bg.replace(/[(rgba )]/g, '').split(',')
+            const alpha = rgba[3]
+            if (alpha === '0') {
+              bg = 'cyan'
+            } else if (alpha > 0.0 || alpha === undefined) {
               bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
             }
             instanced.setColorAt(count, color.setStyle(bg))
@@ -752,8 +756,8 @@ const mpos = {
           }
 
           instanced.instanceMatrix.needsUpdate = true
-          instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
           instanced.computeBoundingSphere()
+          instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
 
           // update shader
           instanced.geometry.setAttribute('uvOffset', new InstancedBufferAttribute(uvOffset, 2))
@@ -847,8 +851,7 @@ const mpos = {
         } else {
           const rect = { el: node, inPolar: null }
 
-          rect.inPolar = precept.inPolar(rect)
-          if (rect.inPolar) {
+          if (precept.inPolar(rect)) {
             // not empty
             if (rect.inPolar === 1 && node.nodeName === '#text') {
               const orphan = node.parentNode.childElementCount >= 1 && node.parentNode.matches([precept.allow])
@@ -860,7 +863,7 @@ const mpos = {
                 wrap.appendChild(node)
 
                 rect.el = wrap
-                rect.inPolar = precept.inPolar(rect)
+                precept.inPolar(rect)
                 grade.txt.push(node)
               }
             }
@@ -883,6 +886,9 @@ const mpos = {
       grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
       grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
       grade.canvas.width = grade.canvas.height = grade.maxRes
+      // clear atlas
+      const ctx = grade.canvas.getContext('2d')
+      ctx.clearRect(0, 0, grade.canvas.width, grade.canvas.height)
 
       function setRect(rect, z, mat, unset) {
         if (rect) {
@@ -895,8 +901,11 @@ const mpos = {
             if (rect.mat === 'poster' || rect.mat === 'native') {
               // shader
               rect.atlas = grade.atlas++
-              // update ux elevated
-              rect.priority = rect.mat === 'native' && rect.atlas
+
+              if (rect.mat === 'native' && rect.atlas && rect.el.tagName !== 'A') {
+                // update ux elevated
+                rect.priority = true
+              }
             }
           } else {
             // off-screen elements
@@ -1004,17 +1013,19 @@ const mpos = {
 
       struct(sel, depth)
 
-      Object.values(grade.rects).forEach((rect) => {
+      Object.keys(grade.rects).forEach((idx) => {
+        let rect = grade.rects[idx]
         // begin two lists: atlas (instanced) || other (mesh)
         if (rect.mat && rect.inPolar >= grade.inPolar) {
           //const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
           const type = rect.r_
           const r_ = grade.r_[type]
           r_.count++
-          r_.rects[rect.el.getAttribute('data-idx')] = rect
+          r_.rects[idx] = rect
         } else if (!rect.mat) {
           // free memory
-          rect.el = null
+          rect.el = rect.bound = null
+          delete grade.rects[idx]
         }
       })
       grade.key = { x: 1 - 1 / grade.cells, y: 0.0001 }
@@ -1187,12 +1198,12 @@ const mpos = {
         // target element original style
         if (!rect.css || rect.frame < progress) {
           // ux priority may be escalated
-          css.priority =
-            css.priority || css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
+          rect.priority =
+            rect.priority || css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
 
-          css.priority && el.classList.add('mp-unset')
+          rect.priority && el.classList.add('mp-unset')
           rect.bound = el.getBoundingClientRect()
-          css.priority && el.classList.remove('mp-unset')
+          rect.priority && el.classList.remove('mp-unset')
 
           // reset transforms
           css.scale = 1
@@ -1211,43 +1222,42 @@ const mpos = {
       }
 
       const rects = mpos.var.grade.rects
+      let max = 8 // deep tree?
       let els = []
-      while (el && el !== document.body) {
-        if (progress === undefined || frame) {
-          if (!rect.css || rect.frame < progress) {
-            // accumulate ancestor matrix
-            const style = rects[el.getAttribute('data-idx')]?.css?.style || {} // window.getComputedStyle(el)
-            if (style.transform?.startsWith('matrix')) {
-              const transform = style.transform.replace(/(matrix)|[( )]/g, '')
-              // transform matrix
-              const [a, b] = transform.split(',')
-              const scale = Math.sqrt(a * a + b * b)
-              const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-              const radian = degree * (Math.PI / 180)
-              // accrue transforms
-              css.scale *= scale
-              css.radian += radian
-              css.degree += degree
-              css.transform++
+      while (el && el !== document.body && max--) {
+        const r_ = rects[el.getAttribute('data-idx')]
+        if (r_?.priority) {
+          if (progress === undefined || frame) {
+            if (!rect.css || rect.frame < progress) {
+              // accumulate ancestor matrix
+              const style = r_.css?.style // window.getComputedStyle(el)
+              if (style && style.transform?.startsWith('matrix')) {
+                const transform = style.transform.replace(/(matrix)|[( )]/g, '')
+                // transform matrix
+                const [a, b] = transform.split(',')
+                const scale = Math.sqrt(a * a + b * b)
+                const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+                const radian = degree * (Math.PI / 180)
+                // accrue transforms
+                css.scale *= scale
+                css.radian += radian
+                css.degree += degree
+                css.transform++
+              }
+            }
+          } else {
+            // style override
+            if (r_.priority) {
+              // sets transform:initial for real box dimensions
+              el.classList.toggle('mp-unset', progress)
             }
           }
-        } else {
-          // style override
-          // sets transform:initial for real box dimensions
-          const priority = rects[el.getAttribute('data-idx')]?.css?.priority
-          if (priority) {
-            el.classList.toggle('mp-unset', progress)
-          }
         }
-
         els.unshift(el)
         el = el.parentNode
       }
 
       if (progress === undefined || frame) {
-        //if (!css.style) {
-        //  css.style = {}
-        //}
         rect.css = css
       }
       //return css
