@@ -1,5 +1,5 @@
 import './mpos.scss'
-import { toPng, toSvg } from 'html-to-image'
+import { toPng } from 'html-to-image'
 //import * as THREE from 'three'
 import {
   BoxGeometry,
@@ -9,7 +9,6 @@ import {
   FrontSide,
   Raycaster,
   Vector2,
-  Vector3,
   Scene,
   PerspectiveCamera,
   WebGLRenderer,
@@ -262,9 +261,11 @@ const mpos = {
         }
 
         if (idx === 'frame') {
-          // immediate schedule
-          mpos.ux.reflow({ type: e.type, value: e.value })
-          if (!vars.wait) {
+          // immediate schedule, unless manually called -1
+          if (e.value > -1) {
+            mpos.ux.reflow({ type: e.type, value: e.value })
+          }
+          if (!grade.wait) {
             mpos.precept.update(grade, idx)
           }
         } else {
@@ -476,10 +477,11 @@ const mpos = {
           // 2: node is tag
           vis++
           //const style = window.getComputedStyle(node)
+          rect.bound = node.getBoundingClientRect()
           if (node.checkVisibility()) {
             // 3: tag not hidden
             vis++
-            rect.bound = node.getBoundingClientRect()
+
             const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
             const scroll = !(rect.bound.bottom < 0 || rect.bound.top - viewHeight >= 0)
             if (scroll) {
@@ -495,11 +497,11 @@ const mpos = {
     update: function (grade, dataIdx) {
       const vars = mpos.var
       let r_queue = grade.r_.queue
-      if ((dataIdx && !r_queue.length) || vars.wait) {
+      if ((dataIdx && !r_queue.length) || grade.wait) {
         // redundant invocation... frame?
         return
       }
-      vars.wait = true
+      grade.wait = true
       let quality = 1
 
       const r_atlas = grade.r_.atlas
@@ -510,7 +512,7 @@ const mpos = {
         let pseudo = false
         if (rect.css) {
           pseudo = rect.css.pseudo
-          rect.css.pseudo = rect.el.matches(':hover')
+          rect.css.pseudo = rect.el.matches(':hover,:focus')
           pseudo = pseudo || rect.css.pseudo
         }
         return pseudo
@@ -572,6 +574,10 @@ const mpos = {
                 // frame && active view && significant
                 if (r_queue.indexOf(idx) === -1) {
                   r_queue.push(idx)
+                  // children
+                  //rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
+                  //  r_queue.push(el.getAttribute('data-idx'))
+                  //})
                 }
               }
             })
@@ -583,8 +589,7 @@ const mpos = {
       } else {
         // HARD-update: viewport
         const root = document.body
-        const rect = { el: root, mat: 'wire', z: -16, fix: true }
-        rect.priority = true
+        const rect = { el: root, mat: 'wire', z: -16, fix: true, priority: true }
         const idx = root.getAttribute('data-idx')
         r_other.rects[idx] = rect
         r_other.count++
@@ -610,7 +615,7 @@ const mpos = {
             opts.ctx = opts.ctx || grade.canvas.getContext('2d')
             opts.step = opts.step || grade.maxRes / grade.cells
             // paint breakpoints, unless frame: [0%, 50%]
-            opts.paint = opts.idx >= 8 && r_frame === 0 ? [opts.idx, Math.floor(opts.idx / 2)] : []
+            opts.paint = opts.idx >= 32 && r_frame === 0 ? [opts.idx, Math.floor(opts.idx / 2)] : []
           }
 
           function next() {
@@ -707,7 +712,7 @@ const mpos = {
             if (rect.obj) {
               // filter visibility
               let visible = true
-              if (grade.inPolar >= 4 && !rect.fix) {
+              if (!rect.fix) {
                 visible = rect.inPolar >= grade.inPolar
               }
               rect.obj.visible = visible
@@ -786,7 +791,7 @@ const mpos = {
       promise.catch((error) => console.log(error))
       promise.then(function (grade) {
         //console.log('update', grade.minEls)
-        vars.wait = false
+        grade.wait = false
         return promise
       })
     }
@@ -806,7 +811,8 @@ const mpos = {
 
       // get DOM node or offscreen
       const sel = document.querySelector(selector)
-      if (sel === null || vars.wait) {
+      const precept = mpos.precept
+      if (sel === null || vars.grade?.wait) {
         return
       } else if (selector === 'address') {
         const obj = document.querySelector(selector + ' object')
@@ -820,7 +826,7 @@ const mpos = {
       group.name = selector
 
       // structure
-      const precept = mpos.precept
+
       const grade = {
         group: group,
         canvas: precept.canvas || document.createElement('canvas'),
@@ -916,6 +922,7 @@ const mpos = {
           unset = unset || rect.el.matches(precept.unset)
           if (unset) {
             rect.unset = true
+            rect.priority = true
           }
 
           // if rect mat.native matches cors, it is not added to atlas (with mat.poster)
@@ -1026,6 +1033,7 @@ const mpos = {
           // free memory
           rect.el = rect.bound = null
           delete grade.rects[idx]
+          document.querySelector('[data-idx="' + idx + '"]').removeAttribute('data-idx')
         }
       })
       grade.key = { x: 1 - 1 / grade.cells, y: 0.0001 }
@@ -1056,17 +1064,14 @@ const mpos = {
       mpos.add.css(rect, opts.frame)
       rect.frame = opts.frame || rect.frame || 0
       // css: unset for box scale
-      mpos.add.css(rect, true)
-      let bound = rect.el.getBoundingClientRect()
-      // css: remove unset
-      mpos.add.css(rect, false)
+      let unset = mpos.add.css(rect, true)
 
       // scale
-      const w = bound.width
-      const h = bound.height
+      const w = unset.width
+      const h = unset.height
       const d = vars.fov.z
       // position
-      bound = rect.unset ? bound : rect.bound
+      let bound = rect.unset ? unset : rect.bound
       let x = bound.width / 2
       let y = -bound.height / 2
       // scroll{0,0} is viewport, not document
@@ -1213,54 +1218,67 @@ const mpos = {
         }
       } else if (rect.unset) {
         // quirks of DOM
-        if (el.matches('details')) {
-          el.open = progress
-        }
-        if (el.matches('.mp-offscreen')) {
-          rect.z = css.style.zIndex
-        }
+        //if (el.matches('details')) {
+        //  el.open = progress
+        //}
+        //if (el.matches('.mp-offscreen')) {
+        //  rect.z = css.style.zIndex
+        //}
       }
 
+      let unset
       const rects = mpos.var.grade.rects
-      let max = 8 // deep tree?
-      let els = []
-      while (el && el !== document.body && max--) {
-        const r_ = rects[el.getAttribute('data-idx')]
-        if (r_?.priority) {
-          if (progress === undefined || frame) {
-            if (!rect.css || rect.frame < progress) {
-              // accumulate ancestor matrix
-              const style = r_.css?.style // window.getComputedStyle(el)
-              if (style && style.transform?.startsWith('matrix')) {
-                const transform = style.transform.replace(/(matrix)|[( )]/g, '')
-                // transform matrix
-                const [a, b] = transform.split(',')
-                const scale = Math.sqrt(a * a + b * b)
-                const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-                const radian = degree * (Math.PI / 180)
-                // accrue transforms
-                css.scale *= scale
-                css.radian += radian
-                css.degree += degree
-                css.transform++
+      function accumulate(progress) {
+        let el = rect.el
+        let els = []
+        let max = 8 // deep tree?
+
+        while (el && el !== document.body && max--) {
+          const r_ = rects[el.getAttribute('data-idx')]
+
+          if (r_?.priority) {
+            if (progress === undefined || frame) {
+              if (!rect.css || rect.frame < progress) {
+                // accumulate ancestor matrix
+                const style = r_.css?.style || css.style //|| window.getComputedStyle(el)
+
+                if (style && style.transform?.startsWith('matrix')) {
+                  const transform = style.transform.replace(/(matrix)|[( )]/g, '')
+                  // transform matrix
+                  const [a, b] = transform.split(',')
+                  const scale = Math.sqrt(a * a + b * b)
+                  const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+                  const radian = degree * (Math.PI / 180)
+                  // accrue transforms
+                  css.scale *= scale
+                  css.radian += radian
+                  css.degree += degree
+                  css.transform++
+                }
               }
-            }
-          } else {
-            // style override
-            if (r_.priority) {
+            } else {
+              // style override
+              //if (r_.priority) {
               // sets transform:initial for real box dimensions
               el.classList.toggle('mp-unset', progress)
+              //}
             }
           }
+          els.unshift(el)
+          el = el.parentNode
         }
-        els.unshift(el)
-        el = el.parentNode
-      }
 
-      if (progress === undefined || frame) {
-        rect.css = css
+        if (progress === true) {
+          unset = rect.el.getBoundingClientRect()
+          accumulate(!progress)
+        } else {
+          if (progress === undefined || frame) {
+            rect.css = css
+          }
+        }
       }
-      //return css
+      accumulate(progress)
+      return unset || css
     },
     shader: function (canvas, texStep) {
       //discourse.threejs.org/t/13221/17
@@ -1335,14 +1353,14 @@ const mpos = {
       if (group.children.length) {
         let s2 = group.userData.s2
         if (!s2) {
-          mpos.var.grade.group.add(group)
+          const grade = mpos.var.grade
+          grade.group.add(group)
 
           const aabb = new Box3()
           aabb.setFromObject(group)
           s2 = Math.max(aabb.max.x, aabb.max.y)
           // original scale
           group.userData.s2 = s2
-          mpos.var.wait = false
         }
 
         const s1 = Math.max(dummy.scale.x, dummy.scale.y)
