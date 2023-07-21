@@ -224,10 +224,7 @@ const mpos = {
 
       if (key === 'frame') {
         controller.onFinishChange(function (v) {
-          mpos.ux.timers.clear(key)
-          if (v) {
-            mpos.ux.reflow({ type: key, value: v })
-          }
+          mpos.ux.reflow({ type: key, value: v })
         })
       }
     })
@@ -256,16 +253,18 @@ const mpos = {
 
       function enqueue(idx) {
         if (queue.indexOf(idx) === -1) {
-          // immediately add unique
+          // add unique
           queue.push(idx)
         }
 
         if (idx === 'frame') {
           // immediate schedule, unless manually called -1
-          if (e.value > -1) {
+          if (e.value > 0) {
+            // schedule next frame (but 0 doesnt, and -1 clears without update)
             mpos.ux.reflow({ type: e.type, value: e.value })
           }
           if (!grade.wait) {
+            // update current queue
             mpos.precept.update(grade, idx)
           }
         } else {
@@ -289,9 +288,11 @@ const mpos = {
         // event schedule or throttle
         const [timer, timeout] = e.type === 'frame' ? ['frame', e.value] : ['reflow', 250]
 
-        //if (timer === 'frame') {
         mpos.ux.timers.clear(timer)
-        //}
+        if (e.value === -1) {
+          // user can clear a timer...?
+          return
+        }
 
         mpos.ux.timers[timer].push(
           setTimeout(function () {
@@ -563,13 +564,13 @@ const mpos = {
         }
 
         if (reflow) {
-          // update visibility
-          // rect was not forced (despite inPolar, un-observed)
+          // update visibility, from Observer or animation frame
           function vis(rects, reQueue) {
             Object.keys(rects).forEach(function (idx) {
               const rect = rects[idx]
               mpos.precept.inPolar(rect)
 
+              //const uxout = mpos.add.css(rect, r_frame)
               if (reQueue && rect.inPolar >= 4 && (rect.priority || pseudo(rect))) {
                 // frame && active view && significant
                 if (r_queue.indexOf(idx) === -1) {
@@ -589,7 +590,7 @@ const mpos = {
       } else {
         // HARD-update: viewport
         const root = document.body
-        const rect = { el: root, mat: 'wire', z: -16, fix: true, priority: true }
+        const rect = { el: root, mat: 'wire', z: -16, fix: true, ux: { i: 1, o: 0 } }
         const idx = root.getAttribute('data-idx')
         r_other.rects[idx] = rect
         r_other.count++
@@ -654,7 +655,7 @@ const mpos = {
             bbox && (rect.el.style.display = 'inline-block')
             // toSvg crisper, toPng smaller
             //rect.el.classList.add('mp-align')
-            const pixelRatio = rect.priority ? quality : 0.8
+            const pixelRatio = rect.ux.o ? quality : 0.8
 
             toPng(rect.el, { style: vars.unset, pixelRatio: pixelRatio, preferredFontFormat: 'woff' })
               .then(function (dataUrl) {
@@ -900,6 +901,7 @@ const mpos = {
         if (rect) {
           rect.mat = mat
           rect.z = z
+          rect.ux = { i: 0, o: 0 }
 
           if (rect.inPolar >= grade.inPolar) {
             grade.minEls++
@@ -918,11 +920,16 @@ const mpos = {
             mpos.ux.observer?.observe(rect.el)
           }
 
+          if (rect.mat === 'native' && rect.atlas && rect.el.tagName !== 'A') {
+            // update ux elevated
+            rect.ux.i = 1
+          }
+
           // unset inherits transform from class
           unset = unset || rect.el.matches(precept.unset)
           if (unset) {
             rect.unset = true
-            rect.priority = true
+            rect.ux.i = 1
           }
 
           // if rect mat.native matches cors, it is not added to atlas (with mat.poster)
@@ -1065,30 +1072,32 @@ const mpos = {
       rect.frame = opts.frame || rect.frame || 0
       // css: unset for box scale
       let unset = mpos.add.css(rect, true)
-
-      // scale
-      const w = unset.width
-      const h = unset.height
-      const d = vars.fov.z
-      // position
       let bound = rect.unset ? unset : rect.bound
-      let x = bound.width / 2
-      let y = -bound.height / 2
-      // scroll{0,0} is viewport, not document
-      const scroll = opts.scroll || { x: 0, y: 0 }
-      if (!scroll.fix) {
-        x += scroll.x + bound.left
-        y += scroll.y - bound.top
-      }
-
-      let z = rect.z * d
-      let zIndex = Number(rect.css?.style?.zIndex || 0)
-      const sign = zIndex >= 0 ? 1 : -1
-      zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
-      zIndex *= sign
-      z += zIndex * (vars.opt.depth * vars.fov.z)
 
       function transform(obj) {
+        // TRANSFORMS
+        // scale
+        const w = unset.width
+        const h = unset.height
+        const d = vars.fov.z
+        // position
+        let x = bound.width / 2
+        let y = -bound.height / 2
+        // scroll{0,0} is viewport, not document
+        const scroll = opts.scroll || { x: 0, y: 0 }
+        if (!scroll.fix) {
+          x += scroll.x + bound.left
+          y += scroll.y - bound.top
+        }
+
+        let z = rect.z * d
+        let zIndex = Number(rect.css?.style?.zIndex || 0)
+        const sign = zIndex >= 0 ? 1 : -1
+        zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
+        zIndex *= sign
+        z += zIndex * (vars.opt.depth * vars.fov.z)
+        //
+
         // separation for portal
         const stencil = obj.isCSS3DObject || rect.mat === 'loader'
         const extrude = stencil ? vars.fov.z / 2 : 0
@@ -1114,6 +1123,7 @@ const mpos = {
           // dummy from element fits group
           mpos.add.fit(dummy, obj)
         } else {
+          // generic dummy, i.e. atlas
           obj.position.set(x, y, z)
           obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
           obj.rotation.z = -rect.css.radian
@@ -1203,12 +1213,12 @@ const mpos = {
         // target element original style
         if (!rect.css || rect.frame < progress) {
           // ux priority may be escalated
-          rect.priority =
-            rect.priority || css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
+          const priority = css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
+          rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
-          rect.priority && el.classList.add('mp-unset')
+          rect.ux.o && el.classList.add('mp-unset')
           rect.bound = el.getBoundingClientRect()
-          rect.priority && el.classList.remove('mp-unset')
+          rect.ux.o && el.classList.remove('mp-unset')
 
           // reset transforms
           css.scale = 1
@@ -1236,7 +1246,7 @@ const mpos = {
         while (el && el !== document.body && max--) {
           const r_ = rects[el.getAttribute('data-idx')]
 
-          if (r_?.priority) {
+          if (r_?.ux.o) {
             if (progress === undefined || frame) {
               if (!rect.css || rect.frame < progress) {
                 // accumulate ancestor matrix
@@ -1278,7 +1288,7 @@ const mpos = {
         }
       }
       accumulate(progress)
-      return unset || css
+      return unset || rect.ux.o
     },
     shader: function (canvas, texStep) {
       //discourse.threejs.org/t/13221/17
