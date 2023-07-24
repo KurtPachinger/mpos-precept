@@ -462,36 +462,37 @@ const mpos = {
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     inPolar: function (rect, control) {
       const node = rect.el
-
       let vis = node && (node.tagName || node.textContent.trim()) ? 1 : false
-      if (typeof control === 'object') {
-        // node relative in control plot
-
-        vis = Object.values(control).some(function (tag) {
-          const parent = node.parentElement
-          const unlist = parent && parent.offsetWidth && parent.offsetHeight
-          return unlist && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
-        })
-      } else {
-        // 1: node not empty
-        if (node.tagName) {
-          // 2: node is tag
-          vis++
-          //const style = window.getComputedStyle(node)
-          rect.bound = node.getBoundingClientRect()
-          if (node.checkVisibility()) {
-            // 3: tag not hidden
+      if (vis) {
+        if (node.nodeName === '#text' && typeof control === 'object') {
+          // node relative in control plot
+          vis = Object.values(control).some(function (tag) {
+            const parent = node.parentElement
+            const unlist = parent && parent.offsetWidth && parent.offsetHeight
+            return unlist && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
+          })
+        } else {
+          // 1: node not empty
+          if (node.tagName) {
+            // 2: node is tag
             vis++
 
-            const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-            const scroll = !(rect.bound.bottom < 0 || rect.bound.top - viewHeight >= 0)
-            if (scroll) {
-              // 4: tag in viewport
+            rect.bound = node.getBoundingClientRect()
+            if (rect.bound.width > 0 && rect.bound.height > 0 && node.checkVisibility()) {
+              // 4: tag is visible
               vis++
+
+              const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
+              const scroll = rect.bound.bottom >= 0 && rect.bound.top - viewHeight < 0
+              if (scroll) {
+                // 4: tag in viewport
+                vis++
+              }
             }
           }
         }
       }
+
       rect.inPolar = vis
       return vis
     },
@@ -850,6 +851,9 @@ const mpos = {
 
       // FLAT-GRADE: filter, grade, sanitize
       const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
+      const sibling = (parent) => {
+        return parent.childElementCount >= 1 && parent.matches([precept.allow])
+      }
       let node = ni.nextNode()
       while (node) {
         if (node.nodeName === '#comment') {
@@ -860,9 +864,8 @@ const mpos = {
 
           if (precept.inPolar(rect)) {
             // not empty
-            if (rect.inPolar === 1 && node.nodeName === '#text') {
-              const orphan = node.parentNode.childElementCount >= 1 && node.parentNode.matches([precept.allow])
-              if (orphan && precept.inPolar(rect, grade.rects)) {
+            if (node.nodeName === '#text') {
+              if (precept.inPolar(rect, grade.rects) && sibling(node.parentNode)) {
                 // sanitize #text orphan (list or semantic) with parent visible
                 const wrap = document.createElement('span')
                 wrap.classList.add('mp-poster')
@@ -1090,13 +1093,13 @@ const mpos = {
           y += scroll.y - bound.top
         }
 
-        let z = rect.z * d
+        let z = (rect.z || 0) * d
         let zIndex = Number(rect.css?.style?.zIndex || 0)
+
         const sign = zIndex >= 0 ? 1 : -1
         zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
         zIndex *= sign
         z += zIndex * (vars.opt.depth * vars.fov.z)
-        //
 
         // separation for portal
         const stencil = obj.isCSS3DObject || rect.mat === 'loader'
@@ -1189,7 +1192,7 @@ const mpos = {
           // async
           obj = new Group()
           obj.userData.el = rect.el
-          mpos.add.loader(rect, object, obj)
+          mpos.add.loader(rect.el, object, obj)
         } else {
           // general (native, wire)
           vars.grade.group.add(object)
@@ -1208,17 +1211,18 @@ const mpos = {
       const frame = typeof progress === 'number'
       // css style: transform, transformOrigin, backgroundColor, zIndex, position
       const css = rect.css || { style: window.getComputedStyle(el) }
-
+      const ux = rect.ux || {}
       if (progress === undefined || frame) {
         // target element original style
         if (!rect.css || rect.frame < progress) {
           // ux priority may be escalated
           const priority = css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
-          rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
-          rect.ux.o && el.classList.add('mp-unset')
+          ux.o = priority ? ux.i + 1 : ux.i
+
+          ux.o && el.classList.add('mp-unset')
           rect.bound = el.getBoundingClientRect()
-          rect.ux.o && el.classList.remove('mp-unset')
+          ux.o && el.classList.remove('mp-unset')
 
           // reset transforms
           css.scale = 1
@@ -1288,7 +1292,7 @@ const mpos = {
         }
       }
       accumulate(progress)
-      return unset || rect.ux.o
+      return unset || ux.o
     },
     shader: function (canvas, texStep) {
       //discourse.threejs.org/t/13221/17
@@ -1385,25 +1389,55 @@ const mpos = {
         mpos.ux.render()
       }
     },
-    loader: function (rect, dummy, group) {
-      const file = rect.el.data || rect.el.src || rect.el.href
+    loader: function (source, dummy, group = new Group()) {
+      // source is location or contains one
+      let uri = typeof source === 'string' ? source : source.data || source.src || source.href
+      // source is image
+      let mime = uri && uri.match(/\.(gif|jpg|jpeg|png|svg|webp)(\?|$)/i)
+      mime = mime ? mime[0].toUpperCase() : 'File'
+      let loader = !!((mime === 'File' && uri) || mime.match('.SVG'))
+      //console.log(source, uri, mime, loader, dummy, group)
 
-      // instantiate a loader: File, Audio, Object...
-      // todo: url query string paramaters
-      let handler = file ? file.match(/\.(gif|jpg|jpeg|png|svg|webp)(\?|$)/i) : false
-      handler = handler && dummy && group ? handler[0].toUpperCase() : 'File'
-      console.log(handler)
-      const loader = handler.match('.SVG') ? new SVGLoader() : new FileLoader()
+      if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
+        let gc
+        if (uri && !dummy) {
+          // some dynamic resource needs an image
+          gc = source = document.createElement('img')
+          source.style.opacity = 1
+          source.src = uri
+          let unset = document.querySelector('#mp address.mp-offscreen')
+          unset.appendChild(source)
+          dummy = mpos.add.box({ el: source })
+        }
 
-      if (file && (handler.match('.SVG') || handler === 'File')) {
+        // ELEMENT: specific or generic
+        toPng(source, { style: mpos.var.unset, pixelRatio: 1 })
+          .then(function (dataUrl) {
+            let img = new Image()
+            img.onload = function () {
+              // image process, or load script
+              mpos.add.opencv(img, group, dummy)
+              // cleanup
+              gc && gc.parentElement.removeChild(gc)
+              source = dataUrl = img = null
+            }
+            // todo: animated gif?
+            img.src = dataUrl
+          })
+          .catch(function (error) {
+            // src problem...
+            console.log('src problem', error)
+          })
+      } else {
+        // LOADER: specific or generic
+        loader = mime.match('.SVG') ? new SVGLoader() : new FileLoader()
         loader.load(
-          file,
+          uri,
           function (data) {
-            //console.log('data', data)
-            //res = data
-            if (handler === 'File') {
-              // set attribute
-            } else if (handler.match('.SVG')) {
+            console.log('data', data)
+            if (mime === 'File') {
+              // file is not image (XML?)
+            } else if (mime.match('.SVG')) {
               const paths = data.paths || []
 
               for (let i = 0; i < paths.length; i++) {
@@ -1424,7 +1458,7 @@ const mpos = {
                   group.add(mesh)
                 }
               }
-              group.name = handler
+              group.name = mime
 
               mpos.add.fit(dummy, group, { add: true })
             }
@@ -1438,23 +1472,6 @@ const mpos = {
             console.log('error loading')
           }
         )
-      } else {
-        toPng(rect.el, { style: mpos.var.unset, pixelRatio: 1 })
-          .then(function (dataUrl) {
-            let img = new Image()
-            img.onload = function () {
-              // image process, or load script
-              mpos.add.opencv(img, group, dummy)
-              dataUrl = img = null
-            }
-            // todo: animated gif?
-            img.src = dataUrl
-          })
-          .catch(function (error) {
-            // src problem...
-            console.log('src problem')
-            //console.log(error)
-          })
       }
     },
     opencv: function (img, group, dummy) {
