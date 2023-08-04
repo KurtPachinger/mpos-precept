@@ -504,17 +504,17 @@ const mpos = {
         return
       }
       grade.wait = true
-      let quality = 1
-
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
       let r_frame = 0
+      let quality = 1
+      let capture = {}
 
       function pseudo(rect) {
         let pseudo = false
         if (rect.css) {
           pseudo = rect.css.pseudo
-          rect.css.pseudo = rect.el.matches(':hover,:focus')
+          rect.css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.mat === 'poster' && rect.el === capture.hover)
           pseudo = pseudo || rect.css.pseudo
         }
         return pseudo
@@ -551,6 +551,7 @@ const mpos = {
             }
           } else if (idx === 'frame' || idx === 'move' || idx === 'trim') {
             reflow = true
+
             if (idx === 'frame') {
               const timers = mpos.ux.timers
               r_frame = timers.frame[timers.frame.length - 1]
@@ -565,6 +566,12 @@ const mpos = {
         }
 
         if (reflow) {
+          // capture deepest pseudo match
+          capture = {
+            hover: [...grade.el.querySelectorAll(':hover')].pop(),
+            active: [...grade.el.querySelectorAll(':active')].pop(),
+            focus: [...grade.el.querySelectorAll(':focus')].pop()
+          }
           // update visibility, from Observer or animation frame
           function vis(rects, reQueue) {
             Object.keys(rects).forEach(function (idx) {
@@ -572,14 +579,33 @@ const mpos = {
               mpos.precept.inPolar(rect)
 
               //const uxout = mpos.add.css(rect, r_frame)
-              if (reQueue && rect.inPolar >= 4 && (rect.priority || pseudo(rect))) {
-                // frame && active view && significant
-                if (r_queue.indexOf(idx) === -1) {
+              if (reQueue && rect.inPolar >= 4) {
+                if (rect.el.tagName === 'BODY') {
+                  // root not contagious
                   r_queue.push(idx)
-                  // children
-                  //rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
-                  //  r_queue.push(el.getAttribute('data-idx'))
-                  //})
+                } else if (rect.priority || pseudo(rect)) {
+                  // frame && active view && significant
+                  if (r_queue.indexOf(idx) === -1) {
+                    r_queue.push(idx)
+                  }
+
+                  if (rect.css.pseudo) {
+                    // children contagious
+                    let child = rect.child || []
+                    if (!rect.child) {
+                      // cache nodes
+                      rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
+                        const idx = el.getAttribute('data-idx')
+                        let rect = rects[idx]
+                        if (rect && rect.mat === 'poster') {
+                          child.push(idx)
+                        }
+                      })
+                      rect.child = child
+                    }
+
+                    r_queue.push(...child)
+                  }
                 }
               }
             })
@@ -830,6 +856,7 @@ const mpos = {
       // structure
 
       const grade = {
+        el: sel,
         group: group,
         canvas: precept.canvas || document.createElement('canvas'),
         index: precept.index++,
