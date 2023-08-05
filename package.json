@@ -6,7 +6,8 @@
     "dom",
     "layout",
     "interface",
-    "threejs"
+    "threejs",
+    "foldable"
   ],
   "main": "src/index.js",
   "dependencies": {

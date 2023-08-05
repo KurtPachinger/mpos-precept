@@ -216,7 +216,7 @@ const mpos = {
         selector: [['body', 'main', '#native', '#text', '#loader', '#media', 'address']],
         depth: [0, 32, 1],
         inPolar: [1, 4, 1],
-        frame: [0, 500, 50],
+        frame: [0, 300, 15],
         arc: [0, 1, 0.25]
       }
       const param = params[key] || []
@@ -1535,7 +1535,14 @@ const mpos = {
 
             // KMEANS
             const pyr = src.clone()
-            cv.resize(pyr, pyr, new cv.Size(2 * clusters, pyr.cols * ((2 * clusters) / pyr.cols)), 0, 0, cv.INTER_AREA)
+            const thumb = 16
+            if (Math.min(pyr.cols, pyr.rows) > thumb) {
+              // limit sample dimension
+              const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
+              const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
+              cv.resize(pyr, pyr, new cv.Size(pyr.cols * scale, pyr.rows * scale), 0, 0, cv.INTER_AREA)
+            }
+
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
             for (let y = 0; y < pyr.rows; y++) {
               for (let x = 0; x < pyr.cols; x++) {
