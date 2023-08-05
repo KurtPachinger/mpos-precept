@@ -514,7 +514,7 @@ const mpos = {
         let pseudo = false
         if (rect.css) {
           pseudo = rect.css.pseudo
-          rect.css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.mat === 'poster' && rect.el === capture.hover)
+          rect.css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
           pseudo = pseudo || rect.css.pseudo
         }
         return pseudo
@@ -536,9 +536,12 @@ const mpos = {
             const r_ = grade.r_[type]
             if (!r_.rects[idx]) {
               grade.minEls++
-              if (rect.mat === 'poster') {
+              if (rect.mat === 'poster' || (rect.mat === 'native' && rect.r_ === 'atlas')) {
                 // shader
                 rect.atlas = grade.atlas++
+                if (rect.mat === 'native') {
+                  rect.priority = true
+                }
               } else if (type === 'other') {
                 // CSS3D or Loader
                 rect.add = true
@@ -589,7 +592,7 @@ const mpos = {
                     r_queue.push(idx)
                   }
 
-                  if (rect.css.pseudo) {
+                  if (rect.css && rect.css.pseudo) {
                     // children contagious
                     let child = rect.child || []
                     if (!rect.child) {
@@ -933,10 +936,13 @@ const mpos = {
           rect.z = z
           rect.ux = { i: 0, o: 0 }
 
+          // note: portions of this are duplicated in update (r_, priority)
           if (rect.inPolar >= grade.inPolar) {
             grade.minEls++
 
             if (rect.mat === 'poster' || rect.mat === 'native') {
+              //
+
               // shader
               rect.atlas = grade.atlas++
 
@@ -1649,7 +1655,7 @@ const mpos = {
         postRun: [
           function (e) {
             try {
-              console.log('cv', Object.keys(kmeans).length)
+              console.log('cv', Object.keys(kmeans).length, group.userData.el.getAttribute('data-idx'))
               // Shape from label contours
               Object.values(kmeans).forEach(function (label) {
                 let mergedGeoms = []
@@ -1704,6 +1710,7 @@ const mpos = {
               kmeans = null
 
               group.name = 'OPENCV'
+
               mpos.add.fit(dummy, group, { add: true })
             } catch (error) {
               console.warn(error)
@@ -1714,14 +1721,17 @@ const mpos = {
 
       // run Module _main, with vars monkeyed into _stdin
       // i.e. _stdin: { ivy: college, peep: blackbox }
-      requestIdleCallback(
-        function () {
-          if (mpos.var.cv === true) {
-            opencv(Module)
-          }
-        },
-        { time: 500 }
-      )
+      if (mpos.var.cv === true) {
+        opencv(Module)
+        //Module = null
+      } else {
+        requestIdleCallback(
+          function () {
+            mpos.var.cv && opencv(Module)
+          },
+          { time: 1000 }
+        )
+      }
     }
   }
 }
