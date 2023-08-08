@@ -213,7 +213,7 @@ const mpos = {
     gui.domElement.classList.add('mp-native')
     Object.keys(vars.opt).forEach(function (key) {
       const params = {
-        selector: [['body', 'main', '#native', '#text', '#loader', '#media', 'address']],
+        selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#gen', 'address']],
         depth: [0, 32, 1],
         inPolar: [1, 4, 1],
         frame: [0, 300, 15],
@@ -477,13 +477,14 @@ const mpos = {
             // 2: node is tag
             vis++
 
-            rect.bound = node.getBoundingClientRect()
-            if (rect.bound.width > 0 && rect.bound.height > 0 && node.checkVisibility()) {
+            let bound = rect.bound || node.getBoundingClientRect()
+            if (bound.width > 0 && bound.height > 0 && node.checkVisibility()) {
               // 4: tag is visible
               vis++
+              // bound is not a reference/update to rect.bound, which favors a rect without transforms
 
               const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-              const scroll = rect.bound.bottom >= 0 && rect.bound.top - viewHeight < 0
+              const scroll = bound.bottom >= 0 && bound.top - viewHeight < 0
               if (scroll) {
                 // 4: tag in viewport
                 vis++
@@ -511,6 +512,7 @@ const mpos = {
       let capture = {}
 
       function pseudo(rect) {
+        // pseudo should check to de-queue itself
         let pseudo = false
         if (rect.css) {
           pseudo = rect.css.pseudo
@@ -539,9 +541,9 @@ const mpos = {
               if (rect.mat === 'poster' || (rect.mat === 'native' && rect.r_ === 'atlas')) {
                 // shader
                 rect.atlas = grade.atlas++
-                if (rect.mat === 'native') {
-                  rect.priority = true
-                }
+                //if (rect.mat === 'native') {
+                //  rect.priority = true
+                //}
               } else if (type === 'other') {
                 // CSS3D or Loader
                 rect.add = true
@@ -579,14 +581,29 @@ const mpos = {
           function vis(rects, reQueue) {
             Object.keys(rects).forEach(function (idx) {
               const rect = rects[idx]
+
+              // always update bound (from user events or frame)
+              // ... inPolar uses DOM rect bound
+              // ... css decorates transformed, for unset bound
+              //     and compares frame bound/css for change, to reduce queue
+              //
+              mpos.add.css(rect, r_frame)
               mpos.precept.inPolar(rect)
 
-              //const uxout = mpos.add.css(rect, r_frame)
-              if (reQueue && rect.inPolar >= 4) {
+              //if (rect.ux.u) {
+              //console.log('uxout', rect.el)
+              //}
+
+              // note: queue uses inPolar>=4 (not mpos.var.opt.inPolar)
+              // ...but if you DID re-draw offscreen elements
+              // ...you could traverse css immediately (it skips subsequent calls)
+              // ...to compare frame transforms and reduce queue
+              if (reQueue && rect.inPolar >= mpos.var.opt.inPolar) {
                 if (rect.el.tagName === 'BODY') {
                   // root not contagious
                   r_queue.push(idx)
-                } else if (rect.priority || pseudo(rect)) {
+                } else if (pseudo(rect) || rect.ux.u || rect.ux.i) {
+                  //console.log('uxi', rect.el)
                   // frame && active view && significant
                   if (r_queue.indexOf(idx) === -1) {
                     r_queue.push(idx)
@@ -600,6 +617,7 @@ const mpos = {
                       rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
                         const idx = el.getAttribute('data-idx')
                         let rect = rects[idx]
+                        //rect.css.pseudo = true
                         if (rect && rect.mat === 'poster') {
                           child.push(idx)
                         }
@@ -609,6 +627,7 @@ const mpos = {
 
                     r_queue.push(...child)
                   }
+                  //rect.css.pseudo = false
                 }
               }
             })
@@ -626,7 +645,9 @@ const mpos = {
         r_other.count++
       }
 
-      //console.log('queue', grade.r_.queue.length, dataIdx, r_frame)
+      // note: queue to re-draw atlas
+      // ...and currently transforms (atlas, other) still affects everything
+      //console.log('queue', r_queue.length, dataIdx, r_frame)
 
       const promise = new Promise((resolve, reject) => {
         // style needs no transform, no margin, maybe block... dont reset live animations, etc...
@@ -738,9 +759,9 @@ const mpos = {
             const add = !rect.obj && (dataIdx === undefined || rect.add)
             const scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
             // add (async) or transform
-            mpos.add.box(rect, { add: add, scroll: scroll, frame: r_frame })
+            const dummy = mpos.add.box(rect, { add: add, scroll: scroll, frame: r_frame })
 
-            if (rect.obj) {
+            if (dummy && rect.obj) {
               // filter visibility
               let visible = true
               if (!rect.fix) {
@@ -759,32 +780,37 @@ const mpos = {
           let count = 0
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
             // Instance Matrix
+
             const dummy = mpos.add.box(rect, { frame: r_frame })
-            instanced.setMatrixAt(count, dummy.matrix)
+            if (dummy) {
+              instanced.setMatrixAt(count, dummy.matrix)
 
-            // Instance Color
-            const color = new Color()
-            let bg = rect.css.style.backgroundColor
-            let rgba = bg.replace(/[(rgba )]/g, '').split(',')
-            const alpha = rgba[3]
-            if (alpha === '0') {
-              bg = 'cyan'
-            } else if (alpha > 0.0 || alpha === undefined) {
-              bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
-            }
-            instanced.setColorAt(count, color.setStyle(bg))
-
-            // Shader Atlas UV
-            const stepSize = count * 2
-            if (rect.inPolar >= grade.inPolar) {
-              // mat: self, child, poster...
-              if (rect.atlas !== undefined || rect.mat === 'self') {
-                uvOffset[stepSize] = rect.x || grade.key.x
-                uvOffset[stepSize + 1] = 1 - rect.y || grade.key.y
+              // Instance Color
+              const color = new Color()
+              let bg = rect.css.style.backgroundColor
+              let rgba = bg.replace(/[(rgba )]/g, '').split(',')
+              const alpha = rgba[3]
+              if (alpha === '0') {
+                bg = 'cyan'
+              } else if (alpha > 0.0 || alpha === undefined) {
+                bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
               }
-              if (rect.atlas !== undefined) {
-                // raycast filter
-                grade.ray[count] = Number(idx)
+              instanced.setColorAt(count, color.setStyle(bg))
+
+              //}
+
+              // Shader Atlas UV
+              const stepSize = count * 2
+              if (rect.inPolar >= grade.inPolar) {
+                // mat: self, child, poster...
+                if (rect.atlas !== undefined || rect.mat === 'self') {
+                  uvOffset[stepSize] = rect.x || grade.key.x
+                  uvOffset[stepSize + 1] = 1 - rect.y || grade.key.y
+                }
+                if (rect.atlas !== undefined) {
+                  // raycast filter
+                  grade.ray[count] = Number(idx)
+                }
               }
             }
 
@@ -804,10 +830,10 @@ const mpos = {
 
           if (!paint) {
             // UI Atlas
-            const atlas = document.querySelector('#atlas canvas')
-            const name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
+            //const atlas = document.querySelector('#atlas canvas')
+            //const name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
             //const link = atlas.querySelector('a')
-            atlas && (atlas.title = name)
+            //atlas && (atlas.title = name)
             //link.href = grade.canvas.toDataURL('image/jpeg', 0.5)
             //link.appendChild(grade.canvas)
             //document.getElementById('atlas').appendChild(link)
@@ -934,31 +960,26 @@ const mpos = {
         if (rect) {
           rect.mat = mat
           rect.z = z
-          rect.ux = { i: 0, o: 0 }
+          // update ux elevated
+          let uxin = rect.mat === 'native' && rect.el.tagName !== 'A' ? 1 : 0
+          rect.ux = { i: uxin, o: 0 }
 
           // note: portions of this are duplicated in update (r_, priority)
           if (rect.inPolar >= grade.inPolar) {
             grade.minEls++
 
             if (rect.mat === 'poster' || rect.mat === 'native') {
-              //
-
               // shader
               rect.atlas = grade.atlas++
 
-              if (rect.mat === 'native' && rect.atlas && rect.el.tagName !== 'A') {
-                // update ux elevated
-                rect.priority = true
-              }
+              //if (rect.mat === 'native' && rect.atlas && rect.el.tagName !== 'A') {
+              // update ux elevated
+              //  rect.priority = true
+              //}
             }
           } else {
             // off-screen elements
             mpos.ux.observer?.observe(rect.el)
-          }
-
-          if (rect.mat === 'native' && rect.atlas && rect.el.tagName !== 'A') {
-            // update ux elevated
-            rect.ux.i = 1
           }
 
           // unset inherits transform from class
@@ -1101,11 +1122,14 @@ const mpos = {
       return grade
     },
     box: function (rect, opts = {}) {
+      if (rect.obj && rect.ux.u === false && !rect.r_ === 'other') {
+        return false
+      }
       const vars = mpos.var
 
       // css: accumulate transforms
       mpos.add.css(rect, opts.frame)
-      rect.frame = opts.frame || rect.frame || 0
+
       // css: unset for box scale
       let unset = mpos.add.css(rect, true)
       let bound = rect.unset ? unset : rect.bound
@@ -1244,12 +1268,20 @@ const mpos = {
       const frame = typeof progress === 'number'
       // css style: transform, transformOrigin, backgroundColor, zIndex, position
       const css = rect.css || { style: window.getComputedStyle(el) }
-      const ux = rect.ux || {}
+
+      //
+      let uxout = {}
+
       if (progress === undefined || frame) {
         // target element original style
+        // ux frame change pre/post calculable? (imperative)
+        rect.ux.u = false
+        uxout = { bound: rect.bound, scale: css.scale, degree: css.degree }
         if (!rect.css || rect.frame < progress) {
-          // ux priority may be escalated
-          const priority = css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
+          // ux priority may be escalated (declarative)
+          const ux = rect.ux
+          const priority =
+            css.pseudo || css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
 
           ux.o = priority ? ux.i + 1 : ux.i
 
@@ -1320,12 +1352,29 @@ const mpos = {
           accumulate(!progress)
         } else {
           if (progress === undefined || frame) {
+            // frame && rect.frame < progress
             rect.css = css
+            rect.bound = rect.el.getBoundingClientRect()
+            if (frame) {
+              if (rect.frame < progress && rect.ux.o) {
+                // was frame change calculable?
+                // could be 1 or 2, but not have shifted
+                // 1+0= definitely
+                // 1+1= definitely (ux.i native)
+                // 0+1= maybe
+                rect.ux.u =
+                  JSON.stringify(uxout.bound) !== JSON.stringify(rect.bound) ||
+                  uxout.scale !== rect.css.scale ||
+                  uxout.degree !== rect.css.degree
+              }
+              rect.frame = progress
+            }
           }
         }
       }
       accumulate(progress)
-      return unset || ux.o
+
+      return unset || rect.ux.u
     },
     shader: function (canvas, texStep) {
       //discourse.threejs.org/t/13221/17
@@ -1540,7 +1589,7 @@ const mpos = {
               // limit sample dimension
               const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
               const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
-              cv.resize(pyr, pyr, new cv.Size(pyr.cols * scale, pyr.rows * scale), 0, 0, cv.INTER_AREA)
+              cv.resize(pyr, pyr, new cv.Size(Math.ceil(pyr.cols * scale), Math.ceil(pyr.rows * scale)), 0, 0, cv.INTER_AREA)
             }
 
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
@@ -1554,7 +1603,7 @@ const mpos = {
             release(pyr)
 
             const labels = new cv.Mat()
-            const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 16, 0.8)
+            const criteria = new cv.TermCriteria(cv.TermCriteria_MAX_ITER + cv.TermCriteria_EPS, 8, 0.8)
             const centers = new cv.Mat()
             cv.kmeans(sample, clusters, labels, criteria, 1, cv.KMEANS_PP_CENTERS, centers)
             release(sample)
@@ -1730,13 +1779,14 @@ const mpos = {
       // i.e. _stdin: { ivy: college, peep: blackbox }
       if (mpos.var.cv === true) {
         opencv(Module)
-        //Module = null
+        Module = null
       } else {
         requestIdleCallback(
           function () {
-            mpos.var.cv && opencv(Module)
+            opencv(Module)
+            Module = null
           },
-          { time: 1000 }
+          { time: 2000 }
         )
       }
     }

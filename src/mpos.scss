@@ -2,7 +2,7 @@
 // MP SELECTORS
 .mp-offscreen {
   pointer-events: none;
-  > * { z-index: 999;  }
+  > * { z-index: 999; }
   &.tool { bottom: 8rem; }
 }
 
