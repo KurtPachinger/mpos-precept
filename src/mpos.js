@@ -1,5 +1,5 @@
 import './mpos.scss'
-import { toPng } from 'html-to-image'
+import { toPng, toCanvas } from 'html-to-image'
 //import * as THREE from 'three'
 import {
   BoxGeometry,
@@ -17,7 +17,7 @@ import {
   InstancedBufferAttribute,
   Group,
   InstancedMesh,
-  StaticDrawUsage,
+  DynamicDrawUsage,
   Object3D,
   CanvasTexture,
   NearestFilter,
@@ -650,6 +650,10 @@ const mpos = {
       //console.log('queue', r_queue.length, dataIdx, r_frame)
 
       const promise = new Promise((resolve, reject) => {
+        // Instanced Mesh
+        const instanced = grade.instanced
+        instanced.count = r_atlas.count
+        const uvOffset = instanced.geometry.getAttribute('uvOffset')
         // style needs no transform, no margin, maybe block... dont reset live animations, etc...
         //const align = { display: 'block', margin: 0, transform: 'initial', left: 'initial', right: 'initial' }
         function atlas(grade, opts = {}) {
@@ -708,35 +712,39 @@ const mpos = {
             //rect.el.classList.add('mp-align')
             const pixelRatio = rect.ux.o ? quality : 0.8
 
-            toPng(rect.el, { style: vars.unset, pixelRatio: pixelRatio, preferredFontFormat: 'woff' })
-              .then(function (dataUrl) {
+            toCanvas(rect.el, { style: vars.unset, pixelRatio: pixelRatio, preferredFontFormat: 'woff' })
+              .then(function (canvas) {
                 //rect.el.classList.remove('mp-align')
-                if (dataUrl === 'data:,') {
-                  //const error = ['idx', rect.el.getAttribute('data-idx'), 'bad size'].join(' ')
-                  //console.log('no box')
-                  next()
+                //if (dataUrl === 'data:,') {
+                //const error = ['idx', rect.el.getAttribute('data-idx'), 'bad size'].join(' ')
+                //console.log('no box')
+                //  next()
+                if (canvas.width === 0 || canvas.height === 0) {
+                  // bad canvas
                 } else {
                   bbox && (rect.el.style.display = 'initial')
-                  let img = new Image()
-                  img.onload = function () {
-                    const step = opts.step
-                    // canvas xy: from block top (FIFO)
-                    const x = (rect.atlas % grade.cells) * step
-                    const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
-                    r_frame && opts.ctx.clearRect(x, y, step, step)
-                    opts.ctx.drawImage(img, x, y, step, step)
-                    // shader xy: from block bottom
-                    // avoid 0 edge, so add 0.0001
-                    rect.x = (0.0001 + x) / grade.maxRes
-                    rect.y = (0.0001 + y + step) / grade.maxRes
-                    // recursive
-                    next()
-                    img = null
-                  }
-
-                  img.src = dataUrl
-                  dataUrl = null
+                  // let img = new Image()
+                  //img.onload = function (e) {
+                  //URL.revokeObjectURL(e.target.src)
+                  const step = opts.step
+                  // canvas xy: from block top (FIFO)
+                  const x = (rect.atlas % grade.cells) * step
+                  const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
+                  r_frame && opts.ctx.clearRect(x, y, step, step)
+                  opts.ctx.drawImage(canvas, x, y, step, step)
+                  // shader xy: from block bottom
+                  // avoid 0 edge, so add 0.0001
+                  rect.x = (0.0001 + x) / grade.maxRes
+                  rect.y = (0.0001 + y + step) / grade.maxRes
+                  // recursive
                 }
+
+                canvas = null
+                next()
+
+                //img.src = URL.createObjectURL(blob)
+                //dataUrl = null
+                //}
               })
               .catch(function (error) {
                 // src problem...
@@ -752,7 +760,7 @@ const mpos = {
 
         function transforms(grade, paint) {
           // apply cumulative updates
-          grade.scroll = { x: window.scrollX, y: window.scrollY }
+          //grade.scroll = { x: window.scrollX, y: window.scrollY }
 
           // Mesh: CSS3D, loader, root...
           Object.values(r_other.rects).forEach(function (rect) {
@@ -771,47 +779,45 @@ const mpos = {
             }
           })
 
-          // Instanced Mesh
-          const instanced = grade.instanced
-          instanced.count = r_atlas.count
-          const uvOffset = new Float32Array(instanced.count * 2).fill(-1)
-
           grade.ray = {}
           let count = 0
+          const color = new Color()
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
             // Instance Matrix
-
             const dummy = mpos.add.box(rect, { frame: r_frame })
+            // dummy false if css on frame was unchanged
             if (dummy) {
               instanced.setMatrixAt(count, dummy.matrix)
 
-              // Instance Color
-              const color = new Color()
-              let bg = rect.css.style.backgroundColor
-              let rgba = bg.replace(/[(rgba )]/g, '').split(',')
-              const alpha = rgba[3]
-              if (alpha === '0') {
-                bg = 'cyan'
-              } else if (alpha > 0.0 || alpha === undefined) {
-                bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
+              // Instance Color (first-run)
+              if (dataIdx === undefined) {
+                let bg = rect.css.style.backgroundColor
+                let rgba = bg.replace(/[(rgba )]/g, '').split(',')
+                const alpha = rgba[3]
+                if (alpha === '0') {
+                  bg = 'cyan'
+                } else if (alpha > 0.0 || alpha === undefined) {
+                  bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
+                }
+                instanced.setColorAt(count, color.setStyle(bg))
               }
-              instanced.setColorAt(count, color.setStyle(bg))
-
-              //}
 
               // Shader Atlas UV
-              const stepSize = count * 2
+              let x = -1,
+                y = -1
               if (rect.inPolar >= grade.inPolar) {
                 // mat: self, child, poster...
                 if (rect.atlas !== undefined || rect.mat === 'self') {
-                  uvOffset[stepSize] = rect.x || grade.key.x
-                  uvOffset[stepSize + 1] = 1 - rect.y || grade.key.y
+                  x = rect.x || grade.key.x
+                  y = 1 - rect.y || grade.key.y
                 }
                 if (rect.atlas !== undefined) {
                   // raycast filter
                   grade.ray[count] = Number(idx)
                 }
               }
+
+              uvOffset.setXY(count, x, y)
             }
 
             count++
@@ -822,7 +828,7 @@ const mpos = {
           instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
 
           // update shader
-          instanced.geometry.setAttribute('uvOffset', new InstancedBufferAttribute(uvOffset, 2))
+          uvOffset.needsUpdate = true
           instanced.userData.shader.userData.t.needsUpdate = true
 
           //
@@ -840,7 +846,6 @@ const mpos = {
 
             resolve(grade)
             reject(grade)
-          } else {
           }
         }
       })
@@ -901,8 +906,8 @@ const mpos = {
           queue: [],
           atlas: { count: 0, rects: {} },
           other: { count: 0, rects: {} }
-        },
-        scroll: { x: window.scrollX, y: -window.scrollY }
+        }
+        //scroll: { x: window.scrollX, y: -window.scrollY }
       }
 
       // FLAT-GRADE: filter, grade, sanitize
@@ -1011,6 +1016,7 @@ const mpos = {
           if (mat === 'loader' && mpos.var.cv === undefined) {
             mpos.var.cv = false
             const script = document.createElement('script')
+            script.id = 'opencv'
             script.type = 'text/javascript'
             script.async = true
             script.onload = function () {
@@ -1105,12 +1111,17 @@ const mpos = {
       // Instanced Mesh, shader atlas
       const shader = mpos.add.shader(grade.canvas, grade.cells)
       const instanced = new InstancedMesh(vars.geo.clone(), [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line], grade.maxEls)
-      instanced.instanceMatrix.setUsage(StaticDrawUsage)
+      instanced.instanceMatrix.setUsage(DynamicDrawUsage)
       instanced.layers.set(2)
       instanced.userData.shader = shader
       instanced.userData.el = grade.sel
       instanced.name = [grade.index, selector.tagName].join('_')
       grade.instanced = instanced
+
+      // Atlas UV Buffer
+      const uvOffset = new InstancedBufferAttribute(new Float32Array(grade.maxEls * 2).fill(-1), 2)
+      uvOffset.setUsage(DynamicDrawUsage)
+      instanced.geometry.setAttribute('uvOffset', uvOffset)
 
       // OUTPUT
       group.add(instanced)
@@ -1125,6 +1136,7 @@ const mpos = {
       if (rect.obj && rect.ux.u === false && !rect.r_ === 'other') {
         return false
       }
+
       const vars = mpos.var
 
       // css: accumulate transforms
@@ -1584,6 +1596,7 @@ const mpos = {
 
             // KMEANS
             const pyr = src.clone()
+
             const thumb = 16
             if (Math.min(pyr.cols, pyr.rows) > thumb) {
               // limit sample dimension
@@ -1778,16 +1791,13 @@ const mpos = {
       // run Module _main, with vars monkeyed into _stdin
       // i.e. _stdin: { ivy: college, peep: blackbox }
       if (mpos.var.cv === true) {
+        // probably should batch post mpos.dom().then(grade=>(grade.LRP))
         opencv(Module)
-        Module = null
       } else {
-        requestIdleCallback(
-          function () {
-            opencv(Module)
-            Module = null
-          },
-          { time: 2000 }
-        )
+        const script = document.getElementById('opencv')
+        script.addEventListener('load', function () {
+          opencv(Module)
+        })
       }
     }
   }
