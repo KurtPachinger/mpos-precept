@@ -33,6 +33,8 @@ import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
+//
+import Stats from 'three/examples/jsm/libs/stats.module.js'
 
 const mpos = {
   var: {
@@ -124,6 +126,9 @@ const mpos = {
     vars.renderer = opts.renderer || new WebGLRenderer()
     const domElement = vars.renderer.domElement
     const container = vars.proxy ? domElement.parentElement : document.body
+    //
+    window.stats = new Stats()
+    container.appendChild(stats.dom)
 
     vars.fov.w = container.offsetWidth
     vars.fov.h = container.offsetHeight
@@ -454,7 +459,8 @@ const mpos = {
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,iframe:not([src])`.split(
       ','
     ),
-    native: `.mp-native,a,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
+    // added canvas to native, because maybe animations?
+    native: `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
       ','
     ),
     cors: `iframe,object,.yt`.split(','),
@@ -500,10 +506,11 @@ const mpos = {
     update: function (grade, dataIdx) {
       const vars = mpos.var
       let r_queue = grade.r_.queue
-      if ((dataIdx && !r_queue.length) || grade.wait) {
+      if ((dataIdx && !r_queue.length) || grade.wait || document.hidden) {
         // redundant invocation... frame?
         return
       }
+      stats.update()
       grade.wait = true
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
@@ -565,7 +572,7 @@ const mpos = {
               const elapsed = now - timers.last
               timers.last = now
 
-              quality = Math.max(mpos.var.opt.frame / elapsed, 0.5).toFixed(2)
+              quality = Math.max(mpos.var.opt.frame / elapsed, 0.8).toFixed(2)
             }
           }
         }
@@ -604,12 +611,12 @@ const mpos = {
                   r_queue.push(idx)
                 } else if (pseudo(rect) || rect.ux.u || rect.ux.i) {
                   //console.log('uxi', rect.el)
-                  // frame && active view && significant
+                  // frame active or significant
                   if (r_queue.indexOf(idx) === -1) {
                     r_queue.push(idx)
                   }
 
-                  if (rect.css && rect.css.pseudo) {
+                  if (rect.css && rect.css.pseudo && (rect.ux.u === 'both' || rect.ux.u === 'box')) {
                     // children contagious
                     let child = rect.child || []
                     if (!rect.child) {
@@ -619,6 +626,7 @@ const mpos = {
                         let rect = rects[idx]
                         //rect.css.pseudo = true
                         if (rect && rect.mat === 'poster') {
+                          rect.ux.u = 'both' // force child on frame, for atlas/transform...?
                           child.push(idx)
                         }
                       })
@@ -650,6 +658,24 @@ const mpos = {
       //console.log('queue', r_queue.length, dataIdx, r_frame)
 
       const promise = new Promise((resolve, reject) => {
+        // Offscreen Canvas
+        let osc = grade.osc
+        if (!osc) {
+          if (window.OffscreenCanvas) {
+            osc = new OffscreenCanvas(grade.canvas.width, grade.canvas.height)
+          } else {
+            osc = document.createElement('canvas')
+            osc.width = grade.canvas.width
+            osc.height = grade.canvas.height
+          }
+          grade.osc = osc
+        }
+
+        let ctx = osc.getContext('2d')
+        ctx.clearRect(0, 0, osc.width, osc.height)
+        let src = grade.canvas.getContext('2d')
+        //
+
         // Instanced Mesh
         const instanced = grade.instanced
         instanced.count = r_atlas.count
@@ -668,7 +694,7 @@ const mpos = {
             }
             //console.log('atlas', r_frame, opts.array)
             opts.idx = opts.array.length
-            opts.ctx = opts.ctx || grade.canvas.getContext('2d')
+            opts.ctx = opts.ctx || ctx
             opts.step = opts.step || grade.maxRes / grade.cells
             // paint breakpoints, unless frame: [0%, 50%]
             opts.paint = opts.idx >= 32 && r_frame === 0 ? [opts.idx, Math.floor(opts.idx / 2)] : []
@@ -704,7 +730,15 @@ const mpos = {
 
           // queue indexes from end, but in reverse
           const rect = r_atlas.rects[opts.array[opts.array.length - opts.idx]]
-          if (rect && rect.atlas !== undefined) {
+
+          if (rect) {
+            //console.log(rect.el, rect.ux.u)
+          }
+          function bad(ux) {
+            return ux.i !== 1 && ux.u === 'css'
+          }
+
+          if (rect && rect.atlas !== undefined && !bad(rect.ux)) {
             // bug: style display-inline is not honored by style override
             const bbox = !rect.el.clientWidth && !rect.el.clientHeight && rect.el.matches('a, img, object, span, xml, :is(:empty)')
             bbox && (rect.el.style.display = 'inline-block')
@@ -730,7 +764,7 @@ const mpos = {
                   // canvas xy: from block top (FIFO)
                   const x = (rect.atlas % grade.cells) * step
                   const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
-                  r_frame && opts.ctx.clearRect(x, y, step, step)
+                  r_frame && src.clearRect(x, y, step, step)
                   opts.ctx.drawImage(canvas, x, y, step, step)
                   // shader xy: from block bottom
                   // avoid 0 edge, so add 0.0001
@@ -759,6 +793,7 @@ const mpos = {
         atlas(grade)
 
         function transforms(grade, paint) {
+          src.drawImage(osc, 0, 0)
           // apply cumulative updates
           //grade.scroll = { x: window.scrollX, y: window.scrollY }
 
@@ -957,6 +992,8 @@ const mpos = {
       grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
       grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
       grade.canvas.width = grade.canvas.height = grade.maxRes
+      //
+
       // clear atlas
       const ctx = grade.canvas.getContext('2d')
       ctx.clearRect(0, 0, grade.canvas.width, grade.canvas.height)
@@ -1289,6 +1326,7 @@ const mpos = {
         // ux frame change pre/post calculable? (imperative)
         rect.ux.u = false
         uxout = { bound: rect.bound, scale: css.scale, degree: css.degree }
+
         if (!rect.css || rect.frame < progress) {
           // ux priority may be escalated (declarative)
           const ux = rect.ux
@@ -1297,9 +1335,14 @@ const mpos = {
 
           ux.o = priority ? ux.i + 1 : ux.i
 
-          ux.o && el.classList.add('mp-unset')
+          /*
+          //ux.o && el.classList.add('mp-unset')
           rect.bound = el.getBoundingClientRect()
-          ux.o && el.classList.remove('mp-unset')
+          //ux.o && el.classList.remove('mp-unset')
+          if (ux.o) {
+            rect.bound.width = rect.el.clientWidth
+            rect.bound.height = rect.el.clientHeight
+          }*/
 
           // reset transforms
           css.scale = 1
@@ -1348,11 +1391,9 @@ const mpos = {
                 }
               }
             } else {
-              // style override
-              //if (r_.priority) {
+              // style override ancestors
               // sets transform:initial for real box dimensions
               el.classList.toggle('mp-unset', progress)
-              //}
             }
           }
           els.unshift(el)
@@ -1367,17 +1408,25 @@ const mpos = {
             // frame && rect.frame < progress
             rect.css = css
             rect.bound = rect.el.getBoundingClientRect()
+            rect.bound.client = { w: rect.el.clientWidth, h: rect.el.clientHeight }
             if (frame) {
               if (rect.frame < progress && rect.ux.o) {
                 // was frame change calculable?
-                // could be 1 or 2, but not have shifted
-                // 1+0= definitely
-                // 1+1= definitely (ux.i native)
-                // 0+1= maybe
-                rect.ux.u =
-                  JSON.stringify(uxout.bound) !== JSON.stringify(rect.bound) ||
-                  uxout.scale !== rect.css.scale ||
-                  uxout.degree !== rect.css.degree
+                // update atlas, transform, or both...
+                let newBox = JSON.stringify(uxout.bound) !== JSON.stringify(rect.bound)
+                let newCss = uxout.scale !== rect.css.scale || uxout.degree !== rect.css.degree
+                if (newBox || newCss) {
+                  let update = 'both'
+                  if (newBox) {
+                    // deeper comparison
+                    newBox = JSON.stringify(uxout.bound.client) !== JSON.stringify(rect.bound.client)
+                  }
+                  if (!newBox || !newCss) {
+                    update = newBox ? 'box' : 'css'
+                  }
+
+                  rect.ux.u = update
+                }
               }
               rect.frame = progress
             }
@@ -1505,18 +1554,18 @@ const mpos = {
         }
 
         // ELEMENT: specific or generic
-        toPng(source, { style: mpos.var.unset, pixelRatio: 1 })
-          .then(function (dataUrl) {
-            let img = new Image()
-            img.onload = function () {
-              // image process, or load script
-              mpos.add.opencv(img, group, dummy)
-              // cleanup
-              gc && gc.parentElement.removeChild(gc)
-              source = dataUrl = img = null
-            }
+        toCanvas(source, { style: mpos.var.unset, pixelRatio: 1 })
+          .then(function (canvas) {
+            //let img = new Image()
+            //img.onload = function () {
+            // image process, or load script
+            mpos.add.opencv(canvas, group, dummy)
+            // cleanup
+            gc && gc.parentElement.removeChild(gc)
+            source = canvas = null
+            //}
             // todo: animated gif?
-            img.src = dataUrl
+            //img.src = dataUrl
           })
           .catch(function (error) {
             // src problem...
