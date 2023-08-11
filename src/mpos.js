@@ -1,5 +1,5 @@
 import './mpos.scss'
-import { toPng, toCanvas } from 'html-to-image'
+import { toCanvas } from 'html-to-image'
 //import * as THREE from 'three'
 import {
   BoxGeometry,
@@ -453,19 +453,18 @@ const mpos = {
   },
   precept: {
     index: 0,
-    manual: `.mp-loader,.mp-native,.mp-poster`.split(','),
-    unset: `.mp-offscreen`.split(','),
+    manual: `.mp-loader,.mp-poster,.mp-native`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,iframe:not([src])`.split(
       ','
     ),
-    // added canvas to native, because maybe animations?
+    poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
     native: `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
       ','
     ),
-    cors: `iframe,object,.yt`.split(','),
-    poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
+    cors: `iframe,object,.yt`.split(','),
+    unset: `.mp-offscreen`.split(','),
     inPolar: function (rect, control) {
       const node = rect.el
       let vis = node && (node.tagName || node.textContent.trim()) ? 1 : false
@@ -482,13 +481,10 @@ const mpos = {
           if (node.tagName) {
             // 2: node is tag
             vis++
-
             let bound = rect.bound || node.getBoundingClientRect()
             if (bound.width > 0 && bound.height > 0 && node.checkVisibility()) {
-              // 4: tag is visible
+              // 3: tag is visible
               vis++
-              // bound is not a reference/update to rect.bound, which favors a rect without transforms
-
               const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
               const scroll = bound.bottom >= 0 && bound.top - viewHeight < 0
               if (scroll) {
@@ -507,7 +503,7 @@ const mpos = {
       const vars = mpos.var
       let r_queue = grade.r_.queue
       if ((dataIdx && !r_queue.length) || grade.wait || document.hidden) {
-        // redundant invocation... frame?
+        // skip frame
         return
       }
       stats.update()
@@ -519,7 +515,7 @@ const mpos = {
       let capture = {}
 
       function pseudo(rect) {
-        // pseudo should check to de-queue itself
+        // pseudo (or prior frame) enqueued for atlas
         let pseudo = false
         if (rect.css) {
           pseudo = rect.css.pseudo
@@ -531,35 +527,28 @@ const mpos = {
 
       grade.inPolar = vars.opt.inPolar
       if (dataIdx) {
-        // SOFT-update
+        // SOFT-update: Observer or frame
         let reflow = false
         for (let i = r_queue.length - 1; i >= 0; i--) {
           const idx = r_queue[i]
           if (isFinite(idx)) {
-            // Observer
+            // new Observer
             const rect = grade.rects[idx]
-            //rect.inPolar = mpos.precept.inPolar(rect)
-            //const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
             const type = rect.r_
-
             const r_ = grade.r_[type]
+
             if (!r_.rects[idx]) {
-              grade.minEls++
               if (rect.mat === 'poster' || (rect.mat === 'native' && rect.r_ === 'atlas')) {
-                // shader
+                // Instanced
                 rect.atlas = grade.atlas++
-                //if (rect.mat === 'native') {
-                //  rect.priority = true
-                //}
               } else if (type === 'other') {
                 // CSS3D or Loader
                 rect.add = true
               }
-
-              r_.count++
+              // add key
               r_.rects[idx] = rect
-            } else {
-              //r_.rects[idx].inPolar = rect.inPolar
+              r_.count++
+              grade.minEls++
             }
           } else if (idx === 'frame' || idx === 'move' || idx === 'trim') {
             reflow = true
@@ -578,49 +567,37 @@ const mpos = {
         }
 
         if (reflow) {
-          // capture deepest pseudo match
           capture = {
+            // deepest pseudo match
             hover: [...grade.el.querySelectorAll(':hover')].pop(),
             active: [...grade.el.querySelectorAll(':active')].pop(),
             focus: [...grade.el.querySelectorAll(':focus')].pop()
           }
-          // update visibility, from Observer or animation frame
+
           function vis(rects, reQueue) {
+            // update element rect
             Object.keys(rects).forEach(function (idx) {
               const rect = rects[idx]
-
-              // always update bound (from user events or frame)
-              // ... inPolar uses DOM rect bound
-              // ... css decorates transformed, for unset bound
-              //     and compares frame bound/css for change, to reduce queue
-              //
+              // traverse transforms (set/unset), update properties, and qualify ux
               mpos.add.css(rect, r_frame)
+              // update visibility
               mpos.precept.inPolar(rect)
 
-              //if (rect.ux.u) {
-              //console.log('uxout', rect.el)
-              //}
-
-              // note: queue uses inPolar>=4 (not mpos.var.opt.inPolar)
-              // ...but if you DID re-draw offscreen elements
-              // ...you could traverse css immediately (it skips subsequent calls)
-              // ...to compare frame transforms and reduce queue
               if (reQueue && rect.inPolar >= mpos.var.opt.inPolar) {
                 if (rect.el.tagName === 'BODY') {
-                  // root not contagious
+                  // no propagate
                   r_queue.push(idx)
                 } else if (pseudo(rect) || rect.ux.u || rect.ux.i) {
-                  //console.log('uxi', rect.el)
-                  // frame active or significant
+                  // element ux changed or elevated
                   if (r_queue.indexOf(idx) === -1) {
                     r_queue.push(idx)
                   }
 
                   if (rect.css && rect.css.pseudo && (rect.ux.u === 'both' || rect.ux.u === 'box')) {
-                    // children contagious
+                    // children propagate
                     let child = rect.child || []
                     if (!rect.child) {
-                      // cache nodes
+                      // cache a static list
                       rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
                         const idx = el.getAttribute('data-idx')
                         let rect = rects[idx]
@@ -653,10 +630,7 @@ const mpos = {
         r_other.count++
       }
 
-      // note: queue to re-draw atlas
-      // ...and currently transforms (atlas, other) still affects everything
       //console.log('queue', r_queue.length, dataIdx, r_frame)
-
       const promise = new Promise((resolve, reject) => {
         // Offscreen Canvas
         let osc = grade.osc
@@ -670,40 +644,28 @@ const mpos = {
           }
           grade.osc = osc
         }
-
-        let ctx = osc.getContext('2d')
-        ctx.clearRect(0, 0, osc.width, osc.height)
-        let src = grade.canvas.getContext('2d')
-        //
+        // transfer control
+        const ctxO = osc.getContext('2d')
+        const ctxC = grade.canvas.getContext('2d')
 
         // Instanced Mesh
         const instanced = grade.instanced
         instanced.count = r_atlas.count
         const uvOffset = instanced.geometry.getAttribute('uvOffset')
-        // style needs no transform, no margin, maybe block... dont reset live animations, etc...
-        //const align = { display: 'block', margin: 0, transform: 'initial', left: 'initial', right: 'initial' }
+        const step = grade.maxRes / grade.cells
+
         function atlas(grade, opts = {}) {
-          // element mat conversion
           if (opts.array === undefined) {
-            if (dataIdx) {
-              // SOFT-update
-              opts.array = r_queue
-            } else {
-              // HARD-update
-              opts.array = Object.keys(r_atlas.rects)
-            }
-            //console.log('atlas', r_frame, opts.array)
+            // update queue, SOFT or HARD
+            opts.array = dataIdx ? r_queue : Object.keys(r_atlas.rects)
             opts.idx = opts.array.length
-            opts.ctx = opts.ctx || ctx
-            opts.step = opts.step || grade.maxRes / grade.cells
-            // paint breakpoints, unless frame: [0%, 50%]
+            // paint breakpoints [0%, 50%], unless frame
             opts.paint = opts.idx >= 32 && r_frame === 0 ? [opts.idx, Math.floor(opts.idx / 2)] : []
           }
 
           function next() {
-            //setTimeout(() => {
             if (dataIdx) {
-              // decrement queue
+              // reduce queue
               opts.array = opts.array.splice(opts.array.length - opts.idx, opts.array.length)
             }
 
@@ -712,76 +674,57 @@ const mpos = {
                 console.log('...paint')
                 transforms(grade, true)
               }
-
               opts.idx--
-
               atlas(grade, opts)
             } else {
               if (!dataIdx) {
-                // atlas ends with blank key
-                opts.ctx.fillStyle = 'rgba(0,255,255,0.125)'
-                opts.ctx.fillRect(grade.maxRes - opts.step, grade.maxRes - opts.step, opts.step, opts.step)
+                // atlas key structure
+                ctxO.fillStyle = 'rgba(0,255,255,0.125)'
+                ctxO.fillRect(grade.maxRes - step, grade.maxRes - step, step, step)
               }
-              // complete
+              // resolve
               transforms(grade)
             }
-            //}, 0)
           }
 
-          // queue indexes from end, but in reverse
-          const rect = r_atlas.rects[opts.array[opts.array.length - opts.idx]]
-
-          if (rect) {
-            //console.log(rect.el, rect.ux.u)
-          }
-          function bad(ux) {
+          function shallow(ux) {
             return ux.i !== 1 && ux.u === 'css'
           }
-
-          if (rect && rect.atlas !== undefined && !bad(rect.ux)) {
-            // bug: style display-inline is not honored by style override
+          // queue indexes from end, but in reverse
+          const rect = r_atlas.rects[opts.array[opts.array.length - opts.idx]]
+          if (rect && rect.atlas !== undefined && !shallow(rect.ux)) {
+            // override box styles
             const bbox = !rect.el.clientWidth && !rect.el.clientHeight && rect.el.matches('a, img, object, span, xml, :is(:empty)')
             bbox && (rect.el.style.display = 'inline-block')
-            // toSvg crisper, toPng smaller
-            //rect.el.classList.add('mp-align')
             const pixelRatio = rect.ux.o ? quality : 0.8
 
-            toCanvas(rect.el, { style: vars.unset, pixelRatio: pixelRatio, preferredFontFormat: 'woff' })
+            toCanvas(rect.el, {
+              style: vars.unset,
+              canvasWidth: step,
+              canvasHeight: step,
+              pixelRatio: pixelRatio,
+              preferredFontFormat: 'woff'
+            })
               .then(function (canvas) {
-                //rect.el.classList.remove('mp-align')
-                //if (dataUrl === 'data:,') {
-                //const error = ['idx', rect.el.getAttribute('data-idx'), 'bad size'].join(' ')
-                //console.log('no box')
-                //  next()
                 if (canvas.width === 0 || canvas.height === 0) {
-                  // bad canvas
+                  // no box
                 } else {
                   bbox && (rect.el.style.display = 'initial')
-                  // let img = new Image()
-                  //img.onload = function (e) {
-                  //URL.revokeObjectURL(e.target.src)
-                  const step = opts.step
-                  // canvas xy: from block top (FIFO)
+                  // canvas xy, from top (FIFO)
                   const x = (rect.atlas % grade.cells) * step
                   const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
-                  r_frame && src.clearRect(x, y, step, step)
-                  opts.ctx.drawImage(canvas, x, y, step, step)
-                  // shader xy: from block bottom
+                  r_frame && ctxC.clearRect(x, y, step, step)
+                  ctxO.drawImage(canvas, x, y, step, step)
+                  // shader xy, from bottom
                   // avoid 0 edge, so add 0.0001
                   rect.x = (0.0001 + x) / grade.maxRes
                   rect.y = (0.0001 + y + step) / grade.maxRes
-                  // recursive
                 }
-
+                // recurse
                 canvas = null
                 next()
-
-                //img.src = URL.createObjectURL(blob)
-                //dataUrl = null
-                //}
               })
               .catch(function (error) {
-                // src problem...
                 console.log(error)
                 next()
               })
@@ -793,24 +736,22 @@ const mpos = {
         atlas(grade)
 
         function transforms(grade, paint) {
-          src.drawImage(osc, 0, 0)
           // apply cumulative updates
+          ctxC.drawImage(osc, 0, 0)
+          ctxO.clearRect(0, 0, osc.width, osc.height)
+
           //grade.scroll = { x: window.scrollX, y: window.scrollY }
 
           // Mesh: CSS3D, loader, root...
           Object.values(r_other.rects).forEach(function (rect) {
             const add = !rect.obj && (dataIdx === undefined || rect.add)
             const scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
-            // add (async) or transform
+            // add or transform
             const dummy = mpos.add.box(rect, { add: add, scroll: scroll, frame: r_frame })
 
             if (dummy && rect.obj) {
-              // filter visibility
-              let visible = true
-              if (!rect.fix) {
-                visible = rect.inPolar >= grade.inPolar
-              }
-              rect.obj.visible = visible
+              let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
+              rect.obj.visible = vis
             }
           })
 
@@ -824,8 +765,8 @@ const mpos = {
             if (dummy) {
               instanced.setMatrixAt(count, dummy.matrix)
 
-              // Instance Color (first-run)
-              if (dataIdx === undefined) {
+              // Instance Color
+              if (dataIdx === undefined || rect.ux.o || rect.ux.u) {
                 let bg = rect.css.style.backgroundColor
                 let rgba = bg.replace(/[(rgba )]/g, '').split(',')
                 const alpha = rgba[3]
@@ -838,47 +779,40 @@ const mpos = {
               }
 
               // Shader Atlas UV
-              let x = -1,
-                y = -1
+              let vis = -1,
+                x,
+                y
               if (rect.inPolar >= grade.inPolar) {
-                // mat: self, child, poster...
+                // visible
                 if (rect.atlas !== undefined || rect.mat === 'self') {
+                  // mat: self, child, poster, ~native...
                   x = rect.x || grade.key.x
                   y = 1 - rect.y || grade.key.y
-                }
-                if (rect.atlas !== undefined) {
                   // raycast filter
-                  grade.ray[count] = Number(idx)
+                  if (rect.atlas !== undefined) {
+                    grade.ray[count] = Number(idx)
+                  }
                 }
               }
-
-              uvOffset.setXY(count, x, y)
+              uvOffset.setXY(count, x || vis, y || vis)
             }
 
             count++
           }
 
+          // update instance
           instanced.instanceMatrix.needsUpdate = true
           instanced.computeBoundingSphere()
           instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
-
           // update shader
           uvOffset.needsUpdate = true
           instanced.userData.shader.userData.t.needsUpdate = true
-
           //
           mpos.ux.render()
 
           if (!paint) {
-            // UI Atlas
-            //const atlas = document.querySelector('#atlas canvas')
-            //const name = ['atlas', grade.index, grade.atlas, grade.maxRes].join('_')
-            //const link = atlas.querySelector('a')
-            //atlas && (atlas.title = name)
-            //link.href = grade.canvas.toDataURL('image/jpeg', 0.5)
-            //link.appendChild(grade.canvas)
-            //document.getElementById('atlas').appendChild(link)
-
+            // frame done
+            grade.wait = false
             resolve(grade)
             reject(grade)
           }
@@ -888,7 +822,6 @@ const mpos = {
       promise.catch((error) => console.log(error))
       promise.then(function (grade) {
         //console.log('update', grade.minEls)
-        grade.wait = false
         return promise
       })
     }
@@ -896,7 +829,6 @@ const mpos = {
   add: {
     dom: async function (selector, opts = {}) {
       const vars = mpos.var
-
       // options
       selector = selector || vars.opt.selector || 'body'
       const depth = opts.depth || vars.opt.depth || 8
@@ -923,7 +855,6 @@ const mpos = {
       group.name = selector
 
       // structure
-
       const grade = {
         el: sel,
         group: group,
@@ -1003,21 +934,15 @@ const mpos = {
           rect.mat = mat
           rect.z = z
           // update ux elevated
-          let uxin = rect.mat === 'native' && rect.el.tagName !== 'A' ? 1 : 0
+          const uxin = rect.mat === 'native' && rect.el.tagName !== 'A' ? 1 : 0
           rect.ux = { i: uxin, o: 0 }
 
           // note: portions of this are duplicated in update (r_, priority)
           if (rect.inPolar >= grade.inPolar) {
             grade.minEls++
-
             if (rect.mat === 'poster' || rect.mat === 'native') {
-              // shader
+              // instanced atlas
               rect.atlas = grade.atlas++
-
-              //if (rect.mat === 'native' && rect.atlas && rect.el.tagName !== 'A') {
-              // update ux elevated
-              //  rect.priority = true
-              //}
             }
           } else {
             // off-screen elements
@@ -1061,7 +986,7 @@ const mpos = {
               console.log('OpenCV.js')
               mpos.var.cv = true
             }
-            script.src = './opencv.js' // + Date.now()
+            script.src = './opencv.js'
             document.getElementsByTagName('head')[0].appendChild(script)
           }
         } else if (node.matches([precept.native, precept.native3d])) {
@@ -1116,7 +1041,6 @@ const mpos = {
                     // set box type
                     mat = setMat(node, mat, manual, child)
                     setRect(rect, z, mat, unset)
-                    //
                   }
                 }
               }
@@ -1131,13 +1055,14 @@ const mpos = {
         let rect = grade.rects[idx]
         // begin two lists: atlas (instanced) || other (mesh)
         if (rect.mat && rect.inPolar >= grade.inPolar) {
-          //const type = rect.mat === 'native' || rect.mat === 'loader' || rect.mat === 'wire' ? 'other' : 'atlas'
+          //type: other, atlas
           const type = rect.r_
           const r_ = grade.r_[type]
           r_.count++
           r_.rects[idx] = rect
         } else if (!rect.mat) {
           // free memory
+          mpos.ux.observer?.unobserve(rect.el)
           rect.el = rect.bound = null
           delete grade.rects[idx]
           document.querySelector('[data-idx="' + idx + '"]').removeAttribute('data-idx')
@@ -1165,7 +1090,6 @@ const mpos = {
       vars.scene && vars.scene.add(group)
 
       vars.grade = grade
-
       mpos.precept.update(grade)
       return grade
     },
@@ -1318,31 +1242,17 @@ const mpos = {
       // css style: transform, transformOrigin, backgroundColor, zIndex, position
       const css = rect.css || { style: window.getComputedStyle(el) }
 
-      //
       let uxout = {}
-
       if (progress === undefined || frame) {
-        // target element original style
         // ux frame change pre/post calculable? (imperative)
         rect.ux.u = false
         uxout = { bound: rect.bound, scale: css.scale, degree: css.degree }
 
         if (!rect.css || rect.frame < progress) {
-          // ux priority may be escalated (declarative)
-          const ux = rect.ux
+          // ux priority may escalate (declarative)
           const priority =
             css.pseudo || css.style.transform !== 'none' || css.style.animationName !== 'none' || css.style.transitionDuration !== '0s'
-
-          ux.o = priority ? ux.i + 1 : ux.i
-
-          /*
-          //ux.o && el.classList.add('mp-unset')
-          rect.bound = el.getBoundingClientRect()
-          //ux.o && el.classList.remove('mp-unset')
-          if (ux.o) {
-            rect.bound.width = rect.el.clientWidth
-            rect.bound.height = rect.el.clientHeight
-          }*/
+          rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
           // reset transforms
           css.scale = 1
@@ -1391,8 +1301,7 @@ const mpos = {
                 }
               }
             } else {
-              // style override ancestors
-              // sets transform:initial for real box dimensions
+              // unset ancestor style transforms
               el.classList.toggle('mp-unset', progress)
             }
           }
@@ -1405,14 +1314,13 @@ const mpos = {
           accumulate(!progress)
         } else {
           if (progress === undefined || frame) {
-            // frame && rect.frame < progress
+            // update rect properties from frame
             rect.css = css
             rect.bound = rect.el.getBoundingClientRect()
             rect.bound.client = { w: rect.el.clientWidth, h: rect.el.clientHeight }
             if (frame) {
               if (rect.frame < progress && rect.ux.o) {
-                // was frame change calculable?
-                // update atlas, transform, or both...
+                // compare result of frame update
                 let newBox = JSON.stringify(uxout.bound) !== JSON.stringify(rect.bound)
                 let newCss = uxout.scale !== rect.css.scale || uxout.degree !== rect.css.degree
                 if (newBox || newCss) {
@@ -1424,7 +1332,7 @@ const mpos = {
                   if (!newBox || !newCss) {
                     update = newBox ? 'box' : 'css'
                   }
-
+                  // to reduce queue of atlas/transforms
                   rect.ux.u = update
                 }
               }
@@ -1505,8 +1413,7 @@ const mpos = {
       mpos.ux.observer?.disconnect()
     },
     fit: function (dummy, group, opts = {}) {
-      //console.log('fit', group.children.length, opts.add)
-
+      // scale group to element
       if (group.children.length) {
         let s2 = group.userData.s2
         if (!s2) {
@@ -1532,6 +1439,16 @@ const mpos = {
         mpos.ux.render()
       }
     },
+    pyr: function (width, height, thumb = 16) {
+      let pyr = { cols: width, rows: height }
+      if (Math.min(pyr.cols, pyr.rows) > thumb) {
+        // limit sample dimension
+        const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
+        const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
+        pyr = { cols: Math.ceil(pyr.cols * scale), rows: Math.ceil(pyr.rows * scale) }
+      }
+      return [pyr.cols, pyr.rows]
+    },
     loader: function (source, dummy, group = new Group()) {
       // source is location or contains one
       let uri = typeof source === 'string' ? source : source.data || source.src || source.href
@@ -1544,9 +1461,8 @@ const mpos = {
       if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
         let gc
         if (uri && !dummy) {
-          // some dynamic resource needs an image
+          // dynamic resource needs element
           gc = source = document.createElement('img')
-          source.style.opacity = 1
           source.src = uri
           let unset = document.querySelector('#mp address.mp-offscreen')
           unset.appendChild(source)
@@ -1554,21 +1470,15 @@ const mpos = {
         }
 
         // ELEMENT: specific or generic
-        toCanvas(source, { style: mpos.var.unset, pixelRatio: 1 })
+        const [width, height] = mpos.add.pyr(source.clientWidth, source.clientHeight, 128)
+        toCanvas(source, { style: mpos.var.unset, canvasWidth: width, canvasHeight: height, pixelRatio: 1 })
           .then(function (canvas) {
-            //let img = new Image()
-            //img.onload = function () {
-            // image process, or load script
             mpos.add.opencv(canvas, group, dummy)
             // cleanup
             gc && gc.parentElement.removeChild(gc)
             source = canvas = null
-            //}
-            // todo: animated gif?
-            //img.src = dataUrl
           })
           .catch(function (error) {
-            // src problem...
             console.log('src problem', error)
           })
       } else {
@@ -1642,17 +1552,13 @@ const mpos = {
             }
 
             const src = cv.imread(img)
+            img = null
+            const size = src.size()
 
             // KMEANS
             const pyr = src.clone()
-
-            const thumb = 16
-            if (Math.min(pyr.cols, pyr.rows) > thumb) {
-              // limit sample dimension
-              const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
-              const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
-              cv.resize(pyr, pyr, new cv.Size(Math.ceil(pyr.cols * scale), Math.ceil(pyr.rows * scale)), 0, 0, cv.INTER_AREA)
-            }
+            const [width, height] = mpos.add.pyr(pyr.cols, pyr.rows, clusters * 2)
+            cv.resize(pyr, pyr, new cv.Size(width, height), 0, 0, cv.INTER_NEAREST) //AREA,LINEAR,NEAREST
 
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
             for (let y = 0; y < pyr.rows; y++) {
@@ -1690,8 +1596,8 @@ const mpos = {
             centers.delete()
 
             // inrange
-            const lo = src.clone()
-            const hi = src.clone()
+            const lo = new cv.Mat(size, cv.CV_8UC4)
+            const hi = new cv.Mat(size, cv.CV_8UC4)
             Object.keys(kmeans).forEach(function (key) {
               const label = kmeans[key]
               const rgba = label.rgba
@@ -1702,10 +1608,11 @@ const mpos = {
               }
 
               // INRANGE
-              const mask = new cv.Mat.zeros(src.rows, src.cols, 0)
+              const mask = new cv.Mat.zeros(size, 0)
               lo.setTo([rgba.r / 2, rgba.g / 2, rgba.b / 2, 1])
               hi.setTo([(rgba.r + 255) / 2, (rgba.g + 255) / 2, (rgba.b + 255) / 2, 255])
               cv.inRange(src, lo, hi, mask)
+              // inrange
 
               // CONTOURS
               const contours = new cv.MatVector()
@@ -1730,8 +1637,8 @@ const mpos = {
                 const cnt = poly.get(i)
                 // minimum area
                 const area = cv.contourArea(cnt)
-                const perc = area / (src.rows * src.cols)
-                if (perc > 0.001) {
+                const min = area > size.width * size.height * 0.00001
+                if (min) {
                   // relationship
                   const hier = Array.from(hierarchy.intPtr(0, i))
                   const parent = hier[3]
@@ -1759,12 +1666,9 @@ const mpos = {
                 delete kmeans[key]
               }
             })
-            // inrange
+            release(src)
             release(lo)
             release(hi)
-
-            release(src)
-            img = null
             // release memory: Int32Array, Mat, pointer...
           } catch (error) {
             console.warn(error)
