@@ -1,39 +1,13 @@
 import './mpos.scss'
 import { toCanvas } from 'html-to-image'
-//import * as THREE from 'three'
-import {
-  BoxGeometry,
-  MeshBasicMaterial,
-  LineBasicMaterial,
-  RawShaderMaterial,
-  FrontSide,
-  Raycaster,
-  Vector2,
-  Scene,
-  PerspectiveCamera,
-  WebGLRenderer,
-  AxesHelper,
-  Color,
-  InstancedBufferAttribute,
-  Group,
-  InstancedMesh,
-  DynamicDrawUsage,
-  Object3D,
-  CanvasTexture,
-  NearestFilter,
-  Box3,
-  FileLoader,
-  ShapeGeometry,
-  Mesh,
-  Shape,
-  Path
-} from 'three'
+import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 //
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import GifLoader from 'three-gif-loader'
 import Stats from 'three/examples/jsm/libs/stats.module.js'
 
 const mpos = {
@@ -56,21 +30,21 @@ const mpos = {
       max: 1024
     },
     unset: { display: 'block', margin: 0, transform: 'initial', left: 'initial', right: 'initial' },
-    geo: new BoxGeometry(1, 1, 1),
-    mat: new MeshBasicMaterial({
+    geo: new THREE.BoxGeometry(1, 1, 1),
+    mat: new THREE.MeshBasicMaterial({
       transparent: true,
       wireframe: true,
       color: 'cyan',
-      side: FrontSide
+      side: THREE.FrontSide
     }),
-    mat_line: new LineBasicMaterial({
+    mat_line: new THREE.LineBasicMaterial({
       transparent: true,
       opacity: 0.5,
       color: 'cyan',
       depthWrite: false,
-      side: FrontSide
+      side: THREE.FrontSide
     }),
-    mat_shader: new RawShaderMaterial({
+    mat_shader: new THREE.RawShaderMaterial({
       transparent: true,
       depthWrite: false,
       uniforms: {
@@ -113,17 +87,25 @@ const mpos = {
       }
       `
     }),
-    mat_shape: new MeshBasicMaterial({ transparent: true, depthWrite: false }),
-    raycaster: new Raycaster(),
-    pointer: new Vector2()
+    mat_shape: new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
+    raycaster: new THREE.Raycaster(),
+    pointer: new THREE.Vector2()
   },
   init: function (opts = {}) {
     const vars = this.var
     vars.proxy = !!(opts.scene && opts.camera && opts.renderer)
 
     // proxy mode or standalone
-    vars.scene = opts.scene || new Scene()
-    vars.renderer = opts.renderer || new WebGLRenderer()
+    vars.scene = opts.scene || new THREE.Scene()
+    vars.renderer =
+      opts.renderer ||
+      new THREE.WebGLRenderer({
+        // no impact
+        precision: 'lowp',
+        powerPreference: 'low-power',
+        stencil: false,
+        depth: false
+      })
     const domElement = vars.renderer.domElement
     const container = vars.proxy ? domElement.parentElement : document.body
     //
@@ -132,7 +114,7 @@ const mpos = {
 
     vars.fov.w = container.offsetWidth
     vars.fov.h = container.offsetHeight
-    vars.camera = opts.camera || new PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
+    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
 
     // inject mpos stage
     const template = document.createElement('template')
@@ -161,7 +143,7 @@ const mpos = {
       mp.appendChild(domElement)
       vars.renderer.setClearColor(0x00ff00, 0)
       // helpers
-      const axes = new AxesHelper(vars.fov.max)
+      const axes = new THREE.AxesHelper(vars.fov.max)
       vars.scene.add(axes)
     }
 
@@ -632,6 +614,12 @@ const mpos = {
 
       //console.log('queue', r_queue.length, dataIdx, r_frame)
       const promise = new Promise((resolve, reject) => {
+        // Instanced Mesh
+        const instanced = grade.instanced
+        instanced.count = r_atlas.count
+        const uvOffset = instanced.geometry.getAttribute('uvOffset')
+        const step = grade.maxRes / grade.cells
+
         // Offscreen Canvas
         let osc = grade.osc
         if (!osc) {
@@ -647,12 +635,6 @@ const mpos = {
         // transfer control
         const ctxO = osc.getContext('2d')
         const ctxC = grade.canvas.getContext('2d')
-
-        // Instanced Mesh
-        const instanced = grade.instanced
-        instanced.count = r_atlas.count
-        const uvOffset = instanced.geometry.getAttribute('uvOffset')
-        const step = grade.maxRes / grade.cells
 
         function atlas(grade, opts = {}) {
           if (opts.array === undefined) {
@@ -737,6 +719,7 @@ const mpos = {
 
         function transforms(grade, paint) {
           // apply cumulative updates
+
           ctxC.drawImage(osc, 0, 0)
           ctxO.clearRect(0, 0, osc.width, osc.height)
 
@@ -757,7 +740,7 @@ const mpos = {
 
           grade.ray = {}
           let count = 0
-          const color = new Color()
+          const color = new THREE.Color()
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
             // Instance Matrix
             const dummy = mpos.add.box(rect, { frame: r_frame })
@@ -851,7 +834,7 @@ const mpos = {
       // OLD group
       mpos.add.old(selector)
       // NEW group
-      const group = new Group()
+      const group = new THREE.Group()
       group.name = selector
 
       // structure
@@ -935,7 +918,7 @@ const mpos = {
           rect.z = z
           // update ux elevated
           const uxin = rect.mat === 'native' && rect.el.tagName !== 'A' ? 1 : 0
-          rect.ux = { i: uxin, o: 0 }
+          rect.ux = { i: uxin, o: 0, u: false }
 
           // note: portions of this are duplicated in update (r_, priority)
           if (rect.inPolar >= grade.inPolar) {
@@ -1072,8 +1055,12 @@ const mpos = {
 
       // Instanced Mesh, shader atlas
       const shader = mpos.add.shader(grade.canvas, grade.cells)
-      const instanced = new InstancedMesh(vars.geo.clone(), [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line], grade.maxEls)
-      instanced.instanceMatrix.setUsage(DynamicDrawUsage)
+      const instanced = new THREE.InstancedMesh(
+        vars.geo.clone(),
+        [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
+        grade.maxEls
+      )
+      instanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       instanced.layers.set(2)
       instanced.userData.shader = shader
       instanced.userData.el = grade.sel
@@ -1081,8 +1068,8 @@ const mpos = {
       grade.instanced = instanced
 
       // Atlas UV Buffer
-      const uvOffset = new InstancedBufferAttribute(new Float32Array(grade.maxEls * 2).fill(-1), 2)
-      uvOffset.setUsage(DynamicDrawUsage)
+      const uvOffset = new THREE.InstancedBufferAttribute(new Float32Array(grade.maxEls * 2).fill(-1), 2)
+      uvOffset.setUsage(THREE.DynamicDrawUsage)
       instanced.geometry.setAttribute('uvOffset', uvOffset)
 
       // OUTPUT
@@ -1149,7 +1136,7 @@ const mpos = {
           }
         } else if (obj.isGroup) {
           // group implies loader, with arbitrary scale
-          const dummy = new Object3D()
+          const dummy = new THREE.Object3D()
           dummy.position.set(x, y, z)
           dummy.scale.set(w * rect.css.scale, h * rect.css.scale, d)
           obj.rotation.z = -rect.css.radian
@@ -1201,14 +1188,14 @@ const mpos = {
       } else if (rect.mat === 'wire') {
         // mesh singleton
         const mat = vars.mat.clone()
-        mat.color = new Color('cyan')
-        const mesh = new Mesh(vars.geo, mat)
+        mat.color = new THREE.Color('cyan')
+        const mesh = new THREE.Mesh(vars.geo, mat)
         mesh.userData.el = rect.el
         mesh.animations = true
         object = mesh
       } else {
         // Instanced Mesh
-        object = new Object3D()
+        object = new THREE.Object3D()
       }
 
       transform(object)
@@ -1220,9 +1207,8 @@ const mpos = {
         // other custom process
         if (rect.mat === 'loader') {
           // async
-          obj = new Group()
+          obj = mpos.add.loader(rect.el, object)
           obj.userData.el = rect.el
-          mpos.add.loader(rect.el, object, obj)
         } else {
           // general (native, wire)
           vars.grade.group.add(object)
@@ -1347,8 +1333,8 @@ const mpos = {
     },
     shader: function (canvas, texStep) {
       //discourse.threejs.org/t/13221/17
-      const texAtlas = new CanvasTexture(canvas)
-      texAtlas.minFilter = NearestFilter
+      const texAtlas = new THREE.CanvasTexture(canvas)
+      texAtlas.minFilter = THREE.NearestFilter
       // update
       const m = mpos.var.mat_shader.clone()
       m.uniforms.map.value = texAtlas
@@ -1420,7 +1406,7 @@ const mpos = {
           const grade = mpos.var.grade
           grade.group.add(group)
 
-          const aabb = new Box3()
+          const aabb = new THREE.Box3()
           aabb.setFromObject(group)
           s2 = Math.max(aabb.max.x, aabb.max.y)
           // original scale
@@ -1449,83 +1435,113 @@ const mpos = {
       }
       return [pyr.cols, pyr.rows]
     },
-    loader: function (source, dummy, group = new Group()) {
+    loader: function (source, dummy) {
+      const vars = mpos.var
+
       // source is location or contains one
-      let uri = typeof source === 'string' ? source : source.data || source.src || source.href
+      let uri = typeof source === 'string' ? source : source.data || source.src || source.currentSrc || source.href
       // source is image
-      let mime = uri && uri.match(/\.(gif|jpg|jpeg|png|svg|webp)(\?|$)/i)
+      let mime = uri && uri.match(/\.(gif|jpg|jpeg|png|svg|webp|mp4|ogv)(\?|$)/gi)
       mime = mime ? mime[0].toUpperCase() : 'File'
-      let loader = !!((mime === 'File' && uri) || mime.match('.SVG'))
+      let loader = !!((mime === 'File' && uri) || mime.match(/(SVG|GIF)/g))
       //console.log(source, uri, mime, loader, dummy, group)
 
-      if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
-        let gc
-        if (uri && !dummy) {
-          // dynamic resource needs element
-          gc = source = document.createElement('img')
-          source.src = uri
-          let unset = document.querySelector('#mp address.mp-offscreen')
-          unset.appendChild(source)
-          dummy = mpos.add.box({ el: source })
-        }
+      const material = new THREE.MeshBasicMaterial({
+        side: THREE.FrontSide,
+        depthWrite: false
+      })
 
-        // ELEMENT: specific or generic
-        const [width, height] = mpos.add.pyr(source.clientWidth, source.clientHeight, 128)
-        toCanvas(source, { style: mpos.var.unset, canvasWidth: width, canvasHeight: height, pixelRatio: 1 })
-          .then(function (canvas) {
-            mpos.add.opencv(canvas, group, dummy)
-            // cleanup
-            gc && gc.parentElement.removeChild(gc)
-            source = canvas = null
-          })
-          .catch(function (error) {
-            console.log('src problem', error)
-          })
+      //console.log(mime, uri, source, dummy, dummy.matrix)
+      let object
+      if (mime.match(/(MP4|OGV)/g)) {
+        // HANDLER: such as VideoTexture, AudioLoader...
+        const texture = new THREE.VideoTexture(source)
+        material.map = texture
+        const mesh = new THREE.Mesh(vars.geo, material)
+
+        mesh.matrix.copy(dummy.matrix)
+        mesh.name = uri
+        // unique overrides
+        vars.grade.group.add(mesh)
+        object = mesh
       } else {
-        // LOADER: specific or generic
-        loader = mime.match('.SVG') ? new SVGLoader() : new FileLoader()
-        loader.load(
-          uri,
-          function (data) {
-            console.log('data', data)
-            if (mime === 'File') {
-              // file is not image (XML?)
-            } else if (mime.match('.SVG')) {
-              const paths = data.paths || []
-
-              for (let i = 0; i < paths.length; i++) {
-                const path = paths[i]
-
-                const material = new MeshBasicMaterial({
-                  color: path.color,
-                  side: FrontSide,
-                  depthWrite: false
-                })
-
-                const shapes = SVGLoader.createShapes(path)
-
-                for (let j = 0; j < shapes.length; j++) {
-                  const shape = shapes[j]
-                  const geometry = new ShapeGeometry(shape)
-                  const mesh = new Mesh(geometry, material)
-                  group.add(mesh)
-                }
-              }
-              group.name = mime
-
-              mpos.add.fit(dummy, group, { add: true })
-            }
-          },
-          // called when loading is in progresses
-          function (xhr) {
-            console.log((xhr.loaded / xhr.total) * 100 + '% loaded')
-          },
-          // called when loading has errors
-          function (error) {
-            console.log('error loading')
+        let group = new THREE.Group()
+        if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
+          // ELEMENT: specific or generic
+          let gc
+          if (uri && !dummy) {
+            // dynamic resource needs element
+            gc = source = document.createElement('img')
+            source.src = uri
+            let unset = document.querySelector('#mp address.mp-offscreen')
+            unset.appendChild(source)
+            dummy = mpos.add.box({ el: source })
           }
-        )
+
+          const [width, height] = mpos.add.pyr(source.clientWidth, source.clientHeight, 128)
+          toCanvas(source, { style: vars.unset, canvasWidth: width, canvasHeight: height, pixelRatio: 1 })
+            .then(function (canvas) {
+              mpos.add.opencv(canvas, group, dummy)
+              // cleanup
+              gc && gc.parentElement.removeChild(gc)
+              source = canvas = null
+            })
+            .catch(function (error) {
+              console.log('src problem', error)
+            })
+        } else {
+          // LOADER: specific or generic
+          loader = mime.match('.SVG') ? new SVGLoader() : mime.match('.GIF') ? new GifLoader() : new THREE.FileLoader()
+          let res = loader.load(
+            uri,
+            function (data) {
+              console.log('data', data)
+              if (mime === 'File') {
+                // file is not image (XML?)
+              } else if (mime.match('.SVG')) {
+                const paths = data.paths || []
+
+                for (let i = 0; i < paths.length; i++) {
+                  const path = paths[i]
+                  let mat = material.clone()
+                  mat.color = path.color
+
+                  const shapes = SVGLoader.createShapes(path)
+                  for (let j = 0; j < shapes.length; j++) {
+                    const shape = shapes[j]
+                    const geometry = new THREE.ShapeGeometry(shape)
+                    const mesh = new THREE.Mesh(geometry, mat)
+                    group.add(mesh)
+                  }
+                }
+
+                group.name = mime
+                mpos.add.fit(dummy, group, { add: true })
+              } else if (mime.match('.GIF')) {
+                // note: replace TextureLoader with GifLoader or ComposedTexture
+                material.map = res
+                material.transparent = true
+
+                const mesh = new THREE.Mesh(vars.geo, material)
+                mesh.matrix.copy(dummy.matrix)
+                mesh.name = uri
+
+                // unique overrides
+                vars.grade.group.add(mesh)
+                const idx = source.getAttribute('data-idx')
+                vars.grade.rects[idx].obj = mesh
+              }
+            }, // onProgress callback
+            function (xhr) {
+              console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`)
+            }
+          )
+
+          //
+        }
+        object = group
       }
+      return object
     },
     opencv: function (img, group, dummy) {
       let kmeans = {}
@@ -1685,7 +1701,7 @@ const mpos = {
                   Object.values(label.retr).forEach(function (retr) {
                     // hierarchy shape
                     const points = retr.shape
-                    const poly = new Shape()
+                    const poly = new THREE.Shape()
                     for (let p = 0; p < points.length; p += 2) {
                       const pt = { x: points[p], y: points[p + 1] }
                       if (p === 0) {
@@ -1697,7 +1713,7 @@ const mpos = {
                     // hierarchy holes
                     poly.holes = []
                     for (let i = 0; i < retr.holes.length; i++) {
-                      const path = new Path()
+                      const path = new THREE.Path()
                       const hole = retr.holes[i]
                       for (let p = 0; p < hole.length; p += 2) {
                         let pt = { x: hole[p], y: hole[p + 1] }
@@ -1710,7 +1726,7 @@ const mpos = {
                       poly.holes.push(path)
                     }
                     // label contour
-                    let geometry = new ShapeGeometry(poly)
+                    let geometry = new THREE.ShapeGeometry(poly)
                     geometry = mergeVertices(geometry)
                     mergedGeoms.push(geometry)
                   })
@@ -1719,13 +1735,13 @@ const mpos = {
                 if (mergedGeoms.length) {
                   // label color
                   const rgba = label.rgba
-                  const color = new Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
+                  const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
                   const mat = mpos.var.mat_shape.clone()
                   mat.color = color
                   mat.opacity = rgba.a / 255
                   // label contours
                   const mergedBoxes = mergeGeometries(mergedGeoms)
-                  const mesh = new Mesh(mergedBoxes, mat)
+                  const mesh = new THREE.Mesh(mergedBoxes, mat)
                   group.add(mesh)
                 }
               })
