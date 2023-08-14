@@ -7,7 +7,6 @@ import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRe
 //
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import GifLoader from 'three-gif-loader'
 import Stats from 'three/examples/jsm/libs/stats.module.js'
 
 const mpos = {
@@ -735,6 +734,10 @@ const mpos = {
             if (dummy && rect.obj) {
               let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
               rect.obj.visible = vis
+
+              if (rect.gif) {
+                rect.obj.material.map.needsUpdate = true
+              }
             }
           })
 
@@ -955,23 +958,6 @@ const mpos = {
             }
             return classMat
           })
-
-          // inject OpenCV WASM
-          //huningxin.github.io/opencv.js/samples/index.html
-          if (mat === 'loader' && mpos.var.cv === undefined) {
-            mpos.var.cv = false
-            const script = document.createElement('script')
-            script.id = 'opencv'
-            script.type = 'text/javascript'
-            script.async = true
-            script.onload = function () {
-              // remote script loaded
-              console.log('OpenCV.js')
-              mpos.var.cv = true
-            }
-            script.src = './opencv.js'
-            document.getElementsByTagName('head')[0].appendChild(script)
-          }
         } else if (node.matches([precept.native, precept.native3d])) {
           // todo: shared 3d spaces
           mat = 'native'
@@ -1441,10 +1427,10 @@ const mpos = {
       // source is location or contains one
       let uri = typeof source === 'string' ? source : source.data || source.src || source.currentSrc || source.href
       // source is image
-      let mime = uri && uri.match(/\.(gif|jpg|jpeg|png|svg|webp|mp4|ogv)(\?|$)/gi)
+      let mime = uri && uri.match(/\.(gif|jpg|jpeg|png|svg|webp|webm|mp4|ogv)(\?|$)/gi)
       mime = mime ? mime[0].toUpperCase() : 'File'
       let loader = !!((mime === 'File' && uri) || mime.match(/(SVG|GIF)/g))
-      //console.log(source, uri, mime, loader, dummy, group)
+      //console.log(loader, mime, uri)
 
       const material = new THREE.MeshBasicMaterial({
         side: THREE.FrontSide,
@@ -1453,7 +1439,7 @@ const mpos = {
 
       //console.log(mime, uri, source, dummy, dummy.matrix)
       let object
-      if (mime.match(/(MP4|OGV)/g)) {
+      if (mime.match(/(WEBM|MP4|OGV)/g)) {
         // HANDLER: such as VideoTexture, AudioLoader...
         const texture = new THREE.VideoTexture(source)
         material.map = texture
@@ -1491,49 +1477,65 @@ const mpos = {
             })
         } else {
           // LOADER: specific or generic
-          loader = mime.match('.SVG') ? new SVGLoader() : mime.match('.GIF') ? new GifLoader() : new THREE.FileLoader()
-          let res = loader.load(
-            uri,
-            function (data) {
-              console.log('data', data)
-              if (mime === 'File') {
-                // file is not image (XML?)
-              } else if (mime.match('.SVG')) {
-                const paths = data.paths || []
 
-                for (let i = 0; i < paths.length; i++) {
-                  const path = paths[i]
-                  let mat = material.clone()
-                  mat.color = path.color
+          loader = mime.match('.SVG')
+            ? new SVGLoader()
+            : mime.match('.GIF')
+            ? new SuperGif({ gif: source.cloneNode() })
+            : new THREE.FileLoader()
 
-                  const shapes = SVGLoader.createShapes(path)
-                  for (let j = 0; j < shapes.length; j++) {
-                    const shape = shapes[j]
-                    const geometry = new THREE.ShapeGeometry(shape)
-                    const mesh = new THREE.Mesh(geometry, mat)
-                    group.add(mesh)
-                  }
+          function postprocess(data) {
+            console.log('load', mime, data)
+            if (mime === 'File') {
+              // file is not image (XML?)
+            } else if (mime.match('.SVG')) {
+              const paths = data.paths || []
+
+              for (let i = 0; i < paths.length; i++) {
+                const path = paths[i]
+                let mat = material.clone()
+                mat.color = path.color
+
+                const shapes = SVGLoader.createShapes(path)
+                for (let j = 0; j < shapes.length; j++) {
+                  const shape = shapes[j]
+                  const geometry = new THREE.ShapeGeometry(shape)
+                  const mesh = new THREE.Mesh(geometry, mat)
+                  group.add(mesh)
                 }
-
-                group.name = mime
-                mpos.add.fit(dummy, group, { add: true })
-              } else if (mime.match('.GIF')) {
-                // note: replace TextureLoader with GifLoader or ComposedTexture
-                material.map = res
-                material.transparent = true
-
-                const mesh = new THREE.Mesh(vars.geo, material)
-                mesh.matrix.copy(dummy.matrix)
-                mesh.name = uri
-
-                // unique overrides
-                vars.grade.group.add(mesh)
-                const idx = source.getAttribute('data-idx')
-                vars.grade.rects[idx].obj = mesh
               }
-            }, // onProgress callback
+
+              group.name = mime
+              mpos.add.fit(dummy, group, { add: true })
+            } else if (mime.match('.GIF')) {
+              const canvas = loader.get_canvas()
+              // note: replace TextureLoader with GifLoader or ComposedTexture
+              material.map = new THREE.CanvasTexture(canvas)
+              material.transparent = true
+
+              const mesh = new THREE.Mesh(vars.geo, material)
+              mesh.matrix.copy(dummy.matrix)
+              mesh.name = uri
+
+              // unique overrides
+              vars.grade.group.add(mesh)
+              const idx = source.getAttribute('data-idx')
+              const rect = vars.grade.rects[idx]
+              rect.obj = mesh
+              rect.gif = loader
+              // todo: manual frame delta (play/pause) for memory
+            }
+          }
+
+          let params = loader instanceof THREE.Loader ? uri : postprocess
+          let res = loader.load(
+            params,
+            postprocess,
             function (xhr) {
               console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`)
+            },
+            function (error) {
+              console.log('error', error)
             }
           )
 
@@ -1757,17 +1759,11 @@ const mpos = {
         ]
       }
 
+      //huningxin.github.io/opencv.js/samples/index.html
       // run Module _main, with vars monkeyed into _stdin
       // i.e. _stdin: { ivy: college, peep: blackbox }
-      if (mpos.var.cv === true) {
-        // probably should batch post mpos.dom().then(grade=>(grade.LRP))
-        opencv(Module)
-      } else {
-        const script = document.getElementById('opencv')
-        script.addEventListener('load', function () {
-          opencv(Module)
-        })
-      }
+      // probably should batch Promise
+      opencv(Module)
     }
   }
 }
