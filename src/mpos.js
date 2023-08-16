@@ -352,7 +352,7 @@ const mpos = {
             const rect = Object.values(grade.r_.atlas.rects)[hit.instanceId]
             //console.log(hit.instanceId, rect.el, uv)
             // note: raycast element may be non-interactive (atlas), but not CSS3D or loader (other)
-            vars.events = { uv: hit.uv, el: rect.el, mat: rect.mat, position: rect.css.style.position, bound: rect.bound }
+            vars.events = { uv: hit.uv, el: rect.el, mat: rect.mat, position: rect.css?.style.position || {}, bound: rect.bound }
             //
             const caret = vars.caret.style
             // visibility
@@ -1509,7 +1509,7 @@ const mpos = {
               mpos.add.fit(dummy, group, { add: true })
             } else if (mime.match('.GIF')) {
               const canvas = loader.get_canvas()
-              // note: replace TextureLoader with GifLoader or ComposedTexture
+              // note: omggif, TextureLoader, GifLoader, ComposedTexture
               material.map = new THREE.CanvasTexture(canvas)
               material.transparent = true
 
@@ -1523,7 +1523,7 @@ const mpos = {
               const rect = vars.grade.rects[idx]
               rect.obj = mesh
               rect.gif = loader
-              // todo: manual frame delta (play/pause) for memory
+              // todo: manual frame index from delta
             }
           }
 
