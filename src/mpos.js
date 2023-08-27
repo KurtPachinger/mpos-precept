@@ -356,8 +356,7 @@ const mpos = {
             //
             const caret = vars.caret.style
             // visibility
-            const vis = rect.inPolar >= vars.opt.inPolar
-            const color = vis ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
+            const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
             caret.backgroundColor = color
             // location
             const cell = 100 * (1 / grade.cells)
@@ -1535,6 +1534,7 @@ const mpos = {
           }
 
           let params = loader instanceof THREE.Loader ? uri : postprocess
+
           let res = loader.load(
             params,
             postprocess,
