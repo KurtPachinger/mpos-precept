@@ -24,7 +24,6 @@ mpos.init({ scene: scene, camera: camera, renderer: renderer })
 
 // mode: standalone
 mpos.init()
-mpos.gen()
 mpos.add.dom().then(function (grade) {
   console.log('grade', grade)
 })

@@ -1427,9 +1427,9 @@ const mpos = {
       // source is location or contains one
       let uri = typeof source === 'string' ? source : source.data || source.src || source.currentSrc || source.href
       // source is image
-      let mime = uri && uri.match(/\.(gif|jpg|jpeg|png|svg|webp|webm|mp4|ogv)(\?|$)/gi)
+      let mime = uri && uri.match(/\.(json|svg|gif|jpg|jpeg|png|webp|webm|mp4|ogv)(\?|$)/gi)
       mime = mime ? mime[0].toUpperCase() : 'File'
-      let loader = !!((mime === 'File' && uri) || mime.match(/(SVG|GIF)/g))
+      let loader = !!((mime === 'File' && uri) || mime.match(/(JSON|SVG|GIF)/g))
       //console.log(loader, mime, uri)
 
       const material = new THREE.MeshBasicMaterial({
@@ -1478,10 +1478,13 @@ const mpos = {
         } else {
           // LOADER: specific or generic
 
-          loader = mime.match('.SVG')
+          loader = mime.match('.JSON')
+            ? new THREE.ObjectLoader()
+            : mime.match('.SVG')
             ? new SVGLoader()
             : mime.match('.GIF')
-            ? new SuperGif({ gif: source.cloneNode() })
+            ? // SuperGif complains about no parent to insert, but its not wanted in the DOM
+              new SuperGif({ gif: source.cloneNode() })
             : new THREE.FileLoader()
 
           function postprocess(data) {
@@ -1524,6 +1527,10 @@ const mpos = {
               rect.obj = mesh
               rect.gif = loader
               // todo: manual frame index from delta
+            } else if (mime.match('.JSON')) {
+              // note: may be small, upside-down, just a light...?
+              group.add(data)
+              mpos.add.fit(dummy, group, { add: true })
             }
           }
 
@@ -1766,71 +1773,6 @@ const mpos = {
       opencv(Module)
     }
   }
-}
-
-mpos.gen = function (num = 6, selector = 'main') {
-  const lipsum = [
-    'Nunc at dolor lacus. ',
-    'Lorem ipsum dolor sit amet. ',
-    'Phasellus eu sapien tellus. ',
-    'Consectetur adipiscing elit. ',
-    'Integer nec vulputate lacus. ',
-    'Donec auctor id leo eu varius. ',
-    'Sed viverra quis nisl et vulputate. ',
-    'Morbi eget eros non felis tempor sodales. ',
-    'Praesent in elementum risus, a vehicula justo. ',
-    'Vivamus eget magna quis nisi ultrices faucibus. ',
-    'Phasellus massa mauris, rutrum ac semper posuere. ',
-    'Nunc a nibh vitae eros fringilla lacinia id in sapien. '
-  ]
-
-  function fill(element, length) {
-    length = Math.floor(length) + 1
-    const el = document.createElement(element)
-    const len = Math.floor(Math.random() * length)
-    for (let i = 0; i < len; i++) {
-      el.innerText = lipsum[Math.floor(Math.random() * (lipsum.length - 1))]
-    }
-    return el
-  }
-  function color() {
-    let hex = '#'
-    const col = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'a', 'b', 'c', 'd', 'e', 'f']
-    for (let i = 0; i < 6; i++) {
-      hex += col[Math.round(Math.random() * (col.length - 1))]
-    }
-    return hex
-  }
-
-  const section = document.createElement('details')
-  section.id = 'gen'
-  section.classList.add('mp-allow')
-  const fragment = document.createDocumentFragment()
-  for (let i = 0; i < num; i++) {
-    // container
-    const el = document.createElement('article')
-    // heading
-    el.appendChild(fill('h2', num))
-    el.appendChild(fill('p', num * 2))
-    // img
-    const img = fill('img', -1)
-    img.classList.add(i % 2 === 0 ? 'w50' : 'w100')
-    img.style.height = '8em'
-    img.style.backgroundColor = color()
-    img.src = 'data:,'
-    el.appendChild(img)
-    // list
-    const ul = fill('ul', num / 2)
-    ul.appendChild(fill('li', num * 3))
-    ul.appendChild(fill('li', num * 6))
-    ul.appendChild(fill('li', num * 2))
-    el.appendChild(ul)
-
-    fragment.appendChild(el)
-  }
-  section.appendChild(fragment)
-
-  document.querySelector(selector).appendChild(section)
 }
 
 window.mpos = mpos
