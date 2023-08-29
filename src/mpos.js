@@ -821,6 +821,13 @@ const mpos = {
         opts.parse ||
         function (node) {
           console.log(node.nodeName, node.textContent)
+          if (node.textContent.indexOf('//_THREE') === 0) {
+            try {
+              eval(node.textContent)
+            } catch (error) {
+              console.log(error)
+            }
+          }
         }
 
       // get DOM node or offscreen

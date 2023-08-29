@@ -115,10 +115,23 @@
                 <td>comment</td>
                 <td>
                   <!--comment-->
-                  <![CDATA[ XML? ]]>
+                  <![CDATA[ escape ]]>
                   <?php echo('hello world') ?>
                   <?xml version="1.0" encoding="UTF-8"?>
                   <xml>XML</xml>
+                  <!--//_THREE
+                  const loader = new THREE.BufferGeometryLoader();
+                  loader.load(
+	                  '//raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/json/suzanne_buffergeometry.json',
+                  	function ( geometry ) {
+                  		const material = new THREE.MeshBasicMaterial( { color: 0x00c0c0, wireframe: true } );
+                  		const object = new THREE.Mesh( geometry, material );
+                      object.scale.multiplyScalar( 50 );
+                      object.position.set( -50, 50, 0 );
+                  		mpos.var.grade.group.add( object );
+                  	}
+                  );
+                  -->
                   <script>
                     noscript
                   </script>
