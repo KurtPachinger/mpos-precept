@@ -12,7 +12,7 @@
   "main": "src/index.js",
   "dependencies": {
     "html-to-image": "1.11.11",
-    "three": "0.155.0"
+    "three": "0.156.1"
   },
   "devDependencies": {},
   "scripts": {},

@@ -314,16 +314,16 @@ const mpos = {
       const vars = mpos.var
 
       //requestAnimationFrame(vars.animate)
-      const time = new Date().getTime() / 100
-      vars.scene &&
-        vars.scene.traverseVisible(function (obj) {
-          // step a frame tick
-          const animate = obj.animations === true
-          if (animate) {
-            obj.rotation.x = Math.sin(time) / 10
-            obj.rotation.y = Math.cos(time) / 10
-          }
-        })
+      if (vars.scene) {
+        // wiggle viewport
+        const time = new Date().getTime() / 100
+        const body = vars.scene.getObjectByProperty('animations', true)
+        if (body) {
+          body.rotation.x = Math.sin(time) / 10
+          body.rotation.y = Math.cos(time) / 10
+        }
+      }
+
       vars.renderer && vars.renderer.render(vars.scene, vars.camera)
       vars.rendererCSS && vars.rendererCSS.render(vars.scene, vars.camera)
     },
@@ -629,6 +629,9 @@ const mpos = {
             osc.height = grade.canvas.height
           }
           grade.osc = osc
+          // multiple readback
+          osc.getContext('2d').willReadFrequently = true
+          grade.canvas.getContext('2d').willReadFrequently = true
         }
         // transfer control
         const ctxO = osc.getContext('2d')
@@ -663,6 +666,7 @@ const mpos = {
                 ctxO.fillRect(grade.maxRes - step, grade.maxRes - step, step, step)
               }
               // resolve
+
               transforms(grade)
             }
           }
@@ -678,6 +682,7 @@ const mpos = {
             bbox && (rect.el.style.display = 'inline-block')
             const pixelRatio = rect.ux.o ? quality : 0.8
 
+            // to-do: transfer this to an offscreen worker
             toCanvas(rect.el, {
               style: vars.unset,
               canvasWidth: step,
@@ -740,7 +745,7 @@ const mpos = {
             }
           })
 
-          grade.ray = {}
+          let updateInstance, updateShader
           let count = 0
           const color = new THREE.Color()
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
@@ -748,10 +753,12 @@ const mpos = {
             const dummy = mpos.add.box(rect, { frame: r_frame })
             // dummy false if css on frame was unchanged
             if (dummy) {
+              updateInstance = true
               instanced.setMatrixAt(count, dummy.matrix)
 
               // Instance Color
               if (dataIdx === undefined || rect.ux.o || rect.ux.u) {
+                updateShader = true
                 let bg = rect.css.style.backgroundColor
                 let rgba = bg.replace(/[(rgba )]/g, '').split(',')
                 const alpha = rgba[3]
@@ -785,16 +792,19 @@ const mpos = {
             count++
           }
 
-          // update instance
-          instanced.instanceMatrix.needsUpdate = true
-          instanced.computeBoundingSphere()
-          instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
-          // update shader
-          uvOffset.needsUpdate = true
-          instanced.userData.shader.userData.t.needsUpdate = true
-          //
-          mpos.ux.render()
+          if (updateInstance) {
+            // update instance
+            instanced.instanceMatrix.needsUpdate = true
+            instanced.computeBoundingSphere()
+            instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
+          }
+          if (updateShader) {
+            // update shader
+            uvOffset.needsUpdate = true
+            instanced.userData.shader.userData.t.needsUpdate = true
+          }
 
+          mpos.ux.render()
           if (!paint) {
             // frame done
             grade.wait = false
@@ -864,7 +874,8 @@ const mpos = {
           queue: [],
           atlas: { count: 0, rects: {} },
           other: { count: 0, rects: {} }
-        }
+        },
+        ray: {}
         //scroll: { x: window.scrollX, y: -window.scrollY }
       }
 
@@ -1073,7 +1084,7 @@ const mpos = {
       return grade
     },
     box: function (rect, opts = {}) {
-      if (rect.obj && rect.ux.u === false && !rect.r_ === 'other') {
+      if (rect.frame && rect.ux.u === false) {
         return false
       }
 
@@ -1297,11 +1308,14 @@ const mpos = {
             rect.bound = rect.el.getBoundingClientRect()
             rect.bound.client = { w: rect.el.clientWidth, h: rect.el.clientHeight }
             if (frame) {
-              if (rect.frame < progress && rect.ux.o) {
+              if (rect.frame < progress) {
                 // compare result of frame update
                 let newBox = JSON.stringify(uxout.bound) !== JSON.stringify(rect.bound)
                 let newCss = uxout.scale !== rect.css.scale || uxout.degree !== rect.css.degree
-                if (newBox || newCss) {
+                if (newBox || newCss || rect.ux.o) {
+                  // note: should probably set a unique value for rect.ux.o, i.e.
+                  // note: should probably return each prop discrete
+                  // note:
                   let update = 'both'
                   if (newBox) {
                     // deeper comparison
