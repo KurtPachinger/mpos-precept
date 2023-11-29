@@ -1,5 +1,5 @@
 # mpos-precept
-Imposter DOM rects in THREE. 
+Imposter DOM rects in THREE
 ```js
 // use in standalone mode
 mpos.init()
@@ -18,7 +18,7 @@ const opts = {
 // add element to scene, and listen for updates
 mpos.dom( 'main', opts )
 ```
-### Grade
+### grade
 ```mermaid
 flowchart TB
 
@@ -47,3 +47,9 @@ c--no--->html-to-image
 poster-->html-to-image
 a-->loader
 ```
+### applications
+- menus: runtime, dynamic, translate, filesize, outsource, mixed-media
+- sentiment analysis: simulate, augment, local
+- advertise: immersive, context-aware
+- game: environment, prototype
+- test suite: comps
