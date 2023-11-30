@@ -52,4 +52,4 @@ a-->loader
 - sentiment analysis: simulate, augment, local
 - advertise: immersive, context-aware
 - game: environment, prototype
-- test suite: comps
+- test suite: comps, spec sheet
