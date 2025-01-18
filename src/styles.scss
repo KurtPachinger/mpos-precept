@@ -176,6 +176,10 @@ model-viewer {
   100% { transform: rotate(45deg); left: 50%; }
 }
 
+.mp-unstyle {
+  .pulse, .hinge { animation: none; }
+}
+
 // test reflow
 #gen img.w50:hover {
   width: 100%;

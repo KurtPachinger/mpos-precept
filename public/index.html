@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="opencv.js"></script>
     <script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js"></script>
   </head>
@@ -8,7 +9,9 @@
     <details id="tools" class="mp-allow" open>
       <div id="errorMessage"></div>
       <main>
-        <h2><span>main</span></h2>
+        <h2><span>main</span>
+        <input type="checkbox" onChange="document.body.classList.toggle('mp-unstyle')" />
+        </h2>
         <aside id="native" class="tilt scroll">
           <h2>aside<span>#native</span></h2>
           <form onSubmit="return false;">
@@ -82,9 +85,9 @@
         <section id="loader">
           <h2>section<span>#loader</span></h2>
           <p class="mp-loader">Class <span class="sup">mp-loader</span> on text.</p>
-          <object class="mp-loader w33 pulse" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=2100"></object>
-          <img class="mp-loader w33 pulse" src="./image.jpg?t=2100" crossorigin="anonymous" />
-          <img class="mp-loader w33 pulse" src="./image.gif?t=2100" />
+          <object class="mp-loader w33 pulse" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=20"></object>
+          <img class="mp-loader w33 pulse" src="./image.jpg?t=20" crossorigin="anonymous" />
+          <img class="mp-loader w33 pulse" src="./image.gif?t=20" />
           <video class="mp-loader w33 pulse" crossorigin="anonymous" loop autoplay muted>
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
@@ -97,8 +100,8 @@
         <section id="media" class="sub">
           <h2>section<span>#media</span></h2>
           <article>
-            <img class="w50 hinge" src="./image.jpg?t=2100" />
-            <img class="w50 hinge" src="./image.gif?t=2100" />
+            <img class="w50 hinge" src="./image.jpg?t=20" />
+            <img class="w50 hinge" src="./image.gif?t=20" />
           </article>
           <details open class="mp-allow tilt">
             <summary>types</summary>

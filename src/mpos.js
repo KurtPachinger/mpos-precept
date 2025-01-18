@@ -12,12 +12,12 @@ import Stats from 'three/examples/jsm/libs/stats.module.js'
 const mpos = {
   var: {
     opt: {
-      selector: 'body',
+      selector: 'main',
       address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 3,
       arc: 0,
-      frame: 0,
+      delay: 0,
       update: function () {
         mpos.add.dom(this.selector, { depth: this.depth })
       }
@@ -103,8 +103,10 @@ const mpos = {
         precision: 'lowp',
         powerPreference: 'low-power',
         stencil: false,
-        depth: false
+        depth: false,
+        antialias: false
       })
+    vars.renderer.setPixelRatio(1)
     const domElement = vars.renderer.domElement
     const container = vars.proxy ? domElement.parentElement : document.body
     //
@@ -202,15 +204,15 @@ const mpos = {
         selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#gen', 'address']],
         depth: [0, 32, 1],
         inPolar: [1, 4, 1],
-        frame: [0, 300, 15],
+        delay: [0, 300, 5],
         arc: [0, 1, 0.25]
       }
       const param = params[key] || []
       const controller = gui.add(vars.opt, key, ...param).listen()
 
-      if (key === 'frame') {
+      if (key === 'delay') {
         controller.onFinishChange(function (v) {
-          mpos.ux.reflow({ type: key, value: v })
+          mpos.ux.reflow({ type: 'delay', value: v })
         })
       }
     })
@@ -218,7 +220,7 @@ const mpos = {
   ux: {
     timers: {
       reflow: [],
-      frame: [],
+      delay: [],
       clear: function (key) {
         const timers = this[key]
         for (let i = timers.length - 1; i >= 0; i--) {
@@ -243,7 +245,7 @@ const mpos = {
           queue.push(idx)
         }
 
-        if (idx === 'frame') {
+        if (idx === 'delay') {
           // immediate schedule, unless manually called -1
           if (e.value > 0) {
             // schedule next frame (but 0 doesnt, and -1 clears without update)
@@ -272,7 +274,7 @@ const mpos = {
         enqueue(idx)
       } else {
         // event schedule or throttle
-        const [timer, timeout] = e.type === 'frame' ? ['frame', e.value] : ['reflow', 250]
+        const [timer, timeout] = e.type === 'delay' ? ['delay', e.value] : ['reflow', 250]
 
         mpos.ux.timers.clear(timer)
         if (e.value === -1) {
@@ -439,9 +441,10 @@ const mpos = {
       ','
     ),
     poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
-    native: `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
-      ','
-    ),
+    native:
+      `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
+        ','
+      ),
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     cors: `iframe,object,.yt`.split(','),
     unset: `.mp-offscreen`.split(','),
@@ -486,21 +489,31 @@ const mpos = {
         // skip frame
         return
       }
+
       stats.update()
       grade.wait = true
       const r_atlas = grade.r_.atlas
       const r_other = grade.r_.other
       let r_frame = 0
       let quality = 1
-      let capture = {}
+      let capture = false
 
       function pseudo(rect) {
         // pseudo (or prior frame) enqueued for atlas
         let pseudo = false
         if (rect.css) {
+          capture = capture || {
+            // deepest pseudo match
+            hover: [...grade.el.querySelectorAll(':hover')].pop(),
+            active: [...grade.el.querySelectorAll(':active')].pop(),
+            focus: [...grade.el.querySelectorAll(':focus')].pop()
+          }
+
           pseudo = rect.css.pseudo
           rect.css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
           pseudo = pseudo || rect.css.pseudo
+
+          rect.ux.p = pseudo
         }
         return pseudo
       }
@@ -530,70 +543,77 @@ const mpos = {
               r_.count++
               grade.minEls++
             }
-          } else if (idx === 'frame' || idx === 'move' || idx === 'trim') {
+          } else if (idx === 'delay' || idx === 'move' || idx === 'trim') {
             reflow = true
 
-            if (idx === 'frame') {
+            if (idx === 'delay') {
               const timers = mpos.ux.timers
-              r_frame = timers.frame[timers.frame.length - 1]
+              r_frame = timers[idx][timers[idx].length - 1]
               // quality limits pixelRatio of html-to-image
               const now = performance.now()
               const elapsed = now - timers.last
               timers.last = now
 
-              quality = Math.max(mpos.var.opt.frame / elapsed, 0.8).toFixed(2)
+              quality = Math.max(mpos.var.opt[idx] / elapsed, 0.8).toFixed(2)
             }
           }
         }
 
         if (reflow) {
-          capture = {
-            // deepest pseudo match
-            hover: [...grade.el.querySelectorAll(':hover')].pop(),
-            active: [...grade.el.querySelectorAll(':active')].pop(),
-            focus: [...grade.el.querySelectorAll(':focus')].pop()
-          }
-
           function vis(rects, reQueue) {
             // update element rect
             Object.keys(rects).forEach(function (idx) {
               const rect = rects[idx]
+              //
               // traverse transforms (set/unset), update properties, and qualify ux
               mpos.add.css(rect, r_frame)
               // update visibility
               mpos.precept.inPolar(rect)
 
-              if (reQueue && rect.inPolar >= mpos.var.opt.inPolar) {
-                if (rect.el.tagName === 'BODY') {
-                  // no propagate
-                  r_queue.push(idx)
-                } else if (pseudo(rect) || rect.ux.u || rect.ux.i) {
-                  // element ux changed or elevated
-                  if (r_queue.indexOf(idx) === -1) {
+              if (reQueue) {
+                if (rect.inPolar >= mpos.var.opt.inPolar) {
+                  if (rect.el.tagName === 'BODY') {
+                    // no propagate
                     r_queue.push(idx)
-                  }
-
-                  if (rect.css && rect.css.pseudo && (rect.ux.u === 'both' || rect.ux.u === 'box')) {
-                    // children propagate
-                    let child = rect.child || []
-                    if (!rect.child) {
-                      // cache a static list
-                      rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
-                        const idx = el.getAttribute('data-idx')
-                        let rect = rects[idx]
-                        //rect.css.pseudo = true
-                        if (rect && rect.mat === 'poster') {
-                          rect.ux.u = 'both' // force child on frame, for atlas/transform...?
-                          child.push(idx)
-                        }
-                      })
-                      rect.child = child
+                  } else if (pseudo(rect) || rect.gif || rect.ux.u || rect.ux.o) {
+                    // element ux changed or elevated
+                    // note: pseudo evaluates first, so atlas unset has consistent off-state
+                    if (r_queue.indexOf(idx) === -1) {
+                      r_queue.push(idx)
                     }
 
-                    r_queue.push(...child)
+                    if (rect.ux.p) {
+                      // note: pseudo is (active), or was (blur), so enqueue (with children)
+                      // to update atlas/transform by forcing ux.u="both"
+                      // todo: set ux.o++ priority (if ux.p), and use ux.u correctly
+                      // ... compare, inherit?
+                      rect.ux.u = 'both'
+                      rect.ux.p = false
+                      // children propagate
+                      let child = rect.child || []
+                      if (!rect.child) {
+                        // cache a static list
+                        rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
+                          const idx = el.getAttribute('data-idx')
+                          let rect = rects[idx]
+                          //rect.css.pseudo = true
+                          if (rect && rect.mat === 'poster') {
+                            rect.ux.u = 'both' // force child on frame, for atlas/transform...?
+                            child.push(idx)
+                          }
+                        })
+                        rect.child = child
+                      }
+
+                      r_queue.push(...child)
+                    }
                   }
-                  //rect.css.pseudo = false
                 }
+              }
+              if (vars.opt.arc) {
+                // mokeypatch a update
+                // bug: trigger once like 'move', and update r_other
+                rect.ux.u = !rect.ux.u || rect.ux.u == 'css' ? 'css' : 'both'
               }
             })
           }
@@ -707,6 +727,7 @@ const mpos = {
                 }
                 // recurse
                 canvas = null
+
                 next()
               })
               .catch(function (error) {
@@ -723,9 +744,6 @@ const mpos = {
         function transforms(grade, paint) {
           // apply cumulative updates
 
-          ctxC.drawImage(osc, 0, 0)
-          ctxO.clearRect(0, 0, osc.width, osc.height)
-
           //grade.scroll = { x: window.scrollX, y: window.scrollY }
 
           // Mesh: CSS3D, loader, root...
@@ -735,13 +753,18 @@ const mpos = {
             // add or transform
             const dummy = mpos.add.box(rect, { add: add, scroll: scroll, frame: r_frame })
 
+            if (rect.gif) {
+              // refresh SuperGif
+              rect.obj.material.map.needsUpdate = true
+            }
             if (dummy && rect.obj) {
+              // loaded
               let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
               rect.obj.visible = vis
 
-              if (rect.gif) {
-                rect.obj.material.map.needsUpdate = true
-              }
+              mpos.add.use(rect.obj, true)
+
+              //rect.obj.matrixWorldNeedsUpdate = true
             }
           })
 
@@ -756,9 +779,11 @@ const mpos = {
               updateInstance = true
               instanced.setMatrixAt(count, dummy.matrix)
 
-              // Instance Color
               if (dataIdx === undefined || rect.ux.o || rect.ux.u) {
                 updateShader = true
+              }
+              if (dataIdx === undefined) {
+                // Instance Color (first-run)
                 let bg = rect.css.style.backgroundColor
                 let rgba = bg.replace(/[(rgba )]/g, '').split(',')
                 const alpha = rgba[3]
@@ -792,16 +817,21 @@ const mpos = {
             count++
           }
 
+          ctxC.drawImage(osc, 0, 0)
+          ctxO.clearRect(0, 0, osc.width, osc.height)
+
           if (updateInstance) {
             // update instance
-            instanced.instanceMatrix.needsUpdate = true
-            instanced.computeBoundingSphere()
-            instanced.instanceColor && (instanced.instanceColor.needsUpdate = true)
-          }
-          if (updateShader) {
-            // update shader
-            uvOffset.needsUpdate = true
-            instanced.userData.shader.userData.t.needsUpdate = true
+            mpos.add.use(instanced, true)
+
+            if (updateShader) {
+              // update shader
+              uvOffset.needsUpdate = true
+              instanced.userData.shader.userData.t.needsUpdate = true
+              if (dataIdx === undefined) {
+                instanced.instanceColor.needsUpdate = true
+              }
+            }
           }
 
           mpos.ux.render()
@@ -817,11 +847,29 @@ const mpos = {
       promise.catch((error) => console.log(error))
       promise.then(function (grade) {
         //console.log('update', grade.minEls)
+
         return promise
       })
     }
   },
   add: {
+    use: function (object, update) {
+      // update usage manually
+      if (!update) {
+        object.matrixAutoUpdate = false
+        //object.matrixWorldAutoUpdate = false // makes stale meshes from slow loader on init
+        if (object.isInstancedMesh) {
+          object.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+        }
+      } else {
+        object.updateMatrix()
+        object.updateMatrixWorld()
+        if (object.isInstancedMesh) {
+          object.instanceMatrix.needsUpdate = true
+          object.computeBoundingSphere()
+        }
+      }
+    },
     dom: async function (selector, opts = {}) {
       const vars = mpos.var
       // options
@@ -843,7 +891,7 @@ const mpos = {
       // get DOM node or offscreen
       const sel = document.querySelector(selector)
       const precept = mpos.precept
-      if (sel === null || vars.grade?.wait) {
+      if (sel === null || vars.grade?.wait === 1) {
         return
       } else if (selector === 'address') {
         const obj = document.querySelector(selector + ' object')
@@ -859,6 +907,7 @@ const mpos = {
       // structure
       const grade = {
         el: sel,
+        wait: 1,
         group: group,
         canvas: precept.canvas || document.createElement('canvas'),
         index: precept.index++,
@@ -878,6 +927,7 @@ const mpos = {
         ray: {}
         //scroll: { x: window.scrollX, y: -window.scrollY }
       }
+      vars.grade = grade
 
       // FLAT-GRADE: filter, grade, sanitize
       const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
@@ -929,8 +979,8 @@ const mpos = {
       //
 
       // clear atlas
-      const ctx = grade.canvas.getContext('2d')
-      ctx.clearRect(0, 0, grade.canvas.width, grade.canvas.height)
+      //const ctx = grade.canvas.getContext('2d')
+      //ctx.clearRect(0, 0, grade.canvas.width, grade.canvas.height)
 
       function setRect(rect, z, mat, unset) {
         if (rect) {
@@ -1063,7 +1113,8 @@ const mpos = {
         [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
         grade.maxEls
       )
-      instanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      mpos.add.use(instanced)
+
       instanced.layers.set(2)
       instanced.userData.shader = shader
       instanced.userData.el = grade.sel
@@ -1079,7 +1130,7 @@ const mpos = {
       group.add(instanced)
       vars.scene && vars.scene.add(group)
 
-      vars.grade = grade
+      grade.wait = false
       mpos.precept.update(grade)
       return grade
     },
@@ -1162,6 +1213,8 @@ const mpos = {
           obj.rotation.y = rad * damp * 2
           obj.position.setZ(z + pos * damp)
         }
+
+        object.updateMatrix()
       }
 
       let object
@@ -1193,6 +1246,7 @@ const mpos = {
         const mat = vars.mat.clone()
         mat.color = new THREE.Color('cyan')
         const mesh = new THREE.Mesh(vars.geo, mat)
+        mpos.add.use(mesh)
         mesh.userData.el = rect.el
         mesh.animations = true
         object = mesh
@@ -1202,7 +1256,6 @@ const mpos = {
       }
 
       transform(object)
-      object.updateMatrix()
 
       let obj = object
       if (opts.add) {
@@ -1222,6 +1275,7 @@ const mpos = {
         rect.obj = obj
       }
 
+      rect.ux.u = 0
       return obj
     },
     css: function (rect, progress) {
@@ -1464,6 +1518,7 @@ const mpos = {
         const texture = new THREE.VideoTexture(source)
         material.map = texture
         const mesh = new THREE.Mesh(vars.geo, material)
+        mpos.add.use(mesh)
 
         mesh.matrix.copy(dummy.matrix)
         mesh.name = uri
@@ -1524,6 +1579,7 @@ const mpos = {
                   const shape = shapes[j]
                   const geometry = new THREE.ShapeGeometry(shape)
                   const mesh = new THREE.Mesh(geometry, mat)
+                  mpos.add.use(mesh)
                   group.add(mesh)
                 }
               }
@@ -1537,6 +1593,7 @@ const mpos = {
               material.transparent = true
 
               const mesh = new THREE.Mesh(vars.geo, material)
+              mpos.add.use(mesh)
               mesh.matrix.copy(dummy.matrix)
               mesh.name = uri
 
@@ -1772,6 +1829,7 @@ const mpos = {
                   // label contours
                   const mergedBoxes = mergeGeometries(mergedGeoms)
                   const mesh = new THREE.Mesh(mergedBoxes, mat)
+                  mpos.add.use(mesh)
                   group.add(mesh)
                 }
               })
