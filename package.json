@@ -1,0 +1,14 @@
+{
+  "name": "mpos-precept",
+  "version": "1.0.0",
+  "description": "Imposter DOM rects in THREE",
+  "keywords": ["dom", "layout", "interface", "threejs", "foldable"],
+  "main": "public/mpos.js",
+  "dependencies": {
+    "html-to-image": "1.11.11",
+    "three": "0.172.0"
+  },
+  "devDependencies": {},
+  "scripts": {},
+  "browserslist": []
+}
