@@ -3,36 +3,8 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="styles.css" />
-    <script>
-      window.onload = (event) => {
-        // mode: proxy
-        /*
-        import { Scene, PerspectiveCamera, WebGLRenderer, MeshBasicMaterial, BoxGeometry, Mesh } from 'three'
-        const container = document.createElement('div')
-        document.body.appendChild(container)
-        container.style.width = container.style.height = '16rem'
-        const scene = new Scene()
-        const camera = new PerspectiveCamera(45, 1, 0.01, 1920 * 16)
-        camera.position.z = 640
-        const renderer = new WebGLRenderer()
-        renderer.setClearColor(0x00ff00, 0)
-        renderer.setSize(container.offsetWidth, container.offsetHeight)
-        container.appendChild(renderer.domElement)
-
-        const test = new Mesh(new BoxGeometry(160, 160, 160), new MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.25 }))
-        scene.add(test)
-        renderer.render(scene, camera)
-
-        mpos.init({ scene: scene, camera: camera, renderer: renderer })
-        */
-
-        // mode: standalone
-        mpos.init()
-        mpos.add.dom().then(function (grade) {
-          console.log('grade', grade)
-        })
-      }
-    </script>
+    <script src="opencv.js" async></script>
+    <script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js" async></script>
   </head>
   <body>
     <details id="tools" class="mp-allow" open>
@@ -248,7 +220,39 @@
         </details>
       </main>
     </details>
-    <script src="opencv.js" defer></script>
-    <script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js" defer></script>
+    <script>
+      // mode: proxy
+
+      /*
+      import { Scene, PerspectiveCamera, WebGLRenderer, MeshBasicMaterial, BoxGeometry, Mesh } from 'three'
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      container.style.width = container.style.height = '16rem'
+      const scene = new Scene()
+      const camera = new PerspectiveCamera(45, 1, 0.01, 1920 * 16)
+      camera.position.z = 640
+      const renderer = new WebGLRenderer()
+      renderer.setClearColor(0x00ff00, 0)
+      renderer.setSize(container.offsetWidth, container.offsetHeight)
+      container.appendChild(renderer.domElement)
+
+      const test = new Mesh(new BoxGeometry(160, 160, 160), new MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.25 }))
+      scene.add(test)
+      renderer.render(scene, camera)
+
+      mpos.init({ scene: scene, camera: camera, renderer: renderer })
+      */
+
+      const mp = setInterval(() => {
+        if (typeof window.mpos !== 'undefined') {
+          clearInterval(mp)
+          // mode: standalone
+          mpos.init()
+          mpos.add.dom().then(function (grade) {
+            console.log('grade', grade)
+          })
+        }
+      }, 250)
+    </script>
   </body>
 </html>

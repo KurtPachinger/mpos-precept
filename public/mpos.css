@@ -22,6 +22,15 @@ MP SELECTORS */
   }
 }
 
+.mp-host {
+  position: absolute;
+  transform: initial!important;
+  /* more */
+  rotate: none;
+  scale: none;
+  zoom: none;
+}
+
 .mp-align {
   /* block, margin, transform, animation, left, right
  a, img, span, obj
