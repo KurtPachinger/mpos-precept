@@ -31,8 +31,8 @@ html, body {
   section, aside, h2, p, ul, ol, form, table {
     margin-bottom: var(--u2);
   }
-  .resize { overflow: auto; resize: horizontal; }
-  .scroll { overflow: hidden; overflow-y: auto; max-height: 12rem; }
+  .resize { overflow: auto; resize: horizontal;  }
+  .scroll { overflow: hidden; overflow-y: auto; max-height: 12rem;  }
 
   &, #main {
     /*user-select: none;*/
@@ -182,3 +182,5 @@ EFFECTS, ANIMATION */
   width: 100%;
   transition: width 2s;
 }
+
+.gpuForce {transform: translate3d(0,0,0); }

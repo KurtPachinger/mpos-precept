@@ -11,7 +11,6 @@ import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import Stats from 'three/examples/jsm/libs/stats.module.js'
 //
 
-
 const mpos = {
   var: {
     opt: {
@@ -31,7 +30,51 @@ const mpos = {
       z: 8,
       max: 1024
     },
-    unset: { display: 'block', margin: 0, transform: 'initial', left: 'initial', right: 'initial' },
+    unset: {
+      diffs: function (type, opts = {}) {
+        let differ = false
+
+        // note: opts.style may be initializing (undefined) or accumulating (temp)
+        if (type === 'tween') {
+          differ =
+            opts.style.transform !== 'none' ||
+            opts.style.transitionDuration !== '0s' ||
+            (opts.style.animationName !== 'none' && opts.style.animationPlayState === 'running')
+        } else if (type === 'matrix') {
+          differ = opts.style.transform?.startsWith('matrix')
+        } else if (type === 'pseudo') {
+          let rect = opts.rect
+          let css = rect.css
+          if (css) {
+            let capture = opts.capture
+            capture = capture || {
+              // deepest pseudo match
+              hover: [...opts.sel.querySelectorAll(':hover')].pop(),
+              active: [...opts.sel.querySelectorAll(':active')].pop(),
+              focus: [...opts.sel.querySelectorAll(':focus')].pop()
+            }
+
+            // pseudo (or prior frame) enqueued for atlas
+            differ = css.pseudo
+            css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
+            differ = differ || css.pseudo
+
+            rect.ux.p = differ
+          }
+        } else if (type === 'rect') {
+          // note: whitelist skips forcing display of overflow (overlay, sprite hack, detached viewbox...)
+          differ = !opts.node.clientWidth || !opts.node.clientHeight
+          //&& el.matches('a, img, object, span, xml, :is(:empty)')
+        }
+
+        return differ
+      },
+      style: {
+        margin: 'initial',
+        transform: 'initial'
+        //display: 'block',
+      }
+    },
     geo: new THREE.BoxGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
       transparent: true,
@@ -118,7 +161,7 @@ const mpos = {
 
     vars.fov.w = container.offsetWidth
     vars.fov.h = container.offsetHeight
-    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.01, vars.fov.max * 16)
+    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.001, vars.fov.max * 16)
 
     // inject mpos stage
     const template = document.createElement('template')
@@ -318,19 +361,30 @@ const mpos = {
     render: function () {
       const vars = mpos.var
 
-      //requestAnimationFrame(vars.animate)
-      if (vars.scene) {
-        // wiggle viewport
-        const time = new Date().getTime() / 100
-        const body = vars.scene.getObjectByProperty('animations', true)
-        if (body) {
-          body.rotation.x = Math.sin(time) / 10
-          body.rotation.y = Math.cos(time) / 10
-        }
+      // wiggle viewport
+      const time = new Date().getTime() / 100
+      const body = vars.scene.getObjectByProperty('animations', true)
+      if (body) {
+        body.rotation.x = Math.sin(time) / 10
+        body.rotation.y = Math.cos(time) / 10
+      }
+
+      //
+
+      if (vars.grade) {
+        let instanced = vars.grade.instanced
+        instanced.instanceMatrix.needsUpdate = true
+        let uvOffset = instanced.geometry.getAttribute('uvOffset')
+        uvOffset.needsUpdate = true
+        instanced.userData.shader.userData.t.needsUpdate = true
+        //instanced.instanceColor.needsUpdate = true
       }
 
       vars.renderer && vars.renderer.render(vars.scene, vars.camera)
       vars.rendererCSS && vars.rendererCSS.render(vars.scene, vars.camera)
+
+      stats.update()
+      //requestAnimationFrame(vars.animate)
     },
     raycast: function (e) {
       const vars = mpos.var
@@ -488,7 +542,7 @@ const mpos = {
     update: function (grade, dataIdx) {
       const vars = mpos.var
       let r_queue = grade.r_.queue
-      stats.update()
+
       if ((dataIdx && !r_queue.length) || grade.wait || document.hidden) {
         // skip frame
         return
@@ -500,26 +554,6 @@ const mpos = {
       let r_frame = 0
       let quality = 1
       let capture = false
-
-      function pseudo(rect) {
-        // pseudo (or prior frame) enqueued for atlas
-        let pseudo = false
-        if (rect.css) {
-          capture = capture || {
-            // deepest pseudo match
-            hover: [...grade.el.querySelectorAll(':hover')].pop(),
-            active: [...grade.el.querySelectorAll(':active')].pop(),
-            focus: [...grade.el.querySelectorAll(':focus')].pop()
-          }
-
-          pseudo = rect.css.pseudo
-          rect.css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
-          pseudo = pseudo || rect.css.pseudo
-
-          rect.ux.p = pseudo
-        }
-        return pseudo
-      }
 
       grade.inPolar = vars.opt.inPolar
       if (dataIdx) {
@@ -578,37 +612,40 @@ const mpos = {
                   if (rect.el.tagName === 'BODY') {
                     // no propagate
                     r_queue.push(idx)
-                  } else if (pseudo(rect) || rect.ux.u || rect.ux.o) {
-                    // element ux changed or elevated
-                    // note: pseudo evaluates first, so atlas unset has consistent off-state
-                    if (r_queue.indexOf(idx) === -1) {
-                      r_queue.push(idx)
-                    }
-
-                    if (rect.ux.p) {
-                      // note: pseudo is (active), or was (blur), so enqueue (with children)
-                      // to update atlas/transform by forcing ux.u="both"
-                      // todo: set ux.o++ priority (if ux.p), and use ux.u correctly
-                      // ... compare, inherit?
-                      rect.ux.u = 'both'
-                      rect.ux.p = false
-                      // children propagate
-                      let child = rect.child || []
-                      if (!rect.child) {
-                        // cache a static list
-                        rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
-                          const idx = el.getAttribute('data-idx')
-                          let rect = rects[idx]
-                          //rect.css.pseudo = true
-                          if (rect && rect.mat === 'poster') {
-                            rect.ux.u = 'both' // force child on frame, for atlas/transform...?
-                            child.push(idx)
-                          }
-                        })
-                        rect.child = child
+                  } else {
+                    let pseudo = vars.unset.diffs('pseudo', { rect: rect, sel: grade.el, capture: capture })
+                    if (pseudo || rect.ux.u || rect.ux.o) {
+                      // element ux changed or elevated
+                      // note: pseudo evaluates first, so atlas unset has consistent off-state
+                      if (r_queue.indexOf(idx) === -1) {
+                        r_queue.push(idx)
                       }
 
-                      r_queue.push(...child)
+                      if (rect.ux.p) {
+                        // note: pseudo is (active), or was (blur), so enqueue (with children)
+                        // to update atlas/transform by forcing ux.u="both"
+                        // todo: set ux.o++ priority (if ux.p), and use ux.u correctly
+                        // ... compare, inherit?
+                        rect.ux.u = 'both'
+                        rect.ux.p = false
+                        // children propagate
+                        let child = rect.child || []
+                        if (!rect.child) {
+                          // cache a static list
+                          rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
+                            const idx = el.getAttribute('data-idx')
+                            let rect = rects[idx]
+                            //rect.css.pseudo = true
+                            if (rect && rect.mat === 'poster') {
+                              rect.ux.u = 'both' // force child on frame, for atlas/transform...?
+                              child.push(idx)
+                            }
+                          })
+                          rect.child = child
+                        }
+
+                        r_queue.push(...child)
+                      }
                     }
                   }
                 }
@@ -616,7 +653,7 @@ const mpos = {
               if (vars.opt.arc) {
                 // mokeypatch a update
                 // bug: trigger once like 'move', and update r_other
-                rect.ux.u = !rect.ux.u || rect.ux.u == 'css' ? 'css' : 'both'
+                rect.ux.u = !rect.ux.u || rect.ux.u === 'css' ? 'css' : 'both'
               }
             })
           }
@@ -629,6 +666,7 @@ const mpos = {
         const root = document.body
         const rect = { el: root, mat: 'wire', z: -16, fix: true, ux: { i: 1, o: 0 } }
         const idx = root.getAttribute('data-idx')
+
         r_other.rects[idx] = rect
         r_other.count++
       }
@@ -661,10 +699,11 @@ const mpos = {
         const ctxC = grade.canvas.getContext('2d')
 
         function atlas(grade, opts = {}) {
-          if (opts.array === undefined) {
+          if (opts.queue === undefined) {
             // update queue, SOFT or HARD
-            opts.array = dataIdx ? r_queue : Object.keys(r_atlas.rects)
-            opts.idx = opts.array.length
+            opts.queue = dataIdx ? r_queue : Object.keys(r_atlas.rects)
+
+            opts.idx = opts.queue.length
             // paint breakpoints [0%, 50%], unless frame
             opts.paint = opts.idx >= 32 && r_frame === 0 ? [opts.idx, Math.floor(opts.idx / 2)] : []
           }
@@ -672,7 +711,7 @@ const mpos = {
           function next() {
             if (dataIdx) {
               // reduce queue
-              opts.array = opts.array.splice(opts.array.length - opts.idx, opts.array.length)
+              opts.queue = opts.queue.splice(opts.queue.length - opts.idx, opts.queue.length)
             }
 
             if (opts.idx > 0) {
@@ -698,26 +737,44 @@ const mpos = {
             return ux.i !== 1 && ux.u === 'css'
           }
           // queue indexes from end, but in reverse
-          const rect = r_atlas.rects[opts.array[opts.array.length - opts.idx]]
+          const rect = r_atlas.rects[opts.queue[opts.queue.length - opts.idx]]
+
           if (rect && rect.atlas !== undefined && !shallow(rect.ux)) {
             // override box styles
-            const bbox = !rect.el.clientWidth && !rect.el.clientHeight && rect.el.matches('a, img, object, span, xml, :is(:empty)')
-            bbox && (rect.el.style.display = 'inline-block')
             const pixelRatio = rect.ux.o ? quality : 0.8
-
-            // to-do: transfer this to an offscreen worker
-            toCanvas(rect.el, {
-              style: vars.unset,
+            const options = {
+              style: { ...vars.unset.style },
               canvasWidth: step,
               canvasHeight: step,
               pixelRatio: pixelRatio,
               preferredFontFormat: 'woff'
-            })
+            }
+
+            if (!rect.css || !rect.css.style) {
+              // tends to be the page scrolling up (!inPolar),
+              // where elements above were skipped
+              console.log('NO CSS', rect.el, rect)
+            }
+
+            const noBox = vars.unset.diffs('rect', { node: rect.el })
+            if (noBox) {
+              //options.style.display = 'inline-block' // tame pop-in
+              options.width = rect.el.offsetWidth // force size
+              options.height = rect.el.offsetHeight // force size
+            }
+
+            //const isMatrix = vars.unset.diffs('matrix', { style: rect.css.style })
+            //if (isMatrix) {
+            //  options.style.transform = 'initial'
+            //}
+
+            // to-do: transfer this to an offscreen worker
+            toCanvas(rect.el, options)
               .then(function (canvas) {
                 if (canvas.width === 0 || canvas.height === 0) {
                   // no box
                 } else {
-                  bbox && (rect.el.style.display = 'initial')
+                  //noBox && (rect.el.style.display = 'initial')
                   // canvas xy, from top (FIFO)
                   const x = (rect.atlas % grade.cells) * step
                   const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
@@ -762,30 +819,33 @@ const mpos = {
             }
             if (dummy && rect.obj) {
               // loaded
+              // off-screen boxes may "seem" more visible than instancedMesh because they don't have a third state
               let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
               rect.obj.visible = vis
-
-              mpos.add.use(rect.obj, true)
-
-              //rect.obj.matrixWorldNeedsUpdate = true
             }
           })
 
-          let updateInstance, updateShader
+          // experiment: forceFlush, oldGeo
+          let oldGeo, oldMap
           let count = 0
           const color = new THREE.Color()
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
+            // Shader Atlas UV
+            let vis = -1,
+                x,
+                y
+            mpos.precept.inPolar(rect)
+            let force = grade.inPolar === 4
+            let inPolar = rect.inPolar >= grade.inPolar
+
             // Instance Matrix
             const dummy = mpos.add.box(rect, { frame: r_frame })
             // dummy false if css on frame was unchanged
             if (dummy) {
-              updateInstance = true
               instanced.setMatrixAt(count, dummy.matrix)
 
-              if (dataIdx === undefined || rect.ux.o || rect.ux.u) {
-                updateShader = true
-              }
-              if (dataIdx === undefined) {
+              if (dataIdx === undefined || (rect.ux.u && rect.ux.u !== 'css')) {
+                oldMap = true
                 // Instance Color (first-run)
                 let bg = rect.css.style.backgroundColor
                 let rgba = bg.replace(/[(rgba )]/g, '').split(',')
@@ -798,46 +858,54 @@ const mpos = {
                 instanced.setColorAt(count, color.setStyle(bg))
               }
 
-              // Shader Atlas UV
-              let vis = -1,
-                x,
-                y
-              if (rect.inPolar >= grade.inPolar) {
-                // visible
-                if (rect.atlas !== undefined || rect.mat === 'self') {
-                  // mat: self, child, poster, ~native...
+
+
+              if (rect.atlas !== undefined || rect.mat === 'self') {
+                // mat: self, child, poster, ~native...
+                if (rect.inPolar >= grade.inPolar) {
+                  // visible
                   x = rect.x || grade.key.x
                   y = 1 - rect.y || grade.key.y
                   // raycast filter
                   if (rect.atlas !== undefined) {
                     grade.ray[count] = Number(idx)
                   }
+                } else if (grade.inPolar === 4) {
+                  // have dummy, so it changed outside of visibility(?)
+                  // probably from scroll difference
+                  // either 
+                  x = grade.key.x
+                  y = grade.key.y
+
+
+                  //MEMO: maybe not inpolar 4, but draw in 1 of 2 places
+                  // the rectangles that got lost during scroll
+                  // with texture but no xy
+                  // and cleanup
                 }
               }
-              uvOffset.setXY(count, x || vis, y || vis)
-            }
 
-            count++
+              uvOffset.setXY(count++, x || vis, y || vis)
+            } else {
+              // maybe a fast frame
+
+              uvOffset.setXY(count++, x || vis, y || vis)
+
+            }
+            //count++
           }
 
           ctxC.drawImage(osc, 0, 0)
           ctxO.clearRect(0, 0, osc.width, osc.height)
 
-          if (updateInstance) {
-            // update instance
-            mpos.add.use(instanced, true)
-
-            if (updateShader) {
-              // update shader
-              uvOffset.needsUpdate = true
-              instanced.userData.shader.userData.t.needsUpdate = true
-              if (dataIdx === undefined) {
-                instanced.instanceColor.needsUpdate = true
-              }
-            }
-          }
+          //
+          instanced.instanceMatrix.needsUpdate = true
+          uvOffset.needsUpdate = true
+          instanced.userData.shader.userData.t.needsUpdate = true
+          instanced.instanceColor.needsUpdate = true
 
           mpos.ux.render()
+
           if (!paint) {
             // frame done
             grade.wait = false
@@ -856,23 +924,6 @@ const mpos = {
     }
   },
   add: {
-    use: function (object, update) {
-      // update usage manually
-      if (!update) {
-        object.matrixAutoUpdate = false
-        //object.matrixWorldAutoUpdate = false // makes stale meshes from slow loader on init
-        if (object.isInstancedMesh) {
-          object.instanceMatrix.setUsage(THREE.StaticDrawUsage)
-        }
-      } else {
-        object.updateMatrix()
-        object.updateMatrixWorld()
-        if (object.isInstancedMesh) {
-          object.instanceMatrix.needsUpdate = true
-          object.computeBoundingSphere()
-        }
-      }
-    },
     dom: async function (selector, opts = {}) {
       const vars = mpos.var
       // options
@@ -1116,7 +1167,6 @@ const mpos = {
         [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
         grade.maxEls
       )
-      mpos.add.use(instanced)
 
       instanced.layers.set(2)
       instanced.userData.shader = shader
@@ -1249,7 +1299,6 @@ const mpos = {
         const mat = vars.mat.clone()
         mat.color = new THREE.Color('cyan')
         const mesh = new THREE.Mesh(vars.geo, mat)
-        mpos.add.use(mesh)
         mesh.userData.el = rect.el
         mesh.animations = true
         object = mesh
@@ -1282,20 +1331,12 @@ const mpos = {
       return obj
     },
     css: function (rect, progress) {
+      const vars = mpos.var
       // css style transforms
       let el = rect.el
       const frame = typeof progress === 'number'
       // css style: transform, transformOrigin, backgroundColor, zIndex, position
       const css = rect.css || { style: window.getComputedStyle(el) }
-
-      function tweens(css) {
-        let tween =
-          css.style.transform !== 'none' ||
-          css.style.transitionDuration !== '0s' ||
-          (css.style.animationName !== 'none' && css.style.animationPlayState == 'running')
-
-        return tween
-      }
 
       let uxout = {}
       if (progress === undefined || frame) {
@@ -1305,7 +1346,7 @@ const mpos = {
 
         if (!rect.css || rect.frame < progress) {
           // ux priority may escalate (declarative)
-          const priority = css.pseudo || tweens(css)
+          const priority = css.pseudo || vars.unset.diffs('tween', { style: css.style })
           rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
           // reset transforms
@@ -1325,7 +1366,7 @@ const mpos = {
       }
 
       let unset
-      const rects = mpos.var.grade.rects
+      const rects = vars.grade.rects
       function accumulate(progress) {
         let el = rect.el
         let els = []
@@ -1340,7 +1381,7 @@ const mpos = {
                 // accumulate ancestor matrix
                 const style = r_.css?.style || css.style //|| window.getComputedStyle(el)
 
-                if (style && style.transform?.startsWith('matrix')) {
+                if (style && vars.unset.diffs('matrix', { style: style })) {
                   const transform = style.transform.replace(/(matrix)|[( )]/g, '')
                   // transform matrix
                   const [a, b] = transform.split(',')
@@ -1532,7 +1573,6 @@ const mpos = {
         const texture = new THREE.VideoTexture(source)
         material.map = texture
         const mesh = new THREE.Mesh(vars.geo, material)
-        mpos.add.use(mesh)
 
         mesh.matrix.copy(dummy.matrix)
         mesh.name = uri
@@ -1554,7 +1594,8 @@ const mpos = {
           }
 
           const [width, height] = mpos.add.pyr(source.clientWidth, source.clientHeight, 128)
-          toCanvas(source, { style: vars.unset, canvasWidth: width, canvasHeight: height, pixelRatio: 1 })
+
+          toCanvas(source, { style: vars.unset.style, canvasWidth: width, canvasHeight: height, pixelRatio: 1 })
             .then(function (canvas) {
               mpos.add.opencv(canvas, group, dummy)
               // cleanup
@@ -1593,7 +1634,7 @@ const mpos = {
                   const shape = shapes[j]
                   const geometry = new THREE.ShapeGeometry(shape)
                   const mesh = new THREE.Mesh(geometry, mat)
-                  mpos.add.use(mesh)
+
                   group.add(mesh)
                 }
               }
@@ -1607,7 +1648,6 @@ const mpos = {
               material.transparent = true
 
               const mesh = new THREE.Mesh(vars.geo, material)
-              mpos.add.use(mesh)
               mesh.matrix.copy(dummy.matrix)
               mesh.name = uri
 
@@ -1861,7 +1901,6 @@ const mpos = {
                   // label contours
                   const mergedBoxes = mergeGeometries(mergedGeoms)
                   const mesh = new THREE.Mesh(mergedBoxes, mat)
-                  mpos.add.use(mesh)
                   group.add(mesh)
                 }
               })
