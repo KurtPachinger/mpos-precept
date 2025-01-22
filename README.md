@@ -25,8 +25,8 @@ flowchart TB
 window-.-selector
 subgraph selector
  direction TB
- child--maxRes-->parent
  parent--depth-->child
+ child--maxRes-->parent
 end
 
 grade("sanitize, transform")
