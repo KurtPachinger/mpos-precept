@@ -1,7 +1,0 @@
-1. was forcing a redundant inPolar() in transforms instanced necessary?
-  -- did it help the inPolar==4 atlas update on scroll delay?
-2. remove test criteria like force, oldGeo...
-3. continue to see if backgroundColor should update (mp-native, ~priority)
-4. restore manual matrix updates?
-5. continue to fix scroll-up (it's fine, but elements at the top flicker for a second)
-6. check opencv: approxPoly
