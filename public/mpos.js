@@ -33,6 +33,7 @@ const mpos = {
     unset: {
       diffs: function (type, opts = {}) {
         let differ = false
+        let style = opts.style || {}
 
         if (type === 'rect') {
           differ = !opts.node.clientWidth || !opts.node.clientHeight
@@ -40,12 +41,18 @@ const mpos = {
           //&& el.matches('a, img, object, span, xml, :is(:empty)')
         } else if (type === 'matrix') {
           // note: style may be the frame copy uninitialized or accumulating
-          differ = opts.style.transform?.startsWith('matrix')
+          differ = style.transform?.startsWith('matrix')
         } else if (type === 'tween') {
           differ =
-            opts.style.transform !== 'none' ||
-            opts.style.transitionDuration !== '0s' ||
-            (opts.style.animationName !== 'none' && opts.style.animationPlayState === 'running')
+            style.transform !== 'none' ||
+            style.transitionDuration !== '0s' ||
+            (style.animationName !== 'none' && style.animationPlayState === 'running')
+        } else if (type === 'float') {
+          // TRBL; panel (HUD, GUI) may overflow scrollOffset
+          differ =
+            style.zIndex >= 9 &&
+            (style.position === 'fixed' || style.position === 'absolute') 
+            //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
         } else if (type === 'pseudo') {
           // note: let pseudo update rect frame (before return)
           let rect = opts.rect
@@ -78,7 +85,7 @@ const mpos = {
       },
       style: {
         margin: 'initial',
-        transform: 'initial'
+        transform: 'initial',
         //display: 'block',
       }
     },
@@ -152,10 +159,9 @@ const mpos = {
     vars.renderer =
       opts.renderer ||
       new THREE.WebGLRenderer({
-        // no impact
+        antialias: false,
         precision: 'lowp',
-        powerPreference: 'low-power',
-        antialias: false
+        powerPreference: 'low-power'
       })
     vars.renderer.setPixelRatio(1)
     const domElement = vars.renderer.domElement
@@ -166,7 +172,7 @@ const mpos = {
 
     vars.fov.w = container.offsetWidth
     vars.fov.h = container.offsetHeight
-    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 0.001, vars.fov.max * 16)
+    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 1, vars.fov.max * 8)
 
     // inject mpos stage
     const template = document.createElement('template')
@@ -385,7 +391,7 @@ const mpos = {
 
         // instanced elements need texture update
         let instanced = grade.instanced
-        instanced.instanceMatrix.needsUpdate = true
+
         let uvOffset = instanced.geometry.getAttribute('uvOffset')
         uvOffset.needsUpdate = true
         instanced.userData.shader.userData.t.needsUpdate = true
@@ -589,7 +595,6 @@ const mpos = {
               }
               // add key
               r_.rects[idx] = rect
-              r_.count++
               grade.minEls++
             }
           } else if (idx === 'delay' || idx === 'move' || idx === 'trim') {
@@ -680,14 +685,12 @@ const mpos = {
         const idx = root.getAttribute('data-idx')
 
         r_other.rects[idx] = rect
-        r_other.count++
       }
 
       //console.log('queue', r_queue.length, dataIdx, r_frame)
       const promise = new Promise((resolve, reject) => {
         // Instanced Mesh
         const instanced = grade.instanced
-        instanced.count = r_atlas.count
         const uvOffset = instanced.geometry.getAttribute('uvOffset')
         const step = grade.maxRes / grade.cells
 
@@ -763,9 +766,14 @@ const mpos = {
               preferredFontFormat: 'woff'
             }
 
-            if (!rect.css || !rect.css.style) {
-              // not in viewport last run
-              //console.log('NO CSS', rect.el, rect)
+
+            // Feature tests
+
+            if (rect.css && rect.css.style) {
+              const float = vars.unset.diffs('float', { style: rect.css.style })
+              if (float) {
+                options.style.top = options.style.right = options.style.bottom = options.style.left = 'initial'
+              }
             }
 
             const noBox = vars.unset.diffs('rect', { node: rect.el })
@@ -779,6 +787,7 @@ const mpos = {
             //if (isMatrix) {
             //  options.style.transform = 'initial'
             //}
+
 
             // to-do: transfer this to an offscreen worker
             toCanvas(rect.el, options)
@@ -814,20 +823,21 @@ const mpos = {
         atlas(grade)
 
         function transforms(grade, paint) {
-          // apply cumulative updates
+          // Update meshes from queue
 
-          //grade.scroll = { x: window.scrollX, y: window.scrollY }
+          // Reset globals, feature test
+          grade.ray = []
 
           if (!paint) {
-            // Mesh: CSS3D, loader, root...
+            // Meshes other than a general Instance (such as loader) update on tail
+            //grade.scroll = { x: window.scrollX, y: window.scrollY }
             Object.values(r_other.rects).forEach(function (rect) {
-              const add = !rect.obj && (dataIdx === undefined || rect.add)
+              const newBox = !rect.obj && (dataIdx === undefined || rect.add)
               const scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
-              // add or transform
-              const dummy = mpos.add.box(rect, { add: add, scroll: scroll, frame: r_frame })
 
-              if (dummy && rect.obj) {
-                // loaded
+              const dummy = mpos.add.box(rect, { add: newBox, scroll: scroll, frame: r_frame })
+              if (dummy || rect.obj) {
+                // update visibility if loaded
                 // off-screen boxes may "seem" more visible than instancedMesh because they don't have a third state
                 let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
                 rect.obj.visible = vis
@@ -857,9 +867,9 @@ const mpos = {
             // Instance Matrix
             const dummy = mpos.add.box(rect, { frame: r_frame })
             // dummy false if css on frame was unchanged
-            if (dummy) {
-              instanced.setMatrixAt(count, dummy.matrix)
+            dummy && instanced.setMatrixAt(count, dummy.matrix)
 
+            if (dummy || dataIdx === undefined || rect.ux.i || rect.ux.u) {
               if (dataIdx === undefined || rect.ux.u) {
                 oldMap = true
                 // Instance Color (first-run)
@@ -882,10 +892,6 @@ const mpos = {
                   // visible
                   x = rect.x || grade.key.x
                   y = 1 - rect.y || grade.key.y
-                  // raycast filter
-                  if (rect.atlas !== undefined) {
-                    grade.ray[count] = Number(idx)
-                  }
                 } else if (grade.inPolar === 4) {
                   // have dummy, so it changed outside of visibility(?)
                   // probably from scroll difference
@@ -900,15 +906,25 @@ const mpos = {
                 }
               }
 
-              uvOffset.setXY(count++, x || vis, y || vis)
+              uvOffset.setXY(count, x || vis, y || vis)
             } else {
               // maybe a fast frame
               //uvOffset.setXY(count++, x || vis, y || vis)
             }
-            //count++
+
+            // raycast filter
+            let uxPreserve = rect.ux.o || rect.ux.u
+            if (rect.atlas !== undefined && (inPolar || uxPreserve)) {
+              grade.ray[count] = Number(idx)
+            }
+
+            count++
           }
 
-          // draw updates
+          // update geometry (update materials in render)
+          instanced.count = count
+          instanced.instanceMatrix.needsUpdate = true
+          instanced.computeBoundingSphere() // cull and raycast
           oldMap && (instanced.instanceColor.needsUpdate = true)
 
           ctxC.drawImage(osc, 0, 0)
@@ -1157,7 +1173,6 @@ const mpos = {
           //type: other, atlas
           const type = rect.r_
           const r_ = grade.r_[type]
-          r_.count++
           r_.rects[idx] = rect
         } else if (!rect.mat) {
           // free memory
@@ -1678,14 +1693,12 @@ const mpos = {
               const idx = source.getAttribute('data-idx')
               const rect = vars.grade.rects[idx]
               rect.obj = mesh
-
-              console.log('Pri_Force', rect)
-              //rect.gif = loader
-              mesh.animate = { gif: loader }
-
+              
+              
               //NOTE: finding a route for special type
               // after loaded, boost priority, re-enqueue, force update
               rect.ux.i = 1
+              mesh.animate = { gif: loader }
               vars.grade.r_.queue.push(idx)
               mpos.precept.update(mpos.var.grade, 'trim')
 
@@ -1766,13 +1779,22 @@ const mpos = {
             for (let i = 0; i < labels.size().height; i++) {
               const idx = labels.intAt(i, 0)
               if (kmeans[idx] === undefined) {
+                let alpha = centers.floatAt(idx, 3)
+                if (alpha < 0) {
+                  // alpha may be -0 or lost precision at -3e+39
+                  // remap, or black material is grey/transparent
+                  alpha = alpha === -0 ? 0 : 255
+                }
+
+                alpha = alpha < 128 ? Math.max(alpha, 0) : Math.min(alpha, 255)
+
                 kmeans[idx] = {
                   count: 0,
                   rgba: {
                     r: Math.round(centers.floatAt(idx, 0)),
                     g: Math.round(centers.floatAt(idx, 1)),
                     b: Math.round(centers.floatAt(idx, 2)),
-                    a: Math.round(centers.floatAt(idx, 3))
+                    a: Math.round(alpha)
                   }
                 }
               }
@@ -1841,7 +1863,7 @@ const mpos = {
                 const cnt = poly.get(i)
                 // minimum area
                 const area = cv.contourArea(cnt)
-                const min = area > size.width * size.height * 0.00001
+                const min = area > (Math.min(size.width, size.height) / 16) ** 2
                 if (min) {
                   // relationship
                   const hier = Array.from(hierarchy.intPtr(0, i))
@@ -1914,9 +1936,11 @@ const mpos = {
                       poly.holes.push(path)
                     }
                     // label contour
-                    // out: element > reduced canvas > pyr sample (kmeans/inrange) > approxPoly
-                    let geometry = new THREE.ShapeGeometry(poly, 1)
-                    geometry = mergeVertices(geometry, 0.5)
+                    // in-out: element > reduced canvas > pyr sample (kmeans/inrange) > approxPoly
+                    // ShapeGeometry path is not curve
+                    let geometry = new THREE.ShapeGeometry(poly, 0.5)
+                    // mergeVertices tolerance was crunched through opencv pyrdown
+                    geometry = mergeVertices(geometry, 1)
                     mergedGeoms.push(geometry)
                   })
                 }
@@ -1927,7 +1951,8 @@ const mpos = {
                   const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
                   const mat = mpos.var.mat_shape.clone()
                   mat.color = color
-                  if (rgba.a < 255) {
+                  if (rgba.a > 0 && rgba.a < 128) {
+                    // alphaTest: alpha has been through a lot!
                     mat.opacity = rgba.a / 255
                     mat.transparent = true
                   }

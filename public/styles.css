@@ -266,11 +266,20 @@ EFFECTS, ANIMATION */
   }
 }
 
+.lil-gui.root .title {
+  overflow: hidden;
+  }
+
 /* test: reflow, update */
 .mp-unstyle {
   .hinge {
     animation: hinge 12s linear infinite;
   }
+}
+
+.w33:hover {
+  scale: 2;
+  transition: 3s scale;
 }
 
 #gen img.w50:hover {
