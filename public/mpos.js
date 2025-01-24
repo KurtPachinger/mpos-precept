@@ -49,10 +49,8 @@ const mpos = {
             (style.animationName !== 'none' && style.animationPlayState === 'running')
         } else if (type === 'float') {
           // TRBL; panel (HUD, GUI) may overflow scrollOffset
-          differ =
-            style.zIndex >= 9 &&
-            (style.position === 'fixed' || style.position === 'absolute') 
-            //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
+          differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
+          //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
         } else if (type === 'pseudo') {
           // note: let pseudo update rect frame (before return)
           let rect = opts.rect
@@ -85,7 +83,7 @@ const mpos = {
       },
       style: {
         margin: 'initial',
-        transform: 'initial',
+        transform: 'initial'
         //display: 'block',
       }
     },
@@ -375,7 +373,7 @@ const mpos = {
 
       if (grade) {
         // animation step
-        const time = new Date().getTime() / 100
+        const time = Date.now() / 100
         grade.group.traverse((obj) => {
           if (obj.animate) {
             if (obj.animate === true) {
@@ -390,16 +388,13 @@ const mpos = {
         })
 
         // instanced elements need texture update
-        let instanced = grade.instanced
-
-        let uvOffset = instanced.geometry.getAttribute('uvOffset')
-        uvOffset.needsUpdate = true
-        instanced.userData.shader.userData.t.needsUpdate = true
+        grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true
+        grade.instanced.userData.shader.userData.t.needsUpdate = true
         //instanced.instanceColor.needsUpdate = true
       }
 
-      vars.renderer && vars.renderer.render(vars.scene, vars.camera)
-      vars.rendererCSS && vars.rendererCSS.render(vars.scene, vars.camera)
+      vars.renderer.render(vars.scene, vars.camera)
+      vars.rendererCSS.render(vars.scene, vars.camera)
 
       stats.update()
       //requestAnimationFrame(vars.animate)
@@ -412,7 +407,7 @@ const mpos = {
       const grade = vars.grade
       if (grade) {
         vars.raycaster.setFromCamera(vars.pointer, vars.camera)
-        let intersects = vars.raycaster.intersectObjects(grade.group.children, false)
+        let intersects = vars.raycaster.intersectObject(grade.instanced, false)
         intersects = intersects.filter(function (hit) {
           // intersects.instanceId is any Instanced atlas (child, self...)
           // grade.ray { instance: data-idx }
@@ -431,6 +426,7 @@ const mpos = {
             // note: raycast element may be non-interactive (atlas), but not CSS3D or loader (other)
             vars.events = { uv: hit.uv, el: rect.el, mat: rect.mat, position: rect.css?.style.position || {}, bound: rect.bound }
             //
+            vars.caret.title = hit.instanceId + rect.el.nodeName
             const caret = vars.caret.style
             // visibility
             const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
@@ -766,9 +762,17 @@ const mpos = {
               preferredFontFormat: 'woff'
             }
 
+            
+
+
+            if(!rect.css){
+              //slow frame?
+              
+              mpos.precept.inPolar(rect)
+            }
+
 
             // Feature tests
-
             if (rect.css && rect.css.style) {
               const float = vars.unset.diffs('float', { style: rect.css.style })
               if (float) {
@@ -787,7 +791,6 @@ const mpos = {
             //if (isMatrix) {
             //  options.style.transform = 'initial'
             //}
-
 
             // to-do: transfer this to an offscreen worker
             toCanvas(rect.el, options)
@@ -825,11 +828,9 @@ const mpos = {
         function transforms(grade, paint) {
           // Update meshes from queue
 
-          // Reset globals, feature test
-          grade.ray = []
-
           if (!paint) {
-            // Meshes other than a general Instance (such as loader) update on tail
+            //
+            // Meshes other (matches Loader) update on tail
             //grade.scroll = { x: window.scrollX, y: window.scrollY }
             Object.values(r_other.rects).forEach(function (rect) {
               const newBox = !rect.obj && (dataIdx === undefined || rect.add)
@@ -850,17 +851,20 @@ const mpos = {
             })
           }
 
+          
           //
-          // experiment: forceFlush, oldGeo
-          let oldGeo, oldMap
+          // Meshes atlas (general Instance) use priority raycast
+          grade.ray = []
           let count = 0
           const color = new THREE.Color()
+          let oldGeo, oldMap
+
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
             // Shader Atlas UV
             let vis = -1,
               x,
               y
-            mpos.precept.inPolar(rect)
+            
             let force = grade.inPolar === 4
             let inPolar = rect.inPolar >= grade.inPolar
 
@@ -1368,6 +1372,14 @@ const mpos = {
       // css style: transform, transformOrigin, backgroundColor, zIndex, position
       const css = rect.css || { style: window.getComputedStyle(el) }
 
+
+      function getBound(element) {
+        let bound = element.getBoundingClientRect()
+        //bound.width = element.offsetWidth;
+        //bound.height= element.offsetHeight;
+        return bound
+      }
+
       let uxout = {}
       if (progress === undefined || frame) {
         // ux frame change pre/post calculable? (imperative)
@@ -1440,13 +1452,15 @@ const mpos = {
         }
 
         if (progress === true) {
-          unset = rect.el.getBoundingClientRect()
+          unset = getBound(rect.el)
           accumulate(!progress)
         } else {
           if (progress === undefined || frame) {
             // update rect properties from frame
             rect.css = css
-            rect.bound = rect.el.getBoundingClientRect()
+            rect.bound = getBound(rect.el)
+
+
             rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
             if (frame) {
               if (rect.frame < progress) {
@@ -1693,8 +1707,7 @@ const mpos = {
               const idx = source.getAttribute('data-idx')
               const rect = vars.grade.rects[idx]
               rect.obj = mesh
-              
-              
+
               //NOTE: finding a route for special type
               // after loaded, boost priority, re-enqueue, force update
               rect.ux.i = 1
