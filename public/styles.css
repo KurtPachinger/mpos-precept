@@ -13,7 +13,6 @@ body {
 }
 
 #tools {
-
   /* 
   RESET */
   &,
@@ -229,12 +228,26 @@ EFFECTS, ANIMATION */
 
 .hinge {
   position: relative;
-  transform-origin: right top;
   /*animation: hinge 6s linear infinite alternate;*/
 }
 @keyframes hinge {
-  to {
-    transform: rotate(-45deg);
+  25% {
+    z-index: 0;
+    transform: rotate(0deg);
+  }
+
+  50% {
+    z-index: 99;
+    transform: rotate(-15deg);
+  }
+
+  75% {
+    z-index: -3;
+    transform: rotate(0deg);
+  }
+
+  100% {
+    z-index: 0;
   }
 }
 
@@ -256,7 +269,7 @@ EFFECTS, ANIMATION */
 /* test: reflow, update */
 .mp-unstyle {
   .hinge {
-    animation: hinge 6s linear infinite alternate;
+    animation: hinge 12s linear infinite;
   }
 }
 

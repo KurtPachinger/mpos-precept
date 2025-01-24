@@ -155,8 +155,6 @@ const mpos = {
         // no impact
         precision: 'lowp',
         powerPreference: 'low-power',
-        stencil: false,
-        depth: false,
         antialias: false
       })
     vars.renderer.setPixelRatio(1)
@@ -1585,8 +1583,8 @@ const mpos = {
       //console.log(loader, mime, uri)
 
       const material = new THREE.MeshBasicMaterial({
-        side: THREE.FrontSide,
-        depthWrite: false
+        side: THREE.FrontSide
+        //depthWrite: false
       })
 
       //console.log(mime, uri, source, dummy, dummy.matrix)
@@ -1650,6 +1648,7 @@ const mpos = {
               for (let i = 0; i < paths.length; i++) {
                 const path = paths[i]
                 let mat = material.clone()
+                mat.depthFunc = THREE.AlwaysDepth
                 mat.color = path.color
 
                 const shapes = SVGLoader.createShapes(path)
@@ -1731,7 +1730,7 @@ const mpos = {
           let kmeans = this._stdin.kmeans
 
           try {
-            const clusters = 8
+            const clusters = 16
             function release(mat) {
               //cv.setTo([0, 0, 0, 0]) // <- pre-optimizes kmeans result to {}
               cv.resize(mat, mat, new cv.Size(1, 1), 0, 0, cv.INTER_NEAREST)
@@ -1744,7 +1743,7 @@ const mpos = {
 
             // KMEANS
             const pyr = src.clone()
-            const [width, height] = mpos.add.pyr(pyr.cols, pyr.rows, clusters * 2)
+            const [width, height] = mpos.add.pyr(pyr.cols, pyr.rows, clusters * 8)
             cv.resize(pyr, pyr, new cv.Size(width, height), 0, 0, cv.INTER_NEAREST) //AREA,LINEAR,NEAREST
 
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
@@ -1760,7 +1759,7 @@ const mpos = {
             const labels = new cv.Mat()
             const criteria = new cv.TermCriteria(cv.TermCriteria_MAX_ITER + cv.TermCriteria_EPS, 4, 0.8)
             const centers = new cv.Mat()
-            cv.kmeans(sample, clusters, labels, criteria, 1, cv.KMEANS_PP_CENTERS, centers)
+            cv.kmeans(sample, clusters, labels, criteria, 4, cv.KMEANS_PP_CENTERS, centers)
             release(sample)
 
             // kmeans colors
@@ -1804,7 +1803,7 @@ const mpos = {
                   if (channel !== 'a') {
                     let band = rgba[channel] + range
                     band *= factor
-                    //band = (band + target) / 2
+                    band = band < 128 ? Math.max(band, 0) : Math.min(band, 255)
                     bands[channel] = band
                   }
                 })
@@ -1813,8 +1812,8 @@ const mpos = {
               }
 
               const mask = new cv.Mat.zeros(size, 0)
-              const range = 32
-              lo.setTo(level(rgba, -range, 16))
+              const range = 32 // rather greedy
+              lo.setTo(level(rgba, -range, 16)) // 16 remove some text alpha
               hi.setTo(level(rgba, range, 255))
               cv.inRange(src, lo, hi, mask)
               // inrange
@@ -1932,6 +1931,7 @@ const mpos = {
                     mat.opacity = rgba.a / 255
                     mat.transparent = true
                   }
+
                   // label contours
                   const mergedBoxes = mergeGeometries(mergedGeoms)
                   const mesh = new THREE.Mesh(mergedBoxes, mat)
