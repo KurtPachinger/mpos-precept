@@ -28,7 +28,7 @@ const mpos = {
       w: window.innerWidth,
       h: window.innerHeight,
       z: 8,
-      max: 1024
+      max: 512
     },
     unset: {
       diffs: function (type, opts = {}) {
@@ -170,7 +170,7 @@ const mpos = {
 
     vars.fov.w = container.offsetWidth
     vars.fov.h = container.offsetHeight
-    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 1, vars.fov.max * 8)
+    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 1, vars.fov.max * 16)
 
     // inject mpos stage
     const template = document.createElement('template')
@@ -194,7 +194,7 @@ const mpos = {
 
     vars.camera.layers.enableAll()
     if (!vars.proxy) {
-      vars.camera.position.z = vars.fov.max
+      vars.camera.position.z = vars.fov.max *2
       vars.renderer.setSize(vars.fov.w, vars.fov.h)
       mp.appendChild(domElement)
       vars.renderer.setClearColor(0x00ff00, 0)
@@ -691,23 +691,32 @@ const mpos = {
         const step = grade.maxRes / grade.cells
 
         // Offscreen Canvas
+        //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
+        //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
         let osc = grade.osc
         if (!osc) {
-          if (window.OffscreenCanvas) {
-            osc = new OffscreenCanvas(grade.canvas.width, grade.canvas.height)
-          } else {
-            osc = document.createElement('canvas')
-            osc.width = grade.canvas.width
-            osc.height = grade.canvas.height
-          }
-          grade.osc = osc
+          //if (window.OffscreenCanvas) {
+          //  osc = new OffscreenCanvas(grade.canvas.width, grade.canvas.height)
+          //} else {
+          osc = document.createElement('canvas')
+          osc.width = grade.canvas.width
+          osc.height = grade.canvas.height
+          //}
+          grade.osc = osc //.transferControlToOffscreen();
+
           // multiple readback
-          osc.getContext('2d').willReadFrequently = true
-          grade.canvas.getContext('2d').willReadFrequently = true
+          let options = { willReadFrequently: true, alpha: true }
+          grade.ctx = grade.canvas.getContext('2d', options)
+          grade.ctx_osc = grade.osc.getContext('2d', options)
+
+          grade.ctx.imageSmoothingEnabled = false
+          grade.ctx_osc.imageSmoothingEnabled = false
+
+          osc = grade.osc
         }
         // transfer control
-        const ctxO = osc.getContext('2d')
-        const ctxC = grade.canvas.getContext('2d')
+        const ctxC = grade.ctx
+        const ctxO = grade.ctx_osc
 
         function atlas(grade, opts = {}) {
           if (opts.queue === undefined) {
@@ -759,18 +768,16 @@ const mpos = {
               canvasWidth: step,
               canvasHeight: step,
               pixelRatio: pixelRatio,
-              preferredFontFormat: 'woff'
+              preferredFontFormat: 'woff',
+              //filter: function (node) {
+              //  todo: test clone children for diffs 
+              //  return node
+              //}
             }
 
-            
-
-
-            if(!rect.css){
+            if (!rect.css) {
               //slow frame?
-              
-              mpos.precept.inPolar(rect)
             }
-
 
             // Feature tests
             if (rect.css && rect.css.style) {
@@ -833,10 +840,11 @@ const mpos = {
             // Meshes other (matches Loader) update on tail
             //grade.scroll = { x: window.scrollX, y: window.scrollY }
             Object.values(r_other.rects).forEach(function (rect) {
-              const newBox = !rect.obj && (dataIdx === undefined || rect.add)
-              const scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
+              let newGeo = !rect.obj && (dataIdx === undefined || rect.add)
+              let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
 
-              const dummy = mpos.add.box(rect, { add: newBox, scroll: scroll, frame: r_frame })
+              const dummy = mpos.add.box(rect, { add: newGeo, scroll: scroll, frame: r_frame })
+
               if (dummy || rect.obj) {
                 // update visibility if loaded
                 // off-screen boxes may "seem" more visible than instancedMesh because they don't have a third state
@@ -851,85 +859,74 @@ const mpos = {
             })
           }
 
-          
           //
-          // Meshes atlas (general Instance) use priority raycast
+          // Meshes atlas (general Instance) update priority and raycast
           grade.ray = []
           let count = 0
           const color = new THREE.Color()
-          let oldGeo, oldMap
+          let newGeo, newMap
 
           for (const [idx, rect] of Object.entries(r_atlas.rects)) {
-            // Shader Atlas UV
-            let vis = -1,
-              x,
-              y
-            
-            let force = grade.inPolar === 4
-            let inPolar = rect.inPolar >= grade.inPolar
+            let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
+            let inPolar = uxForce ? mpos.precept.inPolar(rect) >= grade.inPolar : rect.inPolar >= grade.inPolar
 
-            // Instance Matrix
             const dummy = mpos.add.box(rect, { frame: r_frame })
-            // dummy false if css on frame was unchanged
+
             dummy && instanced.setMatrixAt(count, dummy.matrix)
 
-            if (dummy || dataIdx === undefined || rect.ux.i || rect.ux.u) {
-              if (dataIdx === undefined || rect.ux.u) {
-                oldMap = true
-                // Instance Color (first-run)
-                let bg = rect.css.style.backgroundColor
-                let rgba = bg.replace(/[(rgba )]/g, '').split(',')
-                const alpha = rgba[3]
-                if (alpha === '0') {
-                  // hidden: dom default, but could be user-specified
-                  bg = 'cyan'
-                } else if (alpha > 0.0 || alpha === undefined) {
-                  // color no alpha channel
-                  bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
-                }
-                instanced.setColorAt(count, color.setStyle(bg))
+            //
+            // Update feature difference (support background)... ad-hoc experiments like tooltip
+            if (dataIdx === undefined || rect.ux.o) {
+              newMap = true
+              // Instance Color (first-run)
+              let bg = rect.css.style.backgroundColor
+              let rgba = bg.replace(/[(rgba )]/g, '').split(',')
+              const alpha = rgba[3]
+              if (alpha === '0') {
+                // hidden: dom default, but could be user-specified
+                bg = 'cyan'
+              } else if (alpha > 0.0 || alpha === undefined) {
+                // color no alpha channel
+                bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
               }
+              instanced.setColorAt(count, color.setStyle(bg))
+            }
 
+            //
+            // Update atlas uv and visibility
+            let vis = -1
+            let x, y
+            if (dataIdx === undefined || dummy || uxForce) {
               if (rect.atlas !== undefined || rect.mat === 'self') {
-                // mat: self, child, poster, ~native...
-                if (rect.inPolar >= grade.inPolar) {
-                  // visible
+                // top-tier bracket
+                if (inPolar) {
                   x = rect.x || grade.key.x
                   y = 1 - rect.y || grade.key.y
                 } else if (grade.inPolar === 4) {
-                  // have dummy, so it changed outside of visibility(?)
-                  // probably from scroll difference
-                  // either
+                  // partial update from split frame (trim), due to scroll delay
                   x = grade.key.x
                   y = grade.key.y
-
-                  //MEMO: maybe not inpolar 4, but draw in 1 of 2 places
-                  // the rectangles that got lost during scroll
-                  // with texture but no xy
-                  // and cleanup
                 }
               }
 
+              // bug frame: force inPolar/css, update instance.count, update render/texture, 3rd condition
               uvOffset.setXY(count, x || vis, y || vis)
-            } else {
-              // maybe a fast frame
-              //uvOffset.setXY(count++, x || vis, y || vis)
             }
 
-            // raycast filter
-            let uxPreserve = rect.ux.o || rect.ux.u
-            if (rect.atlas !== undefined && (inPolar || uxPreserve)) {
+            //
+            // Update raycast whitelist
+            if (rect.atlas !== undefined && (inPolar || uxForce)) {
               grade.ray[count] = Number(idx)
             }
 
             count++
           }
 
-          // update geometry (update materials in render)
+          // Apply Updates
           instanced.count = count
-          instanced.instanceMatrix.needsUpdate = true
           instanced.computeBoundingSphere() // cull and raycast
-          oldMap && (instanced.instanceColor.needsUpdate = true)
+          instanced.instanceMatrix.needsUpdate = true
+          newMap && (instanced.instanceColor.needsUpdate = true)
 
           ctxC.drawImage(osc, 0, 0)
           ctxO.clearRect(0, 0, osc.width, osc.height)
@@ -947,7 +944,6 @@ const mpos = {
       promise.catch((error) => console.log(error))
       promise.then(function (grade) {
         //console.log('update', grade.minEls)
-
         return promise
       })
     }
@@ -1055,7 +1051,7 @@ const mpos = {
       }
 
       // Atlas Units: relative device profile
-      grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 128
+      grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 64
       grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
       grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
       grade.canvas.width = grade.canvas.height = grade.maxRes
@@ -1372,7 +1368,6 @@ const mpos = {
       // css style: transform, transformOrigin, backgroundColor, zIndex, position
       const css = rect.css || { style: window.getComputedStyle(el) }
 
-
       function getBound(element) {
         let bound = element.getBoundingClientRect()
         //bound.width = element.offsetWidth;
@@ -1459,7 +1454,6 @@ const mpos = {
             // update rect properties from frame
             rect.css = css
             rect.bound = getBound(rect.el)
-
 
             rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
             if (frame) {

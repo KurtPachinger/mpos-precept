@@ -10,14 +10,17 @@
     <details id="tools" class="mp-allow" open>
       <div id="errorMessage"></div>
       <main>
-        <h2 class='mp-native'>
+        <h2 class="mp-native">
           <span>main</span>
           <label class="cycle">
             <input type="checkbox" onChange="document.body.classList.toggle('mp-unstyle')" />
             cycle
           </label>
         </h2>
-        <p class="cycle">detect animation: (not byproduct of box resize): instanceColor will change -- although element matches mp-poster, not manually mp-native.</p>
+        <p class="cycle">
+          detect animation (not byproduct of box resize): instanceColor will change, although element matches mp-poster, not manually mp-native.
+          mp-native.
+        </p>
         <aside id="native" class="tilt scroll">
           <h2>aside<span>#native</span></h2>
           <form onSubmit="return false;">
