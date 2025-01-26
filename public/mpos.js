@@ -1998,8 +1998,19 @@ const mpos = {
         postRun: [
           function (e) {
             try {
-              const isSimple = Object.keys(kmeans).length < 4
               console.log('cv', Object.keys(kmeans).length, group.userData.el.getAttribute('data-idx'))
+
+              let counts = []
+              Object.values(kmeans).forEach((label) => counts.push(label.count))
+              counts.sort((a, b) => a - b)
+              const mean = counts.reduce((sum, num) => sum + num, 0) / counts.length
+
+              // is it line art
+              //const n1 = counts[Math.round(counts.length * 0.33)] / mean
+              //const n2 = mean / counts[Math.round(counts.length * 0.66)]
+              //const n = n1 / n2
+              //const evenDist = n < 2 && n > 0.5
+
               // Shape from label contours
               Object.values(kmeans).forEach(function (label) {
                 let mergedGeoms = []
@@ -2049,25 +2060,15 @@ const mpos = {
 
                   material.color = color
 
-                  if (isSimple) {
-                    material.alphaHash = false
-                    material.transparent = true
-                  }
-
                   if (rgba.a > 192) {
-                    if (isSimple) {
-                      material.transparent = false
-                    } else {
-                      material.alphaHash = false
-                    }
-                  }
-
-                  if (rgba.a < 96) {
+                    //material.alphaHash = false
+                  }else if (rgba.a < 128) {
                     // alphaTest: alpha has been through a lot!
                     material.opacity = rgba.a / 255
                   }
 
                   // label contours
+                  // todo: cv.copyMakeBorder reduce triangles near corners
                   const mergedBoxes = mergeGeometries(mergedGeoms)
                   const mesh = new THREE.Mesh(mergedBoxes, material)
                   group.add(mesh)
