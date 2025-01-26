@@ -10,9 +10,7 @@
 html,
 body {
   height: 100%;
-  
 }
-
 
 #tools {
   /* 
@@ -315,7 +313,7 @@ EFFECTS, ANIMATION */
   background-color: rgba(255, 0, 0, 0.5);
   position: relative;
   border-radius: 0.25em;
-  box-shadow: rgba(255, 255, 255, 0.75) 0em 0.125em .25em 0.125em inset, rgba(0, 0, 0, 0.25) 0px -0.125em 0.125em .125em inset;
+  box-shadow: rgba(255, 255, 255, 0.75) 0em 0.125em 0.25em 0.125em inset, rgba(0, 0, 0, 0.25) 0px -0.125em 0.125em 0.125em inset;
   pointer-events: none;
 
   :after,
@@ -324,12 +322,12 @@ EFFECTS, ANIMATION */
     position: absolute;
     font-size: 0.5em;
     animation-delay: 0.25s;
-    border-radius: 0.5em 0.5em .25em .25em;
+    border-radius: 0.5em 0.5em 0.25em 0.25em;
   }
   :after {
     background-color: rgba(255, 255, 0, 0.25);
-    top:2em;
-    left:-.5em;
+    top: 2em;
+    left: -0.5em;
   }
   :before {
     background-color: rgba(0, 255, 128, 0.25);

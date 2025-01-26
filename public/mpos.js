@@ -101,22 +101,14 @@ const mpos = {
     },
     geo: new THREE.BoxGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
-      transparent: true,
-      wireframe: true,
-      color: 'cyan',
-      side: THREE.FrontSide
+      color: 'cyan'
     }),
     mat_shape: new THREE.MeshBasicMaterial({ alphaHash: true }),
-    mat_line: new THREE.LineBasicMaterial({
-      transparent: true,
-      opacity: 0.5,
+    mat_line: new THREE.MeshBasicMaterial({
       color: 'cyan',
-      depthWrite: false,
-      side: THREE.FrontSide
+      wireframe: true
     }),
     mat_shader: new THREE.RawShaderMaterial({
-      transparent: true,
-      depthWrite: false,
       uniforms: {
         map: {
           type: 't',
@@ -182,7 +174,7 @@ const mpos = {
 
     vars.fov.w = container.offsetWidth
     vars.fov.h = container.offsetHeight
-    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 1, vars.fov.max * 16)
+    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 4, vars.fov.max * 16)
 
     // inject mpos stage
     const template = document.createElement('template')
@@ -857,7 +849,7 @@ const mpos = {
 
               const dummy = mpos.add.box(rect, { add: newGeo, scroll: scroll, frame: r_frame })
 
-              if (dummy || rect.obj) {
+              if (rect.obj) {
                 // update visibility if loaded
                 // off-screen boxes may "seem" more visible than instancedMesh because they don't have a third state
                 let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
@@ -866,7 +858,7 @@ const mpos = {
 
               if (rect.obj && rect.obj.animate && rect.obj.animate.gif) {
                 // refresh SuperGif
-                rect.obj.material.map.needsUpdate = true
+                rect.obj.material[4].map.needsUpdate = true
               }
             })
           }
@@ -887,7 +879,8 @@ const mpos = {
             dummy && instanced.setMatrixAt(count, dummy.matrix)
 
             //
-            // Update feature difference (support background)... ad-hoc experiments like tooltip
+            // Update feature difference (support background)
+            // ...ad-hoc experiments like tooltip, catmull heatmap
             if (dataIdx === undefined || rect.ux.o) {
               newMap = true
               // Instance Color (first-run)
@@ -988,11 +981,19 @@ const mpos = {
         return
       } else if (opts.custom) {
         // load resource from external uri (into object)
-        await mpos.add.src(sel, opts.custom, 'data')
-        // use document contentDocument.body instead of CSS3D
-        if (sel.contentDocument) {
-          sel = sel.contentDocument.body
-        }
+        await mpos.add
+          .src(sel, opts.custom, 'data')
+          .then(function (res) {
+            console.log('res', res)
+            // use document contentDocument.body instead of CSS3D
+            if (sel.contentDocument) {
+              sel = sel.contentDocument.body
+            }
+          })
+          .catch((err) => {
+            console.error('err: ', err) // CORS
+            return
+          })
       }
 
       // OLD group
@@ -1070,7 +1071,10 @@ const mpos = {
       }
 
       // Atlas Units: relative device profile
-      grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 32
+      let wAvg = (vars.fov.w + sel.offsetWidth) / 2
+      let hAvg = (vars.fov.h + sel.offsetHeight) / 2
+
+      grade.minRes = Math.pow(2, Math.ceil(Math.max(wAvg, hAvg) / vars.fov.max)) * 32
       grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
       grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
       grade.canvas.width = grade.canvas.height = grade.maxRes
@@ -1206,11 +1210,7 @@ const mpos = {
 
       // Instanced Mesh, shader atlas
       const shader = mpos.add.shader(grade.canvas, grade.cells)
-      const instanced = new THREE.InstancedMesh(
-        vars.geo.clone(),
-        [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line],
-        grade.maxEls
-      )
+      const instanced = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line], grade.maxEls)
 
       instanced.layers.set(2)
       instanced.userData.shader = shader
@@ -1273,9 +1273,7 @@ const mpos = {
         object = css3d
       } else if (rect.mat === 'wire') {
         // mesh singleton
-        const mat = vars.mat.clone()
-        mat.color = new THREE.Color('cyan')
-        const mesh = new THREE.Mesh(vars.geo, mat)
+        const mesh = new THREE.Mesh(vars.geo, vars.mat_line)
         mesh.userData.el = rect.el
         mesh.animate = true
         object = mesh
@@ -1309,8 +1307,7 @@ const mpos = {
         z += zIndex * (vars.opt.depth * vars.fov.z)
 
         // separation for portal
-        const stencil = obj.isCSS3DObject || rect.mat === 'loader'
-        const extrude = stencil ? vars.fov.z / 2 : 0
+        const extrude = rect.mat !== 'self' && rect.mat !== 'child' ? 0.5 : 0
         z += extrude
 
         if (obj.isCSS3DObject) {
@@ -1513,7 +1510,7 @@ const mpos = {
       const texAtlas = new THREE.CanvasTexture(canvas)
       texAtlas.minFilter = THREE.NearestFilter
       // update
-      const m = mpos.var.mat_shader.clone()
+      const m = mpos.var.mat_shader
       m.uniforms.map.value = texAtlas
       m.uniforms.atlasSize.value = texStep
       // output
@@ -1522,8 +1519,8 @@ const mpos = {
     },
     src: function (el, url, attr) {
       return new Promise((resolve, reject) => {
-        el.onload = () => resolve(el)
-        el.onerror = () => reject(el)
+        el.onload = (e) => resolve(e)
+        el.onerror = (e) => reject(e)
         el.setAttribute(attr, url)
       })
     },
@@ -1652,6 +1649,8 @@ const mpos = {
         group.position.copy(dummy.position)
         group.position.x -= dummy.scale.x / 2
         group.position.y += dummy.scale.y / 2
+        // note: currently, group implies SVG/OpenCV which lack depth
+        group.translateZ(mpos.var.opt.depth / 2)
 
         mpos.ux.render()
       }
@@ -1681,10 +1680,10 @@ const mpos = {
       let object
       if (mime.match(/(WEBM|MP4|OGV)/g)) {
         // HANDLER: such as VideoTexture, AudioLoader...
-        const material = mpos.var.mat_shape.clone()
+        const material = vars.mat_shape.clone()
         const texture = new THREE.VideoTexture(source)
         material.map = texture
-        const mesh = new THREE.Mesh(vars.geo, material)
+        const mesh = new THREE.Mesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, material, vars.mat_line])
 
         mesh.matrix.copy(dummy.matrix)
         mesh.name = uri
@@ -1693,11 +1692,11 @@ const mpos = {
         object = mesh
       } else {
         let group = new THREE.Group()
+        let gc
         if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
           //
           // LOAD Element: OpenCV
 
-          let gc
           if (uri && !dummy) {
             // source element from uri file
             gc = source = document.createElement('img')
@@ -1725,11 +1724,15 @@ const mpos = {
         } else {
           //
           // LOAD Custom: stage specific or generic
+          if (mime.match('.GIF')) {
+            gc = source.cloneNode()
+            document.querySelector('#custom').appendChild(gc)
+          }
+
           loader = mime.match('.SVG')
             ? new SVGLoader()
             : mime.match('.GIF')
-            ? // SuperGif complains about no parent to insert, but its not wanted in the DOM
-              new SuperGif({ gif: source.cloneNode(), max_width: 128 })
+            ? new SuperGif({ gif: gc, max_width: 128 })
             : mime.match('.JSON')
             ? new THREE.ObjectLoader()
             : new THREE.FileLoader()
@@ -1765,12 +1768,12 @@ const mpos = {
               mpos.add.fit(dummy, group, { add: true })
             } else if (mime.match('.GIF')) {
               const canvas = loader.get_canvas()
-              // note: omggif, TextureLoader, GifLoader, ComposedTexture
-              const material = mpos.var.mat_shape.clone()
+              // SuperGif aka LibGif aka JsGif
+              // todo: manual frame index from delta
+              const material = vars.mat_shape.clone()
               material.map = new THREE.CanvasTexture(canvas)
-              material.transparent = true
 
-              const mesh = new THREE.Mesh(vars.geo, material)
+              const mesh = new THREE.Mesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, material, vars.mat_line])
               mesh.matrix.copy(dummy.matrix)
               mesh.name = uri
 
@@ -1785,9 +1788,20 @@ const mpos = {
               rect.ux.i = 1
               mesh.animate = { gif: loader }
               vars.grade.r_.queue.push(idx)
-              mpos.precept.update(mpos.var.grade, 'trim')
+              mpos.precept.update(vars.grade, 'trim')
 
-              // todo: manual frame index from delta
+              if (gc) {
+                gc = null
+                // resized
+                const gifs = document.querySelectorAll('#custom .libgif, #custom .jsgif')
+                gifs.forEach((gif) => {
+                  let c = gif.querySelector('canvas')
+                  c.parentElement.removeChild(c)
+                  c = null
+                  gif.innerHTML = ''
+                  gif.parentElement.removeChild(gif)
+                })
+              }
             }
           }
 
@@ -1984,6 +1998,7 @@ const mpos = {
         postRun: [
           function (e) {
             try {
+              const isSimple = Object.keys(kmeans).length < 4
               console.log('cv', Object.keys(kmeans).length, group.userData.el.getAttribute('data-idx'))
               // Shape from label contours
               Object.values(kmeans).forEach(function (label) {
@@ -2033,12 +2048,23 @@ const mpos = {
                   const material = mpos.var.mat_shape.clone()
 
                   material.color = color
+
+                  if (isSimple) {
+                    material.alphaHash = false
+                    material.transparent = true
+                  }
+
+                  if (rgba.a > 192) {
+                    if (isSimple) {
+                      material.transparent = false
+                    } else {
+                      material.alphaHash = false
+                    }
+                  }
+
                   if (rgba.a < 96) {
                     // alphaTest: alpha has been through a lot!
                     material.opacity = rgba.a / 255
-                  }
-                  if (rgba.a > 192) {
-                    material.alphaHash = false
                   }
 
                   // label contours

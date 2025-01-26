@@ -1,16 +1,26 @@
 /*
 MP SELECTORS */
 .mp-offscreen {
-  pointer-events: none;
-  > * { z-index: 999; }
-  &.tool { bottom: 8rem; }
+  /* pointer-events: none; */
+  > * {
+    z-index: 999;
+  }
+  &.tool {
+    bottom: 8rem;
+  }
+  .jsgif,
+  .libgif {
+    display: none;
+  }
 }
 
 .mp-unset {
   /* toggle CSS: toSvg, box/css, quirks, offscreen */
-  transform: initial!important;
+  transform: initial !important;
   /* pseudo states */
-  &:hover { background-color: initial; }
+  &:hover {
+    background-color: initial;
+  }
   &.mp-offscreen {
     /* full-size box
     position: absolute;
@@ -24,7 +34,7 @@ MP SELECTORS */
 
 .mp-host {
   position: absolute;
-  transform: initial!important;
+  transform: initial !important;
   /* more */
   rotate: none;
   scale: none;
@@ -44,32 +54,40 @@ MP SELECTORS */
   right: 0;
   z-index: 3;
 }
-  
 
 /* CSS3D: added to user stylesheet to target cloned elements */
 /* CSS3D: callout CORS media, such as injected iframes */
-#css3d > .mp-block > .mp-block > .mp-block > * { border: 0.125rem dotted red; }
-  
+#css3d > .mp-block > .mp-block > .mp-block > * {
+  border: 0.125rem dotted red;
+}
+
 /*
 MP INTERFACE */
 
 #mp {
   user-select: none;
   position: fixed;
-  &, .tool, .tool * {
+  &,
+  .tool,
+  .tool * {
     margin: 0;
     padding: 0;
   }
-  
+
   #css3d {
     z-index: 1;
-    pointer-events: none; 
-    .mp-block, .mp-block > .mp-block > .mp-block > .mp-native { 
-       pointer-events: none!important;
-       > * { pointer-events: initial; }
-    } 
+    pointer-events: none;
+    .mp-block,
+    .mp-block > .mp-block > .mp-block > .mp-native {
+      pointer-events: none !important;
+      > * {
+        pointer-events: initial;
+      }
+    }
   }
-  &, #css3d, canvas[data-engine] {
+  &,
+  #css3d,
+  canvas[data-engine] {
     overflow: hidden;
     /*overflow-y: auto;*/
     top: 0;
@@ -77,26 +95,29 @@ MP INTERFACE */
     width: 100%;
     height: 100%;
   }
-  #css3d, canvas[data-engine] {
+  #css3d,
+  canvas[data-engine] {
     position: absolute;
     cursor: crosshair;
   }
-  
+
   #atlas {
-    background-color: rgba( 255, 255, 255, 0.75 );
+    background-color: rgba(255, 255, 255, 0.75);
     overflow: hidden;
     overflow-y: auto;
     &:hover {
       transform: scale(2);
       transform-origin: bottom right;
     }
-    a { display: block; }
+    a {
+      display: block;
+    }
     canvas {
       width: 100%;
       height: auto;
       image-rendering: pixelated;
       background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
-      background-size: auto 100% ;
+      background-size: auto 100%;
     }
     #caret {
       /* index and inPolar */
@@ -110,5 +131,4 @@ MP INTERFACE */
       transition: bottom 0.25s, left 0.25s, width 0.25s, height 0.25s, backgroundColor 0.25s;
     }
   }
-  
 }
