@@ -15,20 +15,32 @@ const mpos = {
   var: {
     opt: {
       selector: 'main',
-      address: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
+      custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 16,
       inPolar: 3,
       arc: 0,
       delay: 0,
       update: function () {
-        mpos.add.dom(this.selector, { depth: this.depth })
+        let selector = this.selector
+        const options = { depth: this.depth }
+
+        if (this.selector === 'custom') {
+          if (this.custom.startsWith('//') || this.custom.startsWith('http')) {
+            selector = '#custom object'
+            options.custom = this.custom
+          } else {
+            selector = this.custom
+          }
+        }
+
+        mpos.add.dom(selector, options)
       }
     },
     fov: {
       w: window.innerWidth,
       h: window.innerHeight,
       z: 8,
-      max: 512
+      max: 1024
     },
     unset: {
       diffs: function (type, opts = {}) {
@@ -94,6 +106,7 @@ const mpos = {
       color: 'cyan',
       side: THREE.FrontSide
     }),
+    mat_shape: new THREE.MeshBasicMaterial({ alphaHash: true }),
     mat_line: new THREE.LineBasicMaterial({
       transparent: true,
       opacity: 0.5,
@@ -144,7 +157,6 @@ const mpos = {
       }
       `
     }),
-    mat_shape: new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
     raycaster: new THREE.Raycaster(),
     pointer: new THREE.Vector2()
   },
@@ -176,9 +188,9 @@ const mpos = {
     const template = document.createElement('template')
     template.innerHTML = `
     <section id='mp'>
-      <address class='tool mp-offscreen'>
+      <div class='tool mp-offscreen' id='custom'>
         <object></object>
-      </address>
+      </div>
       <aside class='tool' id='atlas'>
         <canvas></canvas>
         <hr id='caret' />
@@ -194,7 +206,7 @@ const mpos = {
 
     vars.camera.layers.enableAll()
     if (!vars.proxy) {
-      vars.camera.position.z = vars.fov.max *2
+      vars.camera.position.z = vars.fov.max * 2
       vars.renderer.setSize(vars.fov.w, vars.fov.h)
       mp.appendChild(domElement)
       vars.renderer.setClearColor(0x00ff00, 0)
@@ -256,7 +268,7 @@ const mpos = {
     gui.domElement.classList.add('mp-native')
     Object.keys(vars.opt).forEach(function (key) {
       const params = {
-        selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#gen', 'address']],
+        selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#gen', 'custom']],
         depth: [0, 32, 1],
         inPolar: [1, 4, 1],
         delay: [0, 300, 5],
@@ -405,7 +417,7 @@ const mpos = {
       vars.pointer.y = -(e.clientY / window.innerHeight) * 2 + 1
 
       const grade = vars.grade
-      if (grade) {
+      if (grade && !grade.wait) {
         vars.raycaster.setFromCamera(vars.pointer, vars.camera)
         let intersects = vars.raycaster.intersectObject(grade.instanced, false)
         intersects = intersects.filter(function (hit) {
@@ -768,9 +780,9 @@ const mpos = {
               canvasWidth: step,
               canvasHeight: step,
               pixelRatio: pixelRatio,
-              preferredFontFormat: 'woff',
+              preferredFontFormat: 'woff'
               //filter: function (node) {
-              //  todo: test clone children for diffs 
+              //  todo: test clone children for diffs
               //  return node
               //}
             }
@@ -946,47 +958,55 @@ const mpos = {
         //console.log('update', grade.minEls)
         return promise
       })
+    },
+    parse: function (node) {
+      console.log(node.nodeName, node.textContent)
+      if (node.textContent.indexOf('//_THREE') === 0) {
+        try {
+          eval(node.textContent)
+        } catch (error) {
+          console.log(error)
+        }
+      }
     }
   },
   add: {
     dom: async function (selector, opts = {}) {
       const vars = mpos.var
-      // options
-      selector = selector || vars.opt.selector || 'body'
-      const depth = opts.depth || vars.opt.depth || 8
-      const parse =
-        opts.parse ||
-        function (node) {
-          console.log(node.nodeName, node.textContent)
-          if (node.textContent.indexOf('//_THREE') === 0) {
-            try {
-              eval(node.textContent)
-            } catch (error) {
-              console.log(error)
-            }
-          }
-        }
-
-      // get DOM node or offscreen
-      const sel = document.querySelector(selector)
       const precept = mpos.precept
-      if (sel === null || vars.grade?.wait === 1) {
+
+      // Options
+      selector = selector || vars.opt.selector
+      const depth = opts.depth || vars.opt.depth
+      const parse = opts.parse || precept.parse
+
+      // Progress
+      let sel = document.querySelector(selector)
+      const grade_r = vars.grade
+      if (sel === null || (grade_r && grade_r.wait === Infinity && sel.isSameNode(grade_r.el))) {
+        // bad selector or busy
         return
-      } else if (selector === 'address') {
-        const obj = document.querySelector(selector + ' object')
-        await mpos.add.src(obj, vars.opt.address, 'data')
+      } else if (opts.custom) {
+        // load resource from external uri (into object)
+        await mpos.add.src(sel, opts.custom, 'data')
+        // use document contentDocument.body instead of CSS3D
+        if (sel.contentDocument) {
+          sel = sel.contentDocument.body
+        }
       }
 
       // OLD group
-      mpos.add.old(selector)
+      console.log(grade_r)
+      await mpos.add.old(selector)
       // NEW group
       const group = new THREE.Group()
       group.name = selector
 
       // structure
+      vars.grade = { wait: Infinity }
+
       const grade = {
         el: sel,
-        wait: 1,
         group: group,
         canvas: precept.canvas || document.createElement('canvas'),
         index: precept.index++,
@@ -1006,7 +1026,6 @@ const mpos = {
         ray: {}
         //scroll: { x: window.scrollX, y: -window.scrollY }
       }
-      vars.grade = grade
 
       // FLAT-GRADE: filter, grade, sanitize
       const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
@@ -1051,7 +1070,7 @@ const mpos = {
       }
 
       // Atlas Units: relative device profile
-      grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 64
+      grade.minRes = Math.pow(2, Math.ceil(Math.max(vars.fov.w, vars.fov.h) / vars.fov.max)) * 32
       grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
       grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
       grade.canvas.width = grade.canvas.height = grade.maxRes
@@ -1179,7 +1198,8 @@ const mpos = {
           mpos.ux.observer?.unobserve(rect.el)
           rect.el = rect.bound = null
           delete grade.rects[idx]
-          document.querySelector('[data-idx="' + idx + '"]').removeAttribute('data-idx')
+          const node = document.querySelector('[data-idx="' + idx + '"]')
+          node && node.removeAttribute('data-idx')
         }
       })
       grade.key = { x: 1 - 1 / grade.cells, y: 0.0001 }
@@ -1207,7 +1227,7 @@ const mpos = {
       group.add(instanced)
       vars.scene && vars.scene.add(group)
 
-      grade.wait = false
+      vars.grade = grade
       mpos.precept.update(grade)
       return grade
     },
@@ -1411,7 +1431,11 @@ const mpos = {
         let els = []
         let max = 8 // deep tree?
 
-        while (el && el !== document.body && max--) {
+        while (el && max--) {
+          if (el === document.body || !el.parentElement) {
+            break
+          }
+
           const r_ = rects[el.getAttribute('data-idx')]
 
           if (r_?.ux.o) {
@@ -1442,7 +1466,7 @@ const mpos = {
             }
           }
           els.unshift(el)
-          el = el.parentNode
+          el = el.parentElement
           //el = el.closest('.mp-unset')
         }
 
@@ -1504,44 +1528,50 @@ const mpos = {
       })
     },
     old: function (selector) {
-      // dispose of scene and release listeners
-      const groups = mpos.var.scene?.getObjectsByProperty('type', 'Group')
+      //console.log(mpos.var.renderer.info)
+      return new Promise((resolve, reject) => {
+        // dispose of scene and release listeners
+        const groups = mpos.var.scene?.getObjectsByProperty('type', 'Group')
 
-      if (groups && groups.length) {
-        for (let g = groups.length - 1; g >= 0; g--) {
-          const group = groups[g].children || []
-          for (let o = group.length - 1; o >= 0; o--) {
-            const obj = group[o]
-            if (obj.type === 'Mesh') {
-              if (obj.animate && obj.animate.gif) {
-                // SuperGif
-                obj.animate.gif.pause()
-                obj.animate.gif = null
-              }
+        if (groups && groups.length) {
+          for (let g = groups.length - 1; g >= 0; g--) {
+            const group = groups[g].children || []
+            for (let o = group.length - 1; o >= 0; o--) {
+              const obj = group[o]
+              if (obj.type === 'Mesh') {
+                if (obj.animate && obj.animate.gif) {
+                  // SuperGif
+                  obj.animate.gif.pause()
+                  obj.animate.gif = null
+                }
 
-              obj.geometry.dispose()
-              const material = obj.material
-              for (let m = material.length - 1; m >= 0; m--) {
-                const mat = material[m]
-                if (mat) {
-                  mat.canvas && (mat.canvas = null)
-                  mat.map && mat.map.dispose()
-                  // shader
-                  mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
-                  mat.userData.t && mat.userData.t.dispose()
-                  mat.dispose()
+                obj.geometry.dispose()
+                const material = obj.material
+                if (material.length) {
+                  for (let m = material.length - 1; m >= 0; m--) {
+                    const mat = material[m]
+                    if (mat) {
+                      mat.canvas && (mat.canvas = null)
+                      mat.map && mat.map.dispose()
+                      // shader
+                      mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
+                      mat.userData.t && mat.userData.t.dispose()
+                      mat.dispose()
+                    }
+                  }
+                } else {
+                  material.map && material.map.dispose()
+                  material.dispose()
                 }
               }
-              !material.length && material.dispose()
+              obj.removeFromParent()
             }
-            obj.removeFromParent()
+            groups[g].removeFromParent()
           }
-          groups[g].removeFromParent()
         }
-      }
 
-      // CSS3D
-      /*
+        // CSS3D
+        /*
       const css3d = mpos.var.rendererCSS.domElement
       const clones = css3d.querySelectorAll(':not(.mp-block)')
       clones.forEach(function (el) {
@@ -1549,13 +1579,55 @@ const mpos = {
       })
       */
 
-      // Shader Atlas
-      //let atlas = document.getElementById('atlas').children
-      //for (let c = atlas.length - 1; c >= 0; c--) {
-      // atlas[c].parentElement.removeChild(atlas[c])
-      //}
-      document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
-      mpos.ux.observer?.disconnect()
+        // Shader Atlas
+        //let atlas = document.getElementById('atlas').children
+        //for (let c = atlas.length - 1; c >= 0; c--) {
+        // atlas[c].parentElement.removeChild(atlas[c])
+        //}
+        document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
+        mpos.ux.observer?.disconnect()
+
+        //
+        // Performance ResourceTiming
+        // - clear it
+        // - entries against DOM to release last batch
+        function resourceUse(initiatorType = ['img', 'source', 'object', 'iframe']) {
+          const entries = []
+
+          /*'fetch','xmlhttprequest','script'*/
+          for (const res of window.performance.getEntriesByType('resource')) {
+            const media = initiatorType.indexOf(res.initiatorType) > -1
+            if (media) {
+              const name = res.name.split('/').pop()
+              if (!document.querySelector(`[src$="${name}"], [data$="${name}"]`)) {
+                // none use
+                //console.log('none:', res.initiatorType, name, res.name)
+              } else {
+                // some use and parent
+                ;['src', 'data'].forEach(function (attr) {
+                  let els = document.querySelectorAll(`[${attr}$="${name}"]`)
+                  if (els.length) {
+                    //console.log('some:', els)
+                    els.forEach(function (el) {
+                      //console.log('parent:', el.parentNode)
+                    })
+                    entries.push(els)
+                  }
+                })
+              }
+            }
+          }
+
+          //console.log('entries:', entries)
+          performance.clearResourceTimings()
+          return entries
+        }
+
+        resourceUse()
+
+        resolve('clear')
+        reject('no')
+      })
     },
     fit: function (dummy, group, opts = {}) {
       // scale group to element
@@ -1605,15 +1677,11 @@ const mpos = {
       let loader = !!((mime === 'File' && uri) || mime.match(/(JSON|SVG|GIF)/g))
       //console.log(loader, mime, uri)
 
-      const material = new THREE.MeshBasicMaterial({
-        side: THREE.FrontSide
-        //depthWrite: false
-      })
-
       //console.log(mime, uri, source, dummy, dummy.matrix)
       let object
       if (mime.match(/(WEBM|MP4|OGV)/g)) {
         // HANDLER: such as VideoTexture, AudioLoader...
+        const material = mpos.var.mat_shape.clone()
         const texture = new THREE.VideoTexture(source)
         material.map = texture
         const mesh = new THREE.Mesh(vars.geo, material)
@@ -1626,10 +1694,12 @@ const mpos = {
       } else {
         let group = new THREE.Group()
         if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
-          // ELEMENT: specific or generic
+          //
+          // LOAD Element: OpenCV
+
           let gc
           if (uri && !dummy) {
-            // dynamic resource needs element
+            // source element from uri file
             gc = source = document.createElement('img')
             source.src = uri
             let unset = document.querySelector('#mp address.mp-offscreen')
@@ -1642,43 +1712,50 @@ const mpos = {
           toCanvas(source, { style: vars.unset.style, width: width, height: height, pixelRatio: 1 })
             .then(function (canvas) {
               mpos.add.opencv(canvas, group, dummy)
-              // cleanup
-              gc && gc.parentElement.removeChild(gc)
-              source = canvas = null
+              canvas = null
             })
             .catch(function (error) {
               console.log('src problem', error)
             })
-        } else {
-          // LOADER: specific or generic
 
-          loader = mime.match('.JSON')
-            ? new THREE.ObjectLoader()
-            : mime.match('.SVG')
+          if (gc) {
+            gc.parentElement.removeChild(gc)
+            gc = source = null
+          }
+        } else {
+          //
+          // LOAD Custom: stage specific or generic
+          loader = mime.match('.SVG')
             ? new SVGLoader()
             : mime.match('.GIF')
             ? // SuperGif complains about no parent to insert, but its not wanted in the DOM
               new SuperGif({ gif: source.cloneNode(), max_width: 128 })
+            : mime.match('.JSON')
+            ? new THREE.ObjectLoader()
             : new THREE.FileLoader()
 
           function callback(data) {
             console.log('load', mime, data)
+
             if (mime === 'File') {
               // file is not image (XML?)
+            } else if (mime.match('.JSON')) {
+              // note: may be small, upside-down, just a light...?
+              group.add(data)
+              mpos.add.fit(dummy, group, { add: true })
             } else if (mime.match('.SVG')) {
               const paths = data.paths || []
 
               for (let i = 0; i < paths.length; i++) {
                 const path = paths[i]
-                let mat = material.clone()
-                mat.depthFunc = THREE.AlwaysDepth
-                mat.color = path.color
+                const material = mpos.var.mat_shape.clone()
+                material.color = path.color
 
                 const shapes = SVGLoader.createShapes(path)
                 for (let j = 0; j < shapes.length; j++) {
                   const shape = shapes[j]
-                  const geometry = new THREE.ShapeGeometry(shape)
-                  const mesh = new THREE.Mesh(geometry, mat)
+                  const geometry = new THREE.ShapeGeometry(shape, 2)
+                  const mesh = new THREE.Mesh(geometry, material)
 
                   group.add(mesh)
                 }
@@ -1689,6 +1766,7 @@ const mpos = {
             } else if (mime.match('.GIF')) {
               const canvas = loader.get_canvas()
               // note: omggif, TextureLoader, GifLoader, ComposedTexture
+              const material = mpos.var.mat_shape.clone()
               material.map = new THREE.CanvasTexture(canvas)
               material.transparent = true
 
@@ -1710,10 +1788,6 @@ const mpos = {
               mpos.precept.update(mpos.var.grade, 'trim')
 
               // todo: manual frame index from delta
-            } else if (mime.match('.JSON')) {
-              // note: may be small, upside-down, just a light...?
-              group.add(data)
-              mpos.add.fit(dummy, group, { add: true })
             }
           }
 
@@ -1956,23 +2030,26 @@ const mpos = {
                   // label color
                   const rgba = label.rgba
                   const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
-                  const mat = mpos.var.mat_shape.clone()
-                  mat.color = color
-                  if (rgba.a > 0 && rgba.a < 128) {
+                  const material = mpos.var.mat_shape.clone()
+
+                  material.color = color
+                  if (rgba.a < 96) {
                     // alphaTest: alpha has been through a lot!
-                    mat.opacity = rgba.a / 255
-                    mat.transparent = true
+                    material.opacity = rgba.a / 255
+                  }
+                  if (rgba.a > 192) {
+                    material.alphaHash = false
                   }
 
                   // label contours
                   const mergedBoxes = mergeGeometries(mergedGeoms)
-                  const mesh = new THREE.Mesh(mergedBoxes, mat)
+                  const mesh = new THREE.Mesh(mergedBoxes, material)
                   group.add(mesh)
                 }
               })
               kmeans = null
 
-              group.name = 'OPENCV'
+              group.name = 'OpenCV'
 
               mpos.add.fit(dummy, group, { add: true })
             } catch (error) {

@@ -7,20 +7,23 @@
     <script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js" async></script>
   </head>
   <body>
-    <details id="tools" class="mp-allow" open>
+    <details id="tools" class="mp-allow mp-unstyle" open>
       <div id="errorMessage"></div>
       <main>
-        <h2 class="mp-native">
+        <h2>
           <span>main</span>
           <label class="cycle">
-            <input type="checkbox" onChange="document.body.classList.toggle('mp-unstyle')" />
+            <input type="checkbox" checked onChange="document.body.classList.toggle('mp-unstyle')" />
             cycle
           </label>
         </h2>
-        <p class="cycle">
-          detect animation (not byproduct of box resize): instanceColor will change, although element matches mp-poster, not manually mp-native.
-          mp-native.
+        <p class="cycle stage">
+          differ tween: passive, overflow<br />
+          <em class="snake"><em><em><em>-</em></em></em></em>
+          <br />
+          Update queue attribute from cache of split-priority.<br />
         </p>
+        <div class="snake"><div><div><div>+</div></div></div></div>
         <aside id="native" class="tilt scroll">
           <h2>aside<span>#native</span></h2>
           <form onSubmit="return false;">
@@ -95,8 +98,8 @@
           <h2>section<span>#loader</span></h2>
           <p class="mp-loader">Class <span class="sup">mp-loader</span> TXT2IMG?</p>
           <object class="mp-loader w33 hinge" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=20"></object>
-          <img class="mp-loader w33 hinge" src="./image.jpg?t=20" crossorigin="anonymous" />
-          <img class="mp-loader w33 hinge" src="./image.gif?t=20" />
+          <img class="mp-loader w33 hinge" src="./image.jpg?t=21" crossorigin="anonymous" />
+          <img class="mp-loader w33 hinge" src="./image.gif?t=21" />
           <video class="mp-loader w33 hinge" crossorigin="anonymous" loop autoplay muted>
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
