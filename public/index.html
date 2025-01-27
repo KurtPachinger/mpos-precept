@@ -5,6 +5,15 @@
     <link rel="stylesheet" href="styles.css" />
     <script src="opencv.js" async></script>
     <script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js" async></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
   <body>
     <details id="tools" class="mp-allow mp-unstyle" open>
       <div id="errorMessage"></div>
@@ -102,13 +111,19 @@
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
           </video>
-          <div class='w33'>
-            <m class='march mp-allow'>
-            <m class='mp-allow'><m class='mp-allow'><m class='mp-allow'>
-            <object class="mp-loader" data="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json" style='display:block;width:2em;height:2em'></object>
-            </m></m></m>
+          <div class="w33">
+            <m class="march mp-allow">
+              <m class="mp-allow"
+                ><m class="mp-allow"
+                  ><m class="mp-allow">
+                    <object
+                      class="mp-loader"
+                      data="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json"
+                      style="display: block; width: 2em; height: 2em"
+                    ></object> </m></m
+              ></m>
             </m>
-            </div>
+          </div>
         </section>
         <section id="media" class="sub">
           <h2>section<span>#media</span></h2>
@@ -232,46 +247,8 @@
       </main>
     </details>
     <script>
-      function snake(selector, count = 4, symbol = '') {
-        let nodeName = 'm'
-        let snakes = document.createElement(nodeName)
-        snakes.classList.add('march', 'mp-allow')
-        let last = snakes
-        while (--count) {
-          let snake = document.createElement(nodeName)
-          snake.classList.add('mp-allow')
-          if(count%2===0){snake.classList.add('zebra')}
-          last.append(snake)
-          last = snake
-        }
-        last.innerText = symbol
-        document.querySelector(selector).prepend(snakes)
-      }
-    </script>
-  </head>
-    <script>
-      // mode: proxy
-
-      /*
-      import { Scene, PerspectiveCamera, WebGLRenderer, MeshBasicMaterial, BoxGeometry, Mesh } from 'three'
-      const container = document.createElement('div')
-      document.body.appendChild(container)
-      container.style.width = container.style.height = '16rem'
-      const scene = new Scene()
-      const camera = new PerspectiveCamera(45, 1, 0.01, 1920 * 16)
-      camera.position.z = 640
-      const renderer = new WebGLRenderer()
-      renderer.setClearColor(0x00ff00, 0)
-      renderer.setSize(container.offsetWidth, container.offsetHeight)
-      container.appendChild(renderer.domElement)
-
-      const test = new Mesh(new BoxGeometry(160, 160, 160), new MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.25 }))
-      scene.add(test)
-      renderer.render(scene, camera)
-
-      mpos.init({ scene: scene, camera: camera, renderer: renderer })
-      */
-
+      //
+      // Begin!
       const mp = setInterval(() => {
         if (typeof window.mpos !== 'undefined') {
           clearInterval(mp)
@@ -282,12 +259,32 @@
           snake('#overflow', 4, '-')
           snake('#underflow', 4, '+')
           snake('#nest', 16)
-          
+
           mpos.add.dom().then(function (grade) {
             console.log('grade', grade)
           })
         }
       }, 250)
+
+      //
+      // Filler Content
+      function snake(selector, count = 4, symbol = '') {
+        let nodeName = 'm'
+        let snakes = document.createElement(nodeName)
+        snakes.classList.add('march', 'mp-allow')
+        let last = snakes
+        while (--count) {
+          let snake = document.createElement(nodeName)
+          snake.classList.add('mp-allow')
+          if (count % 2 === 0) {
+            snake.classList.add('zebra')
+          }
+          last.append(snake)
+          last = snake
+        }
+        last.innerText = symbol
+        document.querySelector(selector).prepend(snakes)
+      }
     </script>
   </body>
 </html>
