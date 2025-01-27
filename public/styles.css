@@ -51,8 +51,9 @@ body {
     margin-bottom: var(--u2);
   }
   .resize {
-    overflow: auto;
-    resize: horizontal;
+    resize: both;
+    overflow: hidden;
+    overflow-y: auto;
   }
   .scroll {
     overflow: hidden;
@@ -95,12 +96,15 @@ body {
   /*
   ELEMENTS */
   #nest {
+    font-size: 1.5em;
+    margin: 1rem 0 var(--u2);
+    background-color: rgba(255, 255, 128, 0.5);
     div,
     span,
     section {
-      float: left;
       width: 50%;
-      height: 1rem;
+      float: left;
+      text-align: center;
       background-color: rgba(128, 128, 128, 0.25);
     }
   }
@@ -266,8 +270,15 @@ EFFECTS, ANIMATION */
   }
 }
 
-.lil-gui.root .title {
-  overflow: hidden;
+.lil-gui.root {
+  .title {
+    overflow: hidden;
+  }
+  div:before,
+  div:after {
+    /* CDN serves garbage after throttling (arrow) */
+    content: '' !important;
+  }
 }
 
 /* test: reflow, update */
@@ -295,20 +306,18 @@ EFFECTS, ANIMATION */
   position: relative;
   overflow: visible;
 }
-.snake,
-.snake em,
-.snake div,
-.snake :after,
-.snake :before {
+.march,
+.march m,
+.march :after,
+.march :before {
   display: block;
   width: 1em;
   height: 1em;
   position: absolute;
   text-align: center;
 }
-.snake,
-.snake em,
-.snake div {
+.march,
+.march m {
   animation: snake 12s linear infinite alternate;
   background-color: rgba(255, 0, 0, 0.5);
   position: relative;
@@ -334,40 +343,36 @@ EFFECTS, ANIMATION */
     width: 2em;
   }
 
-  em,
-  div,
-  em em,
-  div div {
+  m,
+  m m {
     font-size: 1.25em;
     bottom: 0.125em;
   }
 
-  em em,
-  div div,
-  em em em em,
-  div div div div {
+  m m,
+  m m m m {
     transform: translate(0.5em, 0);
   }
 
-  em,
-  div {
+  m {
     animation-delay: 0.125s;
     z-index: 1;
-    em,
-    div {
+    m {
       animation-delay: 0.25s;
       z-index: 1;
-      em,
-      div {
+      m {
         animation-delay: 0.5s;
         z-index: 2;
-        em,
-        div {
+        m {
           animation-delay: 0.75s;
           z-index: 3;
         }
       }
     }
+  }
+
+  m.zebra {
+    background-color: rgba(0, 0, 255, 0.5);
   }
 }
 

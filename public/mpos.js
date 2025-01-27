@@ -16,7 +16,7 @@ const mpos = {
     opt: {
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
-      depth: 16,
+      depth: 8,
       inPolar: 3,
       arc: 0,
       delay: 0,
@@ -109,6 +109,8 @@ const mpos = {
       wireframe: true
     }),
     mat_shader: new THREE.RawShaderMaterial({
+      //discourse.threejs.org/t/13221/18
+      //discourse.threejs.org/t/33191/12
       uniforms: {
         map: {
           type: 't',
@@ -161,9 +163,9 @@ const mpos = {
     vars.renderer =
       opts.renderer ||
       new THREE.WebGLRenderer({
-        antialias: false,
-        precision: 'lowp',
-        powerPreference: 'low-power'
+        //antialias: false,
+        //precision: 'lowp',
+        //powerPreference: 'low-power',
       })
     vars.renderer.setPixelRatio(1)
     const domElement = vars.renderer.domElement
@@ -174,7 +176,8 @@ const mpos = {
 
     vars.fov.w = container.offsetWidth
     vars.fov.h = container.offsetHeight
-    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, 4, vars.fov.max * 16)
+    const frustum = vars.fov.max * vars.opt.depth
+    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, vars.fov.w / vars.fov.h, vars.fov.z / 2, frustum * 4)
 
     // inject mpos stage
     const template = document.createElement('template')
@@ -198,7 +201,7 @@ const mpos = {
 
     vars.camera.layers.enableAll()
     if (!vars.proxy) {
-      vars.camera.position.z = vars.fov.max * 2
+      vars.camera.position.z = frustum / 8
       vars.renderer.setSize(vars.fov.w, vars.fov.h)
       mp.appendChild(domElement)
       vars.renderer.setClearColor(0x00ff00, 0)
@@ -216,6 +219,7 @@ const mpos = {
 
     vars.controls = new MapControls(vars.camera, domElement)
     vars.controls.screenSpacePanning = true
+    vars.controls.maxDistance = frustum
 
     const halfHeight = -(vars.fov.h / 2)
     vars.camera.position.setY(halfHeight + 0.125)
@@ -382,8 +386,8 @@ const mpos = {
           if (obj.animate) {
             if (obj.animate === true) {
               // wiggle root
-              obj.rotation.x = Math.sin(time) / 10
-              obj.rotation.y = Math.cos(time) / 10
+              obj.rotation.x = Math.sin(time) / 40
+              obj.rotation.y = Math.cos(time) / 40
             } else if (obj.animate.gif) {
               // refresh SuperGif
               obj.material.map.needsUpdate = true
@@ -481,7 +485,6 @@ const mpos = {
         clientX: uv.x * element.offsetWidth + element.offsetLeft + scrollX,
         clientY: uv.y * element.offsetHeight + element.offsetTop + scrollY,
         view: element.ownerDocument.defaultView
-        //
         //bubbles: true,
         //cancelable: true
       }
@@ -526,6 +529,13 @@ const mpos = {
     inPolar: function (rect, control) {
       const node = rect.el
       let vis = node && (node.tagName || node.textContent.trim()) ? 1 : false
+
+      if (rect.css) {
+        // LIFO
+        const onion = typeof rect.z === 'number' ? rect.z <= mpos.var.opt.depth : false
+        vis = vis && onion ? vis : 0
+      }
+
       if (vis) {
         if (node.nodeName === '#text' && typeof control === 'object') {
           // node relative in control plot
@@ -1298,16 +1308,21 @@ const mpos = {
           y += scroll.y - bound.top
         }
 
-        let z = (rect.z || 0) * d
-        let zIndex = Number(rect.css?.style?.zIndex || 0)
+        // z subset mimics DOM honor (not 100% faithful)
+        // being expanded (for z-target ux) AND compressed (into view frustum)
+        const zGrade = rect.z // NodeIterator index [ 1, 2, 3 ... ] from selector
+        const zIndex = rect.css?.style?.zIndex || 'auto' // user-agent stylesheet
+        let zDomain = zIndex === 'auto' // inheritance assigned (mimic DOM honor)
+        const zSign = zDomain || zIndex >= 0 ? 1 : -1
 
-        const sign = zIndex >= 0 ? 1 : -1
-        zIndex = 1 - 1 / (Math.abs(zIndex) || 1)
-        zIndex *= sign
-        z += zIndex * (vars.opt.depth * vars.fov.z)
+        // SCALE domain => range
+        let zRange = zGrade + (zDomain ? 0 : Math.abs(zIndex))
+        const zScale = 1 - 1 / (zRange + 1)
 
-        // separation for portal
-        const extrude = rect.mat !== 'self' && rect.mat !== 'child' ? 0.5 : 0
+        let z = zSign * zScale * vars.fov.z
+
+        // extrude bias to cure shadow acne
+        const extrude = rect.mat !== 'self' && rect.mat !== 'child' ? vars.fov.z / 8 : 0
         z += extrude
 
         if (obj.isCSS3DObject) {
@@ -1387,8 +1402,8 @@ const mpos = {
 
       function getBound(element) {
         let bound = element.getBoundingClientRect()
-        //bound.width = element.offsetWidth;
-        //bound.height= element.offsetHeight;
+        //bound.width = element.clientWidth;
+        //bound.height= element.clientHeight;
         return bound
       }
 
@@ -1650,7 +1665,7 @@ const mpos = {
         group.position.x -= dummy.scale.x / 2
         group.position.y += dummy.scale.y / 2
         // note: currently, group implies SVG/OpenCV which lack depth
-        group.translateZ(mpos.var.opt.depth / 2)
+        group.translateZ(mpos.var.fov.z / 2)
 
         mpos.ux.render()
       }
@@ -2062,7 +2077,7 @@ const mpos = {
 
                   if (rgba.a > 192) {
                     //material.alphaHash = false
-                  }else if (rgba.a < 128) {
+                  } else if (rgba.a < 128) {
                     // alphaTest: alpha has been through a lot!
                     material.opacity = rgba.a / 255
                   }

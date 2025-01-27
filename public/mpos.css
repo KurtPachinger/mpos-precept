@@ -77,10 +77,13 @@ MP INTERFACE */
   #css3d {
     z-index: 1;
     pointer-events: none;
+    
     .mp-block,
     .mp-block > .mp-block > .mp-block > .mp-native {
       pointer-events: none !important;
       > * {
+        backface-visibility: hidden;
+        /* rgb(0 0 0 / 33.33%) */
         pointer-events: initial;
       }
     }

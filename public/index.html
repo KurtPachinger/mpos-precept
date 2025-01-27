@@ -5,7 +5,6 @@
     <link rel="stylesheet" href="styles.css" />
     <script src="opencv.js" async></script>
     <script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js" async></script>
-  </head>
   <body>
     <details id="tools" class="mp-allow mp-unstyle" open>
       <div id="errorMessage"></div>
@@ -17,21 +16,12 @@
             cycle
           </label>
         </h2>
-        <p class="cycle stage">
+        <p class="cycle stage" id="overflow">
           differ tween: passive, overflow<br />
-          <em class="snake"
-            ><em
-              ><em><em>-</em></em></em
-            ></em
-          >
           <br />
           Update queue attribute from cache of split-priority.<br />
         </p>
-        <div class="snake">
-          <div>
-            <div><div>+</div></div>
-          </div>
-        </div>
+        <div class="stage" id="underflow"></div>
         <aside id="native" class="tilt scroll">
           <h2>aside<span>#native</span></h2>
           <form onSubmit="return false;">
@@ -112,10 +102,13 @@
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
           </video>
-          <object
-            class="mp-loader w33 pulse"
-            data="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json"
-          ></object>
+          <div class='w33'>
+            <m class='march mp-allow'>
+            <m class='mp-allow'><m class='mp-allow'><m class='mp-allow'>
+            <object class="mp-loader" data="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json" style='display:block;width:2em;height:2em'></object>
+            </m></m></m>
+            </m>
+            </div>
         </section>
         <section id="media" class="sub">
           <h2>section<span>#media</span></h2>
@@ -239,6 +232,24 @@
       </main>
     </details>
     <script>
+      function snake(selector, count = 4, symbol = '') {
+        let nodeName = 'm'
+        let snakes = document.createElement(nodeName)
+        snakes.classList.add('march', 'mp-allow')
+        let last = snakes
+        while (--count) {
+          let snake = document.createElement(nodeName)
+          snake.classList.add('mp-allow')
+          if(count%2===0){snake.classList.add('zebra')}
+          last.append(snake)
+          last = snake
+        }
+        last.innerText = symbol
+        document.querySelector(selector).prepend(snakes)
+      }
+    </script>
+  </head>
+    <script>
       // mode: proxy
 
       /*
@@ -266,6 +277,12 @@
           clearInterval(mp)
           // mode: standalone
           mpos.init()
+
+          // toast some march-mpallows
+          snake('#overflow', 4, '-')
+          snake('#underflow', 4, '+')
+          snake('#nest', 16)
+          
           mpos.add.dom().then(function (grade) {
             console.log('grade', grade)
           })
