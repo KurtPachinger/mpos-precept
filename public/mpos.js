@@ -436,7 +436,6 @@ const mpos = {
           const atlas = hit.object.isInstancedMesh
           let target = atlas ? hit.instanceId : 'r_other_idx_' + hit.object.userData.el.getAttribute('data-idx')
 
-
           return vars.ux.target.has(target)
         })
 
