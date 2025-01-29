@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <title>mpos-precept</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="styles.css" />
     <script src="opencv.js" async></script>
@@ -14,22 +15,24 @@
       }
     </script>
   </head>
-  <body>
-    <details id="tools" class="mp-allow mp-unstyle" open>
-      <div id="errorMessage"></div>
-      <main>
-        <h2>
-          <span>main</span>
-          <label class="cycle">
-            <input type="checkbox" checked onChange="document.body.classList.toggle('mp-unstyle')" />
-            cycle
-          </label>
-        </h2>
-        <p class="cycle stage" id="overflow">
-          differ tween: passive, overflow<br />
-          <br />
-          Update queue attribute from cache of split-priority.<br />
-        </p>
+  <body class="mp-unstyle">
+    <div id="errorMessage"></div>
+    <main>
+      <h2>
+        <span>main</span>
+        <label class="cycle">
+          <input type="checkbox" checked onChange="document.body.classList.toggle('mp-unstyle')" />
+          cycle
+        </label>
+      </h2>
+      <p class="cycle stage" id="overflow">
+        differ tween: passive, overflow<br />
+        <br />
+        Update queue attribute from cache of split-priority.<br />
+      </p>
+      <details id="tools" class="mp-allow" open>
+        <summary>Static Content</summary>
+
         <div class="stage" id="underflow"></div>
         <aside id="native" class="tilt scroll">
           <h2>aside<span>#native</span></h2>
@@ -89,7 +92,7 @@
             <div>
               <div>
                 <div>
-                  <div><a href="#anchor">A</a></div>
+                  <div><a href="#">A</a></div>
                   <div>B</div>
                 </div>
                 <div><span></span><span></span></div>
@@ -105,31 +108,33 @@
           <h2>section<span>#loader</span></h2>
           <p class="mp-loader">Class <span class="sup">mp-loader</span> TXT2IMG?</p>
           <object class="mp-loader w33 hinge" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=20"></object>
-          <img class="mp-loader w33 hinge" src="./image.jpg?t=21" crossorigin="anonymous" />
-          <img class="mp-loader w33 hinge" src="./image.gif?t=21" />
+          <img alt="" class="mp-loader w33 hinge" src="./image.jpg?t=21" crossorigin="anonymous" />
+          <img alt="" class="mp-loader w33 hinge" src="./image.gif?t=21" />
           <video class="mp-loader w33 hinge" crossorigin="anonymous" loop autoplay muted>
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
           </video>
           <div class="w33">
-            <m class="march mp-allow">
-              <m class="mp-allow"
-                ><m class="mp-allow"
-                  ><m class="mp-allow">
+            <mp class="march mp-allow">
+              <mp class="mp-allow">
+                <mp class="mp-allow">
+                  <mp class="mp-allow">
                     <object
                       class="mp-loader"
                       data="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json"
                       style="display: block; width: 2em; height: 2em"
-                    ></object> </m></m
-              ></m>
-            </m>
+                    ></object>
+                  </mp>
+                </mp>
+              </mp>
+            </mp>
           </div>
         </section>
         <section id="media" class="sub">
           <h2>section<span>#media</span></h2>
           <article>
-            <img class="w33 hinge" src="./image.jpg?t=20" />
-            <img class="w33 hinge" src="./image.gif?t=20" />
+            <img alt="" class="w33 hinge" src="./image.jpg?t=20" />
+            <img alt="" class="w33 hinge" src="./image.gif?t=20" />
           </article>
           <details open class="mp-allow tilt">
             <summary>types</summary>
@@ -209,12 +214,13 @@
             </table>
           </details>
         </section>
-        <a name="anchor"></a>
-        <details id="gen" class="mp-allow" open>
+        <details id="live" class="mp-allow" open>
+          <summary class="mp-native">section<span>#live</span></summary>
+
           <article>
-            <h2>Donec auctor id leo eu varius.</h2>
+            <h2>Article 01</h2>
             <p>Praesent in elementum risus, a vehicula justo.</p>
-            <img class="w50" src="data:," style="height: 8em; background-color: rgb(128, 0, 0)" />
+            <img alt="" class="w50" src="data:," style="height: 8em; background-color: rgb(128, 0, 0)" />
             <ul>
               <span class="mp-poster" style="display: initial">Phasellus eu sapien tellus. </span>
               <li>Praesent in elementum risus, a vehicula justo.</li>
@@ -223,9 +229,9 @@
             </ul>
           </article>
           <article>
-            <h2>Donec auctor id leo eu varius.</h2>
+            <h2>Article 02</h2>
             <p>Praesent in elementum risus, a vehicula justo.</p>
-            <img class="w100" src="data:," style="height: 8em; background-color: rgb(0, 128, 0)" />
+            <img alt="" class="w100" src="data:," style="height: 8em; background-color: rgb(0, 128, 0)" />
             <ul>
               <li>Nunc at dolor lacus.</li>
               <li>Lorem ipsum dolor sit amet.</li>
@@ -233,9 +239,9 @@
             </ul>
           </article>
           <article>
-            <h2>Praesent in elementum risus, a vehicula justo.</h2>
+            <h2>Article 03</h2>
             <p>Consectetur adipiscing elit.</p>
-            <img class="w50" src="data:," style="height: 8em; background-color: rgb(0, 0, 128)" />
+            <img alt="" class="w50" src="data:," style="height: 8em; background-color: rgb(0, 0, 128)" />
             <ul>
               Sed viverra quis nisl et vulputate.
               <li>Phasellus eu sapien tellus.</li>
@@ -244,8 +250,8 @@
             </ul>
           </article>
         </details>
-      </main>
-    </details>
+      </details>
+    </main>
     <script>
       //
       // Begin!
@@ -260,7 +266,7 @@
           snake('#underflow', 4, '+')
           snake('#nest', 16)
 
-          mpos.add.dom().then(function (grade) {
+          mpos.add().then(function (grade) {
             console.log('grade', grade)
           })
         }
@@ -269,7 +275,7 @@
       //
       // Filler Content
       function snake(selector, count = 4, symbol = '') {
-        let nodeName = 'm'
+        let nodeName = 'mp'
         let snakes = document.createElement(nodeName)
         snakes.classList.add('march', 'mp-allow')
         let last = snakes

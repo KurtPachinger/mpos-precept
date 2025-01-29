@@ -9,7 +9,7 @@
     "threejs",
     "foldable"
   ],
-  "main": "public/mpos.js",
+  "main": "./public/mpos.js",
   "dependencies": {
     "html-to-image": "1.11.11",
     "three": "0.172.0"

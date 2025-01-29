@@ -12,7 +12,7 @@ body {
   height: 100%;
 }
 
-#tools {
+main {
   /* 
   RESET */
   &,
@@ -33,7 +33,7 @@ body {
 
   /* 
   STRUCTURE */
-  main,
+  &,
   section,
   article,
   aside,
@@ -61,8 +61,7 @@ body {
     max-height: 12rem;
   }
 
-  &,
-  #main {
+  & {
     /*user-select: none;*/
     position: absolute;
     z-index: 2;
@@ -143,7 +142,7 @@ body {
   table tr,
   li,
   summary {
-    &:hover {
+    &:hover, &:focus {
       background-color: var(--sub);
     }
   }
@@ -156,13 +155,15 @@ body {
   STYLE */
 
   /* accents */
-  h2 {
+  h2,
+  details {
     border-top: var(--u1) solid var(--sup);
     font-style: normal;
     font-weight: normal;
   }
   .sup,
-  h2 span {
+  h2 span,
+  summary span {
     background-color: var(--sup);
   }
   .sub {
@@ -286,6 +287,12 @@ EFFECTS, ANIMATION */
   .hinge {
     animation: hinge 12s linear infinite;
   }
+  .march mp {
+    animation: snake 12s linear infinite alternate;
+  }
+  span.mp-poster {
+    box-shadow: inset 0 -0.125em 0 0 var(--sub);
+  }
 }
 
 .w33:hover {
@@ -293,7 +300,7 @@ EFFECTS, ANIMATION */
   transition: 3s scale;
 }
 
-#gen img.w50:hover {
+#live img.w50:hover {
   width: 100%;
   transition: width 2s;
 }
@@ -306,73 +313,80 @@ EFFECTS, ANIMATION */
   position: relative;
   overflow: visible;
 }
-.march,
-.march m,
-.march :after,
-.march :before {
-  display: block;
-  width: 1em;
-  height: 1em;
-  position: absolute;
-  text-align: center;
-}
-.march,
-.march m {
+
+.march {
   animation: snake 12s linear infinite alternate;
-  background-color: rgba(255, 0, 0, 0.5);
-  position: relative;
-  border-radius: 0.25em;
-  box-shadow: rgba(255, 255, 255, 0.75) 0em 0.125em 0.25em 0.125em inset, rgba(0, 0, 0, 0.25) 0px -0.125em 0.125em 0.125em inset;
-  pointer-events: none;
-
-  :after,
-  :before {
-    content: '';
-    position: absolute;
-    font-size: 0.5em;
-    animation-delay: 0.25s;
-    border-radius: 0.5em 0.5em 0.25em 0.25em;
-  }
-  :after {
-    background-color: rgba(255, 255, 0, 0.25);
-    top: 2em;
-    left: -0.5em;
-  }
-  :before {
-    background-color: rgba(0, 255, 128, 0.25);
-    width: 2em;
+  & mp {
+    animation: none;
   }
 
-  m,
-  m m {
+  &,
+  mp {
+    background-color: rgba(255, 0, 0, 0.5);
+    position: relative;
+    border-radius: 0.25em;
+    box-shadow: rgba(255, 255, 255, 0.75) 0em 0.125em 0.25em 0.125em inset, rgba(0, 0, 0, 0.25) 0px -0.125em 0.125em 0.125em inset;
+    pointer-events: none;
+
+    mp.zebra {
+      background-color: rgba(0, 0, 255, 0.5);
+    }
+
+    &,
+    & :after,
+    & :before {
+      display: block;
+      width: 1em;
+      height: 1em;
+      text-align: center;
+    }
+
+    :after,
+    :before {
+      content: '';
+      position: absolute;
+      font-size: 0.5em;
+      animation-delay: 0.25s;
+      border-radius: 0.5em 0.5em 0.25em 0.25em;
+    }
+    :after {
+      background-color: rgba(255, 255, 0, 0.25);
+      top: 2em;
+      left: -0.5em;
+    }
+    :before {
+      background-color: rgba(0, 255, 128, 0.25);
+      width: 2em;
+    }
+  }
+
+  mp,
+  mp mp {
     font-size: 1.25em;
     bottom: 0.125em;
   }
 
-  m m,
-  m m m m {
+  mp mp,
+  mp mp mp mp {
     transform: translate(0.5em, 0);
   }
 
-  m {
+  /* wiggle */
+  mp {
     animation-delay: 0.125s;
     z-index: 1;
-    m {
+    mp {
       animation-delay: 0.25s;
       z-index: 1;
-      m {
+      mp {
         animation-delay: 0.5s;
         z-index: 2;
-        m {
+        mp {
           animation-delay: 0.75s;
           z-index: 3;
         }
       }
     }
-  }
-
-  m.zebra {
-    background-color: rgba(0, 0, 255, 0.5);
   }
 }
 

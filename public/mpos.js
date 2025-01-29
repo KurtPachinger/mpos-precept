@@ -1,18 +1,19 @@
 import './mpos.css'
-// OpenCV and SuperGif
+
 import { toCanvas } from 'html-to-image'
 import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
-import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import Stats from 'three/examples/jsm/libs/stats.module.js'
-//
+// ...OpenCV and SuperGif
 
 const mpos = {
   var: {
+    count: 0,
     opt: {
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
@@ -33,7 +34,7 @@ const mpos = {
           }
         }
 
-        mpos.add.dom(selector, options)
+        mpos.add(selector, options)
       }
     },
     fov: {
@@ -43,56 +44,6 @@ const mpos = {
       max: 1024
     },
     unset: {
-      diffs: function (type, opts = {}) {
-        let differ = false
-        let style = opts.style || {}
-
-        if (type === 'rect') {
-          differ = !opts.node.clientWidth || !opts.node.clientHeight
-          // note: opts.whitelist for quirks..?
-          //&& el.matches('a, img, object, span, xml, :is(:empty)')
-        } else if (type === 'matrix') {
-          // note: style may be the frame copy uninitialized or accumulating
-          differ = style.transform?.startsWith('matrix')
-        } else if (type === 'tween') {
-          differ =
-            style.transform !== 'none' ||
-            style.transitionDuration !== '0s' ||
-            (style.animationName !== 'none' && style.animationPlayState === 'running')
-        } else if (type === 'float') {
-          // TRBL; panel (HUD, GUI) may overflow scrollOffset
-          differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
-          //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
-        } else if (type === 'pseudo') {
-          // note: let pseudo update rect frame (before return)
-          let rect = opts.rect
-          let css = rect.css
-          if (css) {
-            let capture = opts.capture
-            capture = capture || {
-              // deepest pseudo match
-              hover: [...opts.sel.querySelectorAll(':hover')].pop(),
-              active: [...opts.sel.querySelectorAll(':active')].pop(),
-              focus: [...opts.sel.querySelectorAll(':focus')].pop()
-            }
-
-            // pseudo (or prior frame) enqueued for atlas
-            differ = css.pseudo
-            css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
-            differ = differ || css.pseudo
-
-            rect.ux.p = differ
-          }
-        }
-
-        if (opts.node) {
-          // node may be set manually
-          // check on tail, so other updates (like pseudo) bubble to queue
-          differ = differ || opts.node.classList.contains('mp-diff')
-        }
-
-        return differ
-      },
       style: {
         margin: 'initial',
         transform: 'initial'
@@ -151,8 +102,62 @@ const mpos = {
       }
       `
     }),
-    raycaster: new THREE.Raycaster(),
-    pointer: new THREE.Vector2()
+    ux: {
+      target: new Set(),
+      synthetic: {},
+      raycaster: new THREE.Raycaster(),
+      pointer: new THREE.Vector2()
+    }
+  },
+  diffs: function (type, opts = {}) {
+    let differ = false
+    let style = opts.style || {}
+
+    if (type === 'rect') {
+      differ = !opts.node.clientWidth || !opts.node.clientHeight
+      // note: opts.whitelist for quirks..?
+      //&& el.matches('a, img, object, span, xml, :is(:empty)')
+    } else if (type === 'matrix') {
+      // note: style may be the frame copy uninitialized or accumulating
+      differ = style.transform?.startsWith('matrix')
+    } else if (type === 'tween') {
+      differ =
+        style.transform !== 'none' ||
+        style.transitionDuration !== '0s' ||
+        (style.animationName !== 'none' && style.animationPlayState === 'running')
+    } else if (type === 'float') {
+      // TRBL; panel (HUD, GUI) may overflow scrollOffset
+      differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
+      //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
+    } else if (type === 'pseudo') {
+      // note: let pseudo update rect frame (before return)
+      let rect = opts.rect
+      let css = rect.css
+      if (css) {
+        let capture = opts.capture
+        capture = capture || {
+          // deepest pseudo match
+          hover: [...opts.sel.querySelectorAll(':hover')].pop(),
+          active: [...opts.sel.querySelectorAll(':active')].pop(),
+          focus: [...opts.sel.querySelectorAll(':focus')].pop()
+        }
+
+        // pseudo (or prior frame) enqueued for atlas
+        differ = css.pseudo
+        css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
+        differ = differ || css.pseudo
+
+        rect.ux.p = differ
+      }
+    }
+
+    if (opts.node) {
+      // node may be set manually
+      // check on tail, so other updates (like pseudo) bubble to queue
+      differ = differ || opts.node.classList.contains('mp-diff')
+    }
+
+    return differ
   },
   init: function (opts = {}) {
     const vars = this.var
@@ -194,7 +199,7 @@ const mpos = {
     </section>`
 
     container.appendChild(template.content)
-    mpos.precept.canvas = document.querySelector('#atlas canvas')
+    mpos.var.atlas = document.querySelector('#atlas canvas')
     vars.caret = document.getElementById('caret')
     const mp = vars.proxy ? container : document.getElementById('mp')
     mp.classList.add('mp-block')
@@ -227,12 +232,12 @@ const mpos = {
     vars.controls.update()
 
     // reveal
-    vars.raycaster.layers.set(2)
+    vars.ux.raycaster.layers.set(2)
     mpos.ux.render()
 
     // user events: scene
     vars.controls.addEventListener('change', mpos.ux.render, false)
-    domElement.addEventListener('pointermove', mpos.ux.raycast, false)
+
     const events = ['mousedown', 'mousemove', 'click']
     events.forEach(function (event) {
       domElement.addEventListener(event, mpos.ux.event, false)
@@ -264,7 +269,7 @@ const mpos = {
     gui.domElement.classList.add('mp-native')
     Object.keys(vars.opt).forEach(function (key) {
       const params = {
-        selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#gen', 'custom']],
+        selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
         depth: [0, 32, 1],
         inPolar: [1, 4, 1],
         delay: [0, 300, 5],
@@ -302,13 +307,13 @@ const mpos = {
       }
       const queue = grade.r_.queue
 
-      function enqueue(idx) {
-        if (queue.indexOf(idx) === -1) {
+      function enqueue(rType) {
+        if (queue.indexOf(rType) === -1) {
           // add unique
-          queue.push(idx)
+          queue.push(rType)
         }
 
-        if (idx === 'delay') {
+        if (rType === 'delay') {
           // immediate schedule, unless manually called -1
           if (e.value > 0) {
             // schedule next frame (but 0 doesnt, and -1 clears without update)
@@ -316,14 +321,14 @@ const mpos = {
           }
           if (!grade.wait) {
             // update current queue
-            mpos.precept.update(grade, idx)
+            mpos.update(grade, rType)
           }
         } else {
           // debounce concurrent
           requestIdleCallback(
             function () {
               if (queue.length) {
-                mpos.precept.update(grade, idx)
+                mpos.update(grade, rType)
               }
             },
             { time: 125 }
@@ -333,8 +338,8 @@ const mpos = {
 
       if (e.isIntersecting) {
         // enqueue visible element
-        const idx = e.target.getAttribute('data-idx')
-        enqueue(idx)
+        const rType = e.target.getAttribute('data-idx')
+        enqueue(rType)
       } else {
         // event schedule or throttle
         const [timer, timeout] = e.type === 'delay' ? ['delay', e.value] : ['reflow', 250]
@@ -364,12 +369,12 @@ const mpos = {
 
               mpos.ux.render()
             } else {
-              let idx = e.type
+              let rType = e.type
               if (e.type === 'scroll') {
                 // update visibility?
-                idx = vars.opt.inPolar === 4 ? 'trim' : 'move'
+                rType = vars.opt.inPolar === 4 ? 'trim' : 'move'
               }
-              enqueue(idx)
+              enqueue(rType)
             }
           }, timeout)
         )
@@ -386,8 +391,9 @@ const mpos = {
           if (obj.animate) {
             if (obj.animate === true) {
               // wiggle root
-              obj.rotation.x = Math.sin(time) / 40
-              obj.rotation.y = Math.cos(time) / 40
+              obj.rotation.x = Math.sin(time) / 100
+              obj.rotation.y = Math.cos(time) / 100
+              obj.position.z = -9
             } else if (obj.animate.gif) {
               // refresh SuperGif
               obj.material.map.needsUpdate = true
@@ -397,7 +403,7 @@ const mpos = {
 
         // instanced elements need texture update
         grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true
-        grade.instanced.userData.shader.userData.t.needsUpdate = true
+        vars.mat_shader.userData.t.needsUpdate = true
         //instanced.instanceColor.needsUpdate = true
       }
 
@@ -409,32 +415,46 @@ const mpos = {
     },
     raycast: function (e) {
       const vars = mpos.var
-      vars.pointer.x = (e.clientX / window.innerWidth) * 2 - 1
-      vars.pointer.y = -(e.clientY / window.innerHeight) * 2 + 1
+      vars.ux.pointer.x = (e.clientX / window.innerWidth) * 2 - 1
+      vars.ux.pointer.y = -(e.clientY / window.innerHeight) * 2 + 1
 
       const grade = vars.grade
       if (grade && !grade.wait) {
-        vars.raycaster.setFromCamera(vars.pointer, vars.camera)
-        let intersects = vars.raycaster.intersectObject(grade.instanced, false)
+        vars.ux.raycaster.setFromCamera(vars.ux.pointer, vars.camera)
+        let intersects = vars.ux.raycaster.intersectObjects(grade.group.children, false)
         intersects = intersects.filter(function (hit) {
-          // intersects.instanceId is any Instanced atlas (child, self...)
-          // grade.ray { instance: data-idx }
-          return Object.keys(grade.ray).indexOf(String(hit.instanceId)) > -1
+          // - raycaster is currently using layers(2) which is only the atlas
+          // - intersects.instanceId is any Instanced atlas (child, self...)
+          // - targets: { instanceId:0, dataIdx: 0, rect: rect ... uv }
+          // - vars.ux.ray { instance: data-idx }
+
+          // Set other filter by prefix + dataIdx
+          // Set atlas filter by instanceId directly
+
+          // atlas/other(video) subscribe to this layer
+          // but we filter more by inPolar-type
+          const atlas = hit.object.isInstancedMesh
+          let target = atlas ? hit.instanceId : 'r_other_idx_' + hit.object.userData.el.getAttribute('data-idx')
+
+
+          return vars.ux.target.has(target)
         })
 
         if (intersects.length) {
           const hit = intersects[0]
-          const obj = hit.object
+          const atlas = hit.object.isInstancedMesh
 
-          if (obj) {
+          //if (hit.object) {
+          
             // note: to update instanceMatrix, indexes would need to be constant from transforms()
             // ... i.e. inPolar<3, noscroll, append only...
-            const rect = Object.values(grade.r_.atlas.rects)[hit.instanceId]
+            const rect = atlas ? Object.values(grade.r_.atlas.rects)[hit.instanceId] : grade.r_.other.rects[hit.object.userData.el.getAttribute('data-idx')]
+            console.log('rect',rect)
             //console.log(hit.instanceId, rect.el, uv)
             // note: raycast element may be non-interactive (atlas), but not CSS3D or loader (other)
-            vars.events = { uv: hit.uv, el: rect.el, mat: rect.mat, position: rect.css?.style.position || {}, bound: rect.bound }
+            vars.ux.synthetic = { uv: hit.uv, el: rect.el, mat: rect.mat, position: rect.css?.style.position || {}, bound: rect.bound }
             //
-            vars.caret.title = hit.instanceId + rect.el.nodeName
+            vars.caret.title = rect.el.getAttribute('data-idx') + rect.el.nodeName
             const caret = vars.caret.style
             // visibility
             const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
@@ -449,19 +469,28 @@ const mpos = {
               caret.width = '100%'
               caret.left = caret.bottom = 0
             }
-          }
+         // }
         } else {
-          vars.events = {}
+          vars.ux.synthetic = {}
         }
       }
     },
     event: function (e) {
-      mpos.var.controls.enablePan = true
+      // dispatch synthetic events
+
       //console.log(e.type)
-      const events = mpos.var.events
-      if (!events || !events.el || events.mat !== 'native') {
+      mpos.var.controls.enablePan = true
+      const synthetic = mpos.var.ux.synthetic
+
+      if (e.type === 'mousemove' || e.type === 'mousedown') {
+        mpos.ux.raycast(e)
+      }
+
+      if (!synthetic.el) {
         return
-      } else if (e.type === 'mousedown' || e.type === 'mousemove') {
+      }
+
+      if (synthetic.mat === 'native' && (e.type === 'mousemove' || e.type === 'mousedown')) {
         mpos.var.controls.enablePan = false
       }
 
@@ -471,15 +500,15 @@ const mpos = {
       //const source = document.querySelector('body > :not(.mp-block) [data-idx="' + idx + '"]')
 
       // raycaster
-      const element = events.el
-      const uv = { x: events.uv.x, y: 1 - events.uv.y }
+      const element = synthetic.el
+      const uv = { x: synthetic.uv.x, y: 1 - synthetic.uv.y }
 
       // eventListener
       const event = e.type
       //const pageX = e.offsetX
       //const pageY = e.offsetY
 
-      const [scrollX, scrollY] = events.position === 'fixed' ? [0, 0] : [window.scrollX, window.scrollY]
+      const [scrollX, scrollY] = synthetic.position === 'fixed' ? [0, 0] : [window.scrollX, window.scrollY]
 
       const MouseEventInit = {
         clientX: uv.x * element.offsetWidth + element.offsetLeft + scrollX,
@@ -490,7 +519,7 @@ const mpos = {
       }
 
       //window.dispatchEvent(new MouseEvent(event, MouseEventInit))
-      const bound = events.bound
+      const bound = synthetic.bound
       let x = uv.x * bound.width + bound.left + scrollX
       let y = uv.y * bound.height + bound.top + scrollY
 
@@ -511,8 +540,427 @@ const mpos = {
       traverse(element)
     }
   },
+  update: function (grade, rType) {
+    const vars = mpos.var
+    let r_queue = grade.r_.queue
+
+    if ((rType && !r_queue.length) || grade.wait || document.hidden) {
+      // skip frame
+      return
+    }
+
+    grade.wait = true
+    const r_atlas = grade.r_.atlas
+    const r_other = grade.r_.other
+    let r_frame = 0
+    let quality = 1
+    let capture = false
+
+    grade.inPolar = vars.opt.inPolar
+    if (rType) {
+      // SOFT-update: Observer or frame
+      let reflow = false
+      for (let i = r_queue.length - 1; i >= 0; i--) {
+        const idx = r_queue[i]
+        if (isFinite(idx)) {
+          // new Observer
+          const rect = grade.rects[idx]
+          const type = rect.r_
+          const r_ = grade.r_[type]
+
+          if (!r_.rects[idx]) {
+            if (rect.mat === 'poster' || (rect.mat === 'native' && rect.r_ === 'atlas')) {
+              // Instanced
+              rect.atlas = grade.atlas++
+            } else if (type === 'other') {
+              // CSS3D or Loader
+              rect.add = true
+            }
+            // add key
+            r_.rects[idx] = rect
+            grade.minEls++
+          }
+        } else if (idx === 'delay' || idx === 'move' || idx === 'trim') {
+          reflow = true
+
+          if (idx === 'delay') {
+            const timers = mpos.ux.timers
+            r_frame = timers[idx][timers[idx].length - 1]
+            // quality limits pixelRatio of html-to-image
+            const now = performance.now()
+            const elapsed = now - timers.last
+            timers.last = now
+
+            quality = Math.max(mpos.var.opt[idx] / elapsed, 0.8).toFixed(2)
+          }
+        }
+      }
+
+      if (reflow) {
+        function vis(rects, reQueue) {
+          // update element rect
+          Object.keys(rects).forEach(function (idx) {
+            const rect = rects[idx]
+            //
+            // traverse transforms (set/unset), update properties, and qualify ux
+            mpos.set.css(rect, r_frame)
+            // update visibility
+            mpos.set.inPolar(rect)
+
+            if (reQueue) {
+              if (rect.inPolar >= mpos.var.opt.inPolar) {
+                if (rect.el.tagName === 'BODY') {
+                  // no propagate
+                  r_queue.push(idx)
+                } else {
+                  let pseudo = mpos.diffs('pseudo', { rect: rect, sel: grade.el, capture: capture })
+                  if (pseudo || rect.ux.u || rect.ux.o) {
+                    // element ux changed or elevated
+                    // note: pseudo evaluates first, so atlas unset has consistent off-state
+                    if (r_queue.indexOf(idx) === -1) {
+                      r_queue.push(idx)
+                    }
+
+                    if (rect.ux.p) {
+                      // note: pseudo is (active), or was (blur), so enqueue (with children)
+                      // to update atlas/transform by forcing ux.u="all"
+                      // todo: set ux.o++ priority (if ux.p), and use ux.u correctly
+                      // ... compare, inherit?
+                      rect.ux.u = 'all'
+                      rect.ux.p = false
+                      // children propagate
+                      let child = rect.child || []
+                      if (!rect.child) {
+                        // cache a static list
+                        rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
+                          const idx = el.getAttribute('data-idx')
+                          let rect = rects[idx]
+                          //rect.css.pseudo = true
+                          if (rect && rect.mat === 'poster') {
+                            rect.ux.u = 'all' // force child on frame, for atlas/transform...?
+                            child.push(idx)
+                          }
+                        })
+                        rect.child = child
+                      }
+
+                      r_queue.push(...child)
+                    }
+                  }
+                }
+              }
+            }
+            if (vars.opt.arc) {
+              // mokeypatch a update
+              // bug: trigger once like 'move', and update r_other
+              rect.ux.u = !rect.ux.u || rect.ux.u === 'css' ? 'css' : 'all'
+            }
+          })
+        }
+        const reQueue = r_frame > 0
+        vis(r_atlas.rects, reQueue)
+        vis(r_other.rects)
+      }
+    } else {
+      // HARD-update: viewport
+      const root = document.body
+      const idx = root.getAttribute('data-idx') || 999
+      const rect = { el: root, mat: 'wire', z: -idx, fix: true, ux: { i: 1, o: 0 }, idx: idx }
+
+      r_other.rects[idx] = rect
+    }
+
+    //console.log('queue', r_queue.length, dataIdx, r_frame)
+    const promise = new Promise((resolve, reject) => {
+      // Instanced Mesh
+      const instanced = grade.instanced
+      const uvOffset = instanced.geometry.getAttribute('uvOffset')
+      const step = grade.maxRes / grade.cells
+
+      // Offscreen Canvas
+      //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
+      //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
+      let osc = grade.osc
+      if (!osc) {
+        //if (window.OffscreenCanvas) {
+        //  osc = new OffscreenCanvas(grade.canvas.width, grade.canvas.height)
+        //} else {
+        osc = document.createElement('canvas')
+        osc.width = grade.canvas.width
+        osc.height = grade.canvas.height
+        //}
+        grade.osc = osc //.transferControlToOffscreen();
+
+        // multiple readback
+        let options = { willReadFrequently: true, alpha: true }
+        grade.ctx = grade.canvas.getContext('2d', options)
+        grade.ctx_osc = grade.osc.getContext('2d', options)
+
+        grade.ctx.imageSmoothingEnabled = false
+        grade.ctx_osc.imageSmoothingEnabled = false
+
+        osc = grade.osc
+      }
+      // transfer control
+      const ctxC = grade.ctx
+      const ctxO = grade.ctx_osc
+
+      function atlas(grade, opts = {}) {
+        if (opts.queue === undefined) {
+          // update queue, SOFT or HARD
+          opts.queue = rType ? r_queue : Object.keys(r_atlas.rects)
+
+          opts.idx = opts.queue.length
+          // paint breakpoints [0,50%], unless frame
+          // ...via transforms, which also calls loaders!
+          opts.paint = opts.idx >= 24 && r_frame === 0 ? [0, Math.floor(opts.idx * 0.5)] : []
+        }
+
+        function next() {
+          if (rType) {
+            // reduce queue
+            opts.queue = opts.queue.splice(opts.queue.length - opts.idx, opts.queue.length)
+          }
+
+          if (opts.idx > 0) {
+            if (opts.paint.indexOf(opts.idx) > -1) {
+              console.log('...paint')
+              transforms(grade, true)
+            }
+            opts.idx--
+            atlas(grade, opts)
+          } else {
+            if (!rType) {
+              // atlas key structure
+              ctxO.fillStyle = 'rgba(0,255,255,0.125)'
+              ctxO.fillRect(grade.maxRes - step, grade.maxRes - step, step, step)
+            }
+            // resolve
+
+            transforms(grade)
+          }
+        }
+
+        function shallow(ux) {
+          return ux.i !== 1 && ux.u === 'css'
+        }
+        // queue indexes from end, but in reverse
+        const rect = r_atlas.rects[opts.queue[opts.queue.length - opts.idx]]
+
+        if (rect && rect.atlas !== undefined && !shallow(rect.ux)) {
+          // override box styles
+          const pixelRatio = rect.ux.o ? quality : 0.8
+          const options = {
+            style: { ...vars.unset.style },
+            canvasWidth: step,
+            canvasHeight: step,
+            pixelRatio: pixelRatio,
+            preferredFontFormat: 'woff'
+            //filter: function (node) {
+            //  todo: test clone children for diffs
+            //  return node
+            //}
+          }
+
+          if (!rect.css) {
+            //slow frame?
+          }
+
+          // Feature tests
+          if (rect.css && rect.css.style) {
+            const float = mpos.diffs('float', { style: rect.css.style })
+            if (float) {
+              options.style.top = options.style.right = options.style.bottom = options.style.left = 'initial'
+            }
+          }
+
+          const noBox = mpos.diffs('rect', { node: rect.el })
+          if (noBox) {
+            //options.style.display = 'inline-block' // tame pop-in
+            options.width = rect.el.offsetWidth // force size
+            options.height = rect.el.offsetHeight // force size
+          }
+
+          //const isMatrix = mpos.diffs('matrix', { style: rect.css.style })
+          //if (isMatrix) {
+          //  options.style.transform = 'initial'
+          //}
+
+          // to-do: transfer this to an offscreen worker
+          toCanvas(rect.el, options)
+            .then(function (canvas) {
+              if (canvas.width === 0 || canvas.height === 0) {
+                // no box
+              } else {
+                //noBox && (rect.el.style.display = 'initial')
+                // canvas xy, from top (FIFO)
+                const x = (rect.atlas % grade.cells) * step
+                const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
+                r_frame && ctxC.clearRect(x, y, step, step)
+                ctxO.drawImage(canvas, x, y, step, step)
+                // shader xy, from bottom
+                // avoid 0 edge, so add 0.0001
+                rect.x = (0.0001 + x) / grade.maxRes
+                rect.y = (0.0001 + y + step) / grade.maxRes
+              }
+              // recurse
+              canvas = null
+
+              next()
+            })
+            .catch(function (error) {
+              console.log(error)
+              next()
+            })
+        } else {
+          next()
+        }
+      }
+
+      atlas(grade)
+
+      function transforms(grade, paint) {
+        // Update meshes from queue
+
+        //let targets = mpos.ux.targets
+        const target = [] //{
+        //atlas: [],
+        //other: []
+        // Set() add() delete(key) clear()
+        // atlas :: instanceId (from ROIs) => intersect (ray) => rect (by dataIdx) => synthetic dispatch (element)
+        // other :: ?=> intersect (ray) ?=> Mesh.userData.el ?=> rect (by dataIdx) => ...ditto
+
+        // target singleton
+        // 0: { instanceId?: 0, dataIdx: 0, rect: {}, uv: {} }
+        // ...element, uv, mat, position, bound
+        //}
+        // const cloneTemplate = { ...targets[0] };
+
+        //
+
+        if (!paint) {
+          //
+          // Meshes other (matches Loader) update on tail
+          //grade.scroll = { x: window.scrollX, y: window.scrollY }
+          Object.values(r_other.rects).forEach(function (rect) {
+            let newGeo = !rect.obj && (rType === undefined || rect.add)
+            let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
+
+            const dummy = mpos.set.box(rect, { add: newGeo, scroll: scroll, frame: r_frame })
+
+            if (rect.obj) {
+              // update visibility if loaded
+              // off-screen boxes may "seem" more visible than instancedMesh because they don't have a third state
+              let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
+              rect.obj.visible = vis
+
+              //
+              target.push('r_other_idx_' + rect.idx)
+            }
+
+            if (rect.obj && rect.obj.animate && rect.obj.animate.gif) {
+              // refresh SuperGif
+              rect.obj.material[4].map.needsUpdate = true
+            }
+          })
+        }
+
+        //
+        // Meshes atlas (general Instance) update priority and raycast
+
+        let count = 0
+        const color = new THREE.Color()
+        let newGeo, newMap
+
+        for (const [idx, rect] of Object.entries(r_atlas.rects)) {
+          let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
+          let inPolar = uxForce ? mpos.set.inPolar(rect) >= grade.inPolar : rect.inPolar >= grade.inPolar
+
+          const dummy = mpos.set.box(rect, { frame: r_frame })
+
+          dummy && instanced.setMatrixAt(count, dummy.matrix)
+
+          //
+          // Update feature difference (support background)
+          // ...ad-hoc experiments like tooltip, catmull heatmap
+          if (rType === undefined || rect.ux.o) {
+            newMap = true
+            // Instance Color (first-run)
+            let bg = rect.css.style.backgroundColor
+            let rgba = bg.replace(/[(rgba )]/g, '').split(',')
+            const alpha = rgba[3]
+            if (alpha === '0') {
+              // hidden: dom default, but could be user-specified
+              bg = 'cyan'
+            } else if (alpha > 0.0 || alpha === undefined) {
+              // color no alpha channel
+              bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
+            }
+            instanced.setColorAt(count, color.setStyle(bg))
+          }
+
+          //
+          // Update atlas uv and visibility
+          let vis = -1
+          let x, y
+          if (rType === undefined || dummy || uxForce) {
+            if (rect.atlas !== undefined || rect.mat === 'self') {
+              // top-tier bracket
+              if (inPolar) {
+                x = rect.x || grade.key.x
+                y = 1 - rect.y || grade.key.y
+              } else if (grade.inPolar === 4) {
+                // partial update from split frame (trim), due to scroll delay
+                x = grade.key.x
+                y = grade.key.y
+              }
+            }
+
+            // bug frame: force inPolar/css, update instance.count, update render/texture, 3rd condition
+            uvOffset.setXY(count, x || vis, y || vis)
+
+            //
+            // Update raycast whitelist
+            // from instanceId (not data-idx)
+            // more similar to inPolar than layout change
+            if (rect.atlas !== undefined && inPolar) {
+              target.push(Number(count))
+              //targets: { instanceId:0, dataIdx: 0, rect: rect ... uv }
+            }
+          }
+
+          count++
+        }
+
+        // Apply Updates
+        instanced.count = count
+        instanced.computeBoundingSphere() // cull and raycast
+        instanced.instanceMatrix.needsUpdate = true
+        newMap && (instanced.instanceColor.needsUpdate = true)
+
+        ctxC.drawImage(osc, 0, 0)
+        ctxO.clearRect(0, 0, osc.width, osc.height)
+        mpos.ux.render()
+
+        if (!paint) {
+          vars.ux.target.clear()
+          target.forEach((item) => vars.ux.target.add(item))
+          //console.log('target',target)
+          // frame done
+          grade.wait = false
+          resolve(grade)
+          reject(grade)
+        }
+      }
+    })
+
+    promise.catch((error) => console.log(error))
+    promise.then(function (grade) {
+      //console.log('update', grade.minEls)
+      return promise
+    })
+  },
   precept: {
-    index: 0,
     manual: `.mp-loader,.mp-poster,.mp-native`.split(','),
     allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,iframe:not([src])`.split(
@@ -526,6 +974,291 @@ const mpos = {
     native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
     cors: `iframe,object,.yt`.split(','),
     unset: `.mp-offscreen`.split(','),
+
+    parse: function (node) {
+      console.log(node.nodeName, node.textContent)
+      if (node.textContent.indexOf('//_THREE') === 0) {
+        try {
+          eval(node.textContent)
+        } catch (error) {
+          console.log(error)
+        }
+      }
+    }
+  },
+  add: async function (selector, opts = {}) {
+    const vars = mpos.var
+    const precept = mpos.precept
+
+    // Options
+    selector = selector || vars.opt.selector
+    const depth = opts.depth || vars.opt.depth
+    const parse = opts.parse || precept.parse
+
+    // Progress
+    let sel = document.querySelector(selector)
+    const grade_r = vars.grade
+    if (sel === null || (grade_r && grade_r.wait === Infinity && sel.isSameNode(grade_r.el))) {
+      // bad selector or busy
+      return
+    } else if (opts.custom) {
+      // load resource from external uri (into object)
+      await mpos.set
+        .src(sel, opts.custom, 'data')
+        .then(function (res) {
+          console.log('res', res)
+          // use document contentDocument.body instead of CSS3D
+          if (sel.contentDocument) {
+            sel = sel.contentDocument.body
+          }
+        })
+        .catch((err) => {
+          console.error('err: ', err) // CORS
+          return
+        })
+    }
+
+    // OLD group
+    console.log(grade_r)
+    await mpos.set.old(selector)
+    // NEW group
+    const group = new THREE.Group()
+    group.name = selector
+
+    // structure
+    vars.grade = { wait: Infinity }
+
+    const grade = {
+      el: sel,
+      group: group,
+      canvas: vars.atlas || document.createElement('canvas'),
+      count: vars.count++,
+      atlas: 0, // poster count, whereas r_.atlas includes self,child for instanceMesh
+      minEls: 0, // inPolar count, which Observers increment
+      maxEls: 0,
+      minRes: 256,
+      // list, grade and sort
+      txt: [],
+      rects: {},
+      inPolar: vars.opt.inPolar,
+      r_: {
+        queue: [],
+        atlas: { count: 0, rects: {} },
+        other: { count: 0, rects: {} }
+      },
+      ray: {}
+      //scroll: { x: window.scrollX, y: -window.scrollY }
+    }
+
+    // FLAT-GRADE: filter, grade, sanitize
+    const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
+    const sibling = (parent) => {
+      return parent.childElementCount >= 1 && parent.matches([precept.allow])
+    }
+    let node = ni.nextNode()
+    while (node) {
+      if (node.nodeName === '#comment') {
+        // #comment... (or CDATA, xml, php)
+        parse(node)
+      } else {
+        const rect = { el: node, inPolar: null }
+
+        if (mpos.set.inPolar(rect)) {
+          // not empty
+          if (node.nodeName === '#text') {
+            if (mpos.set.inPolar(rect, grade.rects) && sibling(node.parentNode)) {
+              // sanitize #text orphan (list or semantic) with parent visible
+              const wrap = document.createElement('span')
+              wrap.classList.add('mp-poster')
+              node.parentNode.insertBefore(wrap, node)
+              wrap.appendChild(node)
+
+              rect.el = wrap
+              mpos.set.inPolar(rect)
+              grade.txt.push(node)
+            }
+          }
+
+          if (rect.inPolar >= 2) {
+            // static list
+            const idx = grade.maxEls
+            rect.el.setAttribute('data-idx', idx)
+            grade.rects[idx] = rect
+            grade.maxEls++
+          }
+        }
+      }
+
+      node = ni.nextNode()
+    }
+
+    // Atlas Units: relative device profile
+    let wAvg = (vars.fov.w + sel.offsetWidth) / 2
+    let hAvg = (vars.fov.h + sel.offsetHeight) / 2
+
+    grade.minRes = Math.pow(2, Math.ceil(Math.max(wAvg, hAvg) / vars.fov.max)) * 32
+    grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
+    grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
+    grade.canvas.width = grade.canvas.height = grade.maxRes
+    //
+
+    // clear atlas
+    //const ctx = grade.canvas.getContext('2d')
+    //ctx.clearRect(0, 0, grade.canvas.width, grade.canvas.height)
+
+    function setRect(rect, z, mat, unset) {
+      if (rect) {
+        rect.mat = mat
+        rect.z = z
+        // update ux elevated
+        const uxin = rect.mat === 'native' && rect.el.tagName !== 'A' ? 1 : 0
+        rect.ux = { i: uxin, o: 0, u: false }
+
+        // note: portions of this are duplicated in update (r_, priority)
+        if (rect.inPolar >= grade.inPolar) {
+          grade.minEls++
+          if (rect.mat === 'poster' || rect.mat === 'native') {
+            // instanced atlas
+            rect.atlas = grade.atlas++
+          }
+        } else {
+          // off-screen elements
+          //mpos.ux.observer?.observe(rect.el)
+        }
+
+        // unset inherits transform from class
+        unset = unset || rect.el.matches(precept.unset)
+        if (unset) {
+          rect.unset = true
+          rect.ux.i = 1
+        }
+
+        // if rect mat.native matches cors, it is not added to atlas (with mat.poster)
+        rect.r_ = rect.mat === 'loader' || rect.mat === 'wire' || rect.el.matches([precept.cors, precept.native3d]) ? 'other' : 'atlas'
+      }
+      return unset
+    }
+    function setMat(node, mat, manual, layer) {
+      if (manual) {
+        // priority score
+        mpos.precept.manual.every(function (classMat) {
+          classMat = classMat.replace('.mp-', '')
+          if (node.className.includes(classMat)) {
+            mat = classMat
+            classMat = false
+          }
+          return classMat
+        })
+      } else if (node.matches([precept.native, precept.native3d])) {
+        // todo: shared 3d spaces
+        mat = 'native'
+      } else if (node.matches(precept.poster) || layer === 0) {
+        mat = 'poster'
+      }
+      return mat
+    }
+
+    function struct(sel, deep, unset) {
+      // DEEP-GRADE: type, count
+      const z = depth - deep
+
+      // SELF
+      const rect = grade.rects[sel.getAttribute('data-idx')]
+
+      let mat = 'self'
+      // specify empty or manual
+      const children = sel.children
+      const manual = rect.el.matches(precept.manual)
+      if (!children.length || manual) {
+        mat = setMat(rect.el, mat, manual, children.length)
+      }
+      unset = setRect(rect, z, mat, unset)
+      if (!manual) {
+        // CHILD
+        for (let i = 0; i < children.length; i++) {
+          const node = children[i]
+
+          const rect = grade.rects[node.getAttribute('data-idx')]
+          if (rect && rect.inPolar) {
+            // CLASSIFY TYPE
+            const block = node.matches(precept.block)
+            const abort = grade.atlas >= grade.minRes
+            if (block || abort) {
+              console.log('skip', node.nodeName)
+              //rect.el = null
+            } else {
+              if (rect.inPolar >= 1) {
+                const allow = node.matches(precept.allow)
+                const manual = node.matches(precept.manual)
+                const child = node.children.length
+
+                if (deep >= 1 && allow && !manual && child) {
+                  // selector structure output depth
+                  const D = deep - 1
+                  struct(node, D, unset)
+                } else {
+                  let mat = 'child'
+                  // set box type
+                  mat = setMat(node, mat, manual, child)
+                  setRect(rect, z, mat, unset)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    struct(sel, depth)
+
+    Object.keys(grade.rects).forEach((idx) => {
+      let rect = grade.rects[idx]
+
+      if (rect.mat) {
+        // begin two lists: atlas (instanced) || other (mesh)
+        if (rect.inPolar >= grade.inPolar) {
+          //type: other, atlas
+          const type = rect.r_
+          const r_ = grade.r_[type]
+          r_.rects[idx] = rect
+        }
+        // note: observe off-screen (!inPolar) elements, greedy since pageLoad may be inconsistent
+        rect.idx = idx
+        mpos.ux.observer?.observe(rect.el)
+      } else {
+        // free memory
+        rect.el = rect.bound = null
+        delete grade.rects[idx]
+        const node = document.querySelector('[data-idx="' + idx + '"]')
+        node && node.removeAttribute('data-idx')
+      }
+    })
+    grade.key = { x: 1 - 1 / grade.cells, y: 0.0001 }
+
+    // Instanced Mesh, shader atlas
+    const shader = mpos.set.shader(grade.canvas, grade.cells)
+    const instanced = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line], grade.maxEls)
+
+    instanced.layers.set(2)
+    instanced.userData.shader = shader
+    instanced.userData.el = grade.sel
+    instanced.name = [grade.count, selector.tagName].join('_')
+    grade.instanced = instanced
+
+    // Atlas UV Buffer
+    const uvOffset = new THREE.InstancedBufferAttribute(new Float32Array(grade.maxEls * 2).fill(-1), 2)
+    uvOffset.setUsage(THREE.DynamicDrawUsage)
+    instanced.geometry.setAttribute('uvOffset', uvOffset)
+
+    // OUTPUT
+    group.add(instanced)
+    vars.scene && vars.scene.add(group)
+
+    vars.grade = grade
+    mpos.update(grade)
+    return grade
+  },
+  set: {
     inPolar: function (rect, control) {
       const node = rect.el
       let vis = node && (node.tagName || node.textContent.trim()) ? 1 : false
@@ -567,680 +1300,6 @@ const mpos = {
       rect.inPolar = vis
       return vis
     },
-    update: function (grade, dataIdx) {
-      const vars = mpos.var
-      let r_queue = grade.r_.queue
-
-      if ((dataIdx && !r_queue.length) || grade.wait || document.hidden) {
-        // skip frame
-        return
-      }
-
-      grade.wait = true
-      const r_atlas = grade.r_.atlas
-      const r_other = grade.r_.other
-      let r_frame = 0
-      let quality = 1
-      let capture = false
-
-      grade.inPolar = vars.opt.inPolar
-      if (dataIdx) {
-        // SOFT-update: Observer or frame
-        let reflow = false
-        for (let i = r_queue.length - 1; i >= 0; i--) {
-          const idx = r_queue[i]
-          if (isFinite(idx)) {
-            // new Observer
-            const rect = grade.rects[idx]
-            const type = rect.r_
-            const r_ = grade.r_[type]
-
-            if (!r_.rects[idx]) {
-              if (rect.mat === 'poster' || (rect.mat === 'native' && rect.r_ === 'atlas')) {
-                // Instanced
-                rect.atlas = grade.atlas++
-              } else if (type === 'other') {
-                // CSS3D or Loader
-                rect.add = true
-              }
-              // add key
-              r_.rects[idx] = rect
-              grade.minEls++
-            }
-          } else if (idx === 'delay' || idx === 'move' || idx === 'trim') {
-            reflow = true
-
-            if (idx === 'delay') {
-              const timers = mpos.ux.timers
-              r_frame = timers[idx][timers[idx].length - 1]
-              // quality limits pixelRatio of html-to-image
-              const now = performance.now()
-              const elapsed = now - timers.last
-              timers.last = now
-
-              quality = Math.max(mpos.var.opt[idx] / elapsed, 0.8).toFixed(2)
-            }
-          }
-        }
-
-        if (reflow) {
-          function vis(rects, reQueue) {
-            // update element rect
-            Object.keys(rects).forEach(function (idx) {
-              const rect = rects[idx]
-              //
-              // traverse transforms (set/unset), update properties, and qualify ux
-              mpos.add.css(rect, r_frame)
-              // update visibility
-              mpos.precept.inPolar(rect)
-
-              if (reQueue) {
-                if (rect.inPolar >= mpos.var.opt.inPolar) {
-                  if (rect.el.tagName === 'BODY') {
-                    // no propagate
-                    r_queue.push(idx)
-                  } else {
-                    let pseudo = vars.unset.diffs('pseudo', { rect: rect, sel: grade.el, capture: capture })
-                    if (pseudo || rect.ux.u || rect.ux.o) {
-                      // element ux changed or elevated
-                      // note: pseudo evaluates first, so atlas unset has consistent off-state
-                      if (r_queue.indexOf(idx) === -1) {
-                        r_queue.push(idx)
-                      }
-
-                      if (rect.ux.p) {
-                        // note: pseudo is (active), or was (blur), so enqueue (with children)
-                        // to update atlas/transform by forcing ux.u="all"
-                        // todo: set ux.o++ priority (if ux.p), and use ux.u correctly
-                        // ... compare, inherit?
-                        rect.ux.u = 'all'
-                        rect.ux.p = false
-                        // children propagate
-                        let child = rect.child || []
-                        if (!rect.child) {
-                          // cache a static list
-                          rect.el.querySelectorAll('[data-idx]').forEach(function (el) {
-                            const idx = el.getAttribute('data-idx')
-                            let rect = rects[idx]
-                            //rect.css.pseudo = true
-                            if (rect && rect.mat === 'poster') {
-                              rect.ux.u = 'all' // force child on frame, for atlas/transform...?
-                              child.push(idx)
-                            }
-                          })
-                          rect.child = child
-                        }
-
-                        r_queue.push(...child)
-                      }
-                    }
-                  }
-                }
-              }
-              if (vars.opt.arc) {
-                // mokeypatch a update
-                // bug: trigger once like 'move', and update r_other
-                rect.ux.u = !rect.ux.u || rect.ux.u === 'css' ? 'css' : 'all'
-              }
-            })
-          }
-          const reQueue = r_frame > 0
-          vis(r_atlas.rects, reQueue)
-          vis(r_other.rects)
-        }
-      } else {
-        // HARD-update: viewport
-        const root = document.body
-        const rect = { el: root, mat: 'wire', z: -16, fix: true, ux: { i: 1, o: 0 } }
-        const idx = root.getAttribute('data-idx')
-
-        r_other.rects[idx] = rect
-      }
-
-      //console.log('queue', r_queue.length, dataIdx, r_frame)
-      const promise = new Promise((resolve, reject) => {
-        // Instanced Mesh
-        const instanced = grade.instanced
-        const uvOffset = instanced.geometry.getAttribute('uvOffset')
-        const step = grade.maxRes / grade.cells
-
-        // Offscreen Canvas
-        //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
-        //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
-        let osc = grade.osc
-        if (!osc) {
-          //if (window.OffscreenCanvas) {
-          //  osc = new OffscreenCanvas(grade.canvas.width, grade.canvas.height)
-          //} else {
-          osc = document.createElement('canvas')
-          osc.width = grade.canvas.width
-          osc.height = grade.canvas.height
-          //}
-          grade.osc = osc //.transferControlToOffscreen();
-
-          // multiple readback
-          let options = { willReadFrequently: true, alpha: true }
-          grade.ctx = grade.canvas.getContext('2d', options)
-          grade.ctx_osc = grade.osc.getContext('2d', options)
-
-          grade.ctx.imageSmoothingEnabled = false
-          grade.ctx_osc.imageSmoothingEnabled = false
-
-          osc = grade.osc
-        }
-        // transfer control
-        const ctxC = grade.ctx
-        const ctxO = grade.ctx_osc
-
-        function atlas(grade, opts = {}) {
-          if (opts.queue === undefined) {
-            // update queue, SOFT or HARD
-            opts.queue = dataIdx ? r_queue : Object.keys(r_atlas.rects)
-
-            opts.idx = opts.queue.length
-            // paint breakpoints [0,50%], unless frame
-            // ...via transforms, which also calls loaders!
-            opts.paint = opts.idx >= 24 && r_frame === 0 ? [0, Math.floor(opts.idx * 0.5)] : []
-          }
-
-          function next() {
-            if (dataIdx) {
-              // reduce queue
-              opts.queue = opts.queue.splice(opts.queue.length - opts.idx, opts.queue.length)
-            }
-
-            if (opts.idx > 0) {
-              if (opts.paint.indexOf(opts.idx) > -1) {
-                console.log('...paint')
-                transforms(grade, true)
-              }
-              opts.idx--
-              atlas(grade, opts)
-            } else {
-              if (!dataIdx) {
-                // atlas key structure
-                ctxO.fillStyle = 'rgba(0,255,255,0.125)'
-                ctxO.fillRect(grade.maxRes - step, grade.maxRes - step, step, step)
-              }
-              // resolve
-
-              transforms(grade)
-            }
-          }
-
-          function shallow(ux) {
-            return ux.i !== 1 && ux.u === 'css'
-          }
-          // queue indexes from end, but in reverse
-          const rect = r_atlas.rects[opts.queue[opts.queue.length - opts.idx]]
-
-          if (rect && rect.atlas !== undefined && !shallow(rect.ux)) {
-            // override box styles
-            const pixelRatio = rect.ux.o ? quality : 0.8
-            const options = {
-              style: { ...vars.unset.style },
-              canvasWidth: step,
-              canvasHeight: step,
-              pixelRatio: pixelRatio,
-              preferredFontFormat: 'woff'
-              //filter: function (node) {
-              //  todo: test clone children for diffs
-              //  return node
-              //}
-            }
-
-            if (!rect.css) {
-              //slow frame?
-            }
-
-            // Feature tests
-            if (rect.css && rect.css.style) {
-              const float = vars.unset.diffs('float', { style: rect.css.style })
-              if (float) {
-                options.style.top = options.style.right = options.style.bottom = options.style.left = 'initial'
-              }
-            }
-
-            const noBox = vars.unset.diffs('rect', { node: rect.el })
-            if (noBox) {
-              //options.style.display = 'inline-block' // tame pop-in
-              options.width = rect.el.offsetWidth // force size
-              options.height = rect.el.offsetHeight // force size
-            }
-
-            //const isMatrix = vars.unset.diffs('matrix', { style: rect.css.style })
-            //if (isMatrix) {
-            //  options.style.transform = 'initial'
-            //}
-
-            // to-do: transfer this to an offscreen worker
-            toCanvas(rect.el, options)
-              .then(function (canvas) {
-                if (canvas.width === 0 || canvas.height === 0) {
-                  // no box
-                } else {
-                  //noBox && (rect.el.style.display = 'initial')
-                  // canvas xy, from top (FIFO)
-                  const x = (rect.atlas % grade.cells) * step
-                  const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
-                  r_frame && ctxC.clearRect(x, y, step, step)
-                  ctxO.drawImage(canvas, x, y, step, step)
-                  // shader xy, from bottom
-                  // avoid 0 edge, so add 0.0001
-                  rect.x = (0.0001 + x) / grade.maxRes
-                  rect.y = (0.0001 + y + step) / grade.maxRes
-                }
-                // recurse
-                canvas = null
-
-                next()
-              })
-              .catch(function (error) {
-                console.log(error)
-                next()
-              })
-          } else {
-            next()
-          }
-        }
-
-        atlas(grade)
-
-        function transforms(grade, paint) {
-          // Update meshes from queue
-
-          if (!paint) {
-            //
-            // Meshes other (matches Loader) update on tail
-            //grade.scroll = { x: window.scrollX, y: window.scrollY }
-            Object.values(r_other.rects).forEach(function (rect) {
-              let newGeo = !rect.obj && (dataIdx === undefined || rect.add)
-              let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
-
-              const dummy = mpos.add.box(rect, { add: newGeo, scroll: scroll, frame: r_frame })
-
-              if (rect.obj) {
-                // update visibility if loaded
-                // off-screen boxes may "seem" more visible than instancedMesh because they don't have a third state
-                let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
-                rect.obj.visible = vis
-              }
-
-              if (rect.obj && rect.obj.animate && rect.obj.animate.gif) {
-                // refresh SuperGif
-                rect.obj.material[4].map.needsUpdate = true
-              }
-            })
-          }
-
-          //
-          // Meshes atlas (general Instance) update priority and raycast
-          grade.ray = []
-          let count = 0
-          const color = new THREE.Color()
-          let newGeo, newMap
-
-          for (const [idx, rect] of Object.entries(r_atlas.rects)) {
-            let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
-            let inPolar = uxForce ? mpos.precept.inPolar(rect) >= grade.inPolar : rect.inPolar >= grade.inPolar
-
-            const dummy = mpos.add.box(rect, { frame: r_frame })
-
-            dummy && instanced.setMatrixAt(count, dummy.matrix)
-
-            //
-            // Update feature difference (support background)
-            // ...ad-hoc experiments like tooltip, catmull heatmap
-            if (dataIdx === undefined || rect.ux.o) {
-              newMap = true
-              // Instance Color (first-run)
-              let bg = rect.css.style.backgroundColor
-              let rgba = bg.replace(/[(rgba )]/g, '').split(',')
-              const alpha = rgba[3]
-              if (alpha === '0') {
-                // hidden: dom default, but could be user-specified
-                bg = 'cyan'
-              } else if (alpha > 0.0 || alpha === undefined) {
-                // color no alpha channel
-                bg = 'rgb(' + rgba.slice(0, 3).join() + ')'
-              }
-              instanced.setColorAt(count, color.setStyle(bg))
-            }
-
-            //
-            // Update atlas uv and visibility
-            let vis = -1
-            let x, y
-            if (dataIdx === undefined || dummy || uxForce) {
-              if (rect.atlas !== undefined || rect.mat === 'self') {
-                // top-tier bracket
-                if (inPolar) {
-                  x = rect.x || grade.key.x
-                  y = 1 - rect.y || grade.key.y
-                } else if (grade.inPolar === 4) {
-                  // partial update from split frame (trim), due to scroll delay
-                  x = grade.key.x
-                  y = grade.key.y
-                }
-              }
-
-              // bug frame: force inPolar/css, update instance.count, update render/texture, 3rd condition
-              uvOffset.setXY(count, x || vis, y || vis)
-            }
-
-            //
-            // Update raycast whitelist
-            if (rect.atlas !== undefined && (inPolar || uxForce)) {
-              grade.ray[count] = Number(idx)
-            }
-
-            count++
-          }
-
-          // Apply Updates
-          instanced.count = count
-          instanced.computeBoundingSphere() // cull and raycast
-          instanced.instanceMatrix.needsUpdate = true
-          newMap && (instanced.instanceColor.needsUpdate = true)
-
-          ctxC.drawImage(osc, 0, 0)
-          ctxO.clearRect(0, 0, osc.width, osc.height)
-          mpos.ux.render()
-
-          if (!paint) {
-            // frame done
-            grade.wait = false
-            resolve(grade)
-            reject(grade)
-          }
-        }
-      })
-
-      promise.catch((error) => console.log(error))
-      promise.then(function (grade) {
-        //console.log('update', grade.minEls)
-        return promise
-      })
-    },
-    parse: function (node) {
-      console.log(node.nodeName, node.textContent)
-      if (node.textContent.indexOf('//_THREE') === 0) {
-        try {
-          eval(node.textContent)
-        } catch (error) {
-          console.log(error)
-        }
-      }
-    }
-  },
-  add: {
-    dom: async function (selector, opts = {}) {
-      const vars = mpos.var
-      const precept = mpos.precept
-
-      // Options
-      selector = selector || vars.opt.selector
-      const depth = opts.depth || vars.opt.depth
-      const parse = opts.parse || precept.parse
-
-      // Progress
-      let sel = document.querySelector(selector)
-      const grade_r = vars.grade
-      if (sel === null || (grade_r && grade_r.wait === Infinity && sel.isSameNode(grade_r.el))) {
-        // bad selector or busy
-        return
-      } else if (opts.custom) {
-        // load resource from external uri (into object)
-        await mpos.add
-          .src(sel, opts.custom, 'data')
-          .then(function (res) {
-            console.log('res', res)
-            // use document contentDocument.body instead of CSS3D
-            if (sel.contentDocument) {
-              sel = sel.contentDocument.body
-            }
-          })
-          .catch((err) => {
-            console.error('err: ', err) // CORS
-            return
-          })
-      }
-
-      // OLD group
-      console.log(grade_r)
-      await mpos.add.old(selector)
-      // NEW group
-      const group = new THREE.Group()
-      group.name = selector
-
-      // structure
-      vars.grade = { wait: Infinity }
-
-      const grade = {
-        el: sel,
-        group: group,
-        canvas: precept.canvas || document.createElement('canvas'),
-        index: precept.index++,
-        atlas: 0, // poster count, whereas r_.atlas includes self,child for instanceMesh
-        minEls: 0, // inPolar count, which Observers increment
-        maxEls: 0,
-        minRes: 256,
-        // list, grade and sort
-        txt: [],
-        rects: {},
-        inPolar: vars.opt.inPolar,
-        r_: {
-          queue: [],
-          atlas: { count: 0, rects: {} },
-          other: { count: 0, rects: {} }
-        },
-        ray: {}
-        //scroll: { x: window.scrollX, y: -window.scrollY }
-      }
-
-      // FLAT-GRADE: filter, grade, sanitize
-      const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
-      const sibling = (parent) => {
-        return parent.childElementCount >= 1 && parent.matches([precept.allow])
-      }
-      let node = ni.nextNode()
-      while (node) {
-        if (node.nodeName === '#comment') {
-          // #comment... (or CDATA, xml, php)
-          parse(node)
-        } else {
-          const rect = { el: node, inPolar: null }
-
-          if (precept.inPolar(rect)) {
-            // not empty
-            if (node.nodeName === '#text') {
-              if (precept.inPolar(rect, grade.rects) && sibling(node.parentNode)) {
-                // sanitize #text orphan (list or semantic) with parent visible
-                const wrap = document.createElement('span')
-                wrap.classList.add('mp-poster')
-                node.parentNode.insertBefore(wrap, node)
-                wrap.appendChild(node)
-
-                rect.el = wrap
-                precept.inPolar(rect)
-                grade.txt.push(node)
-              }
-            }
-
-            if (rect.inPolar >= 2) {
-              // static list
-              const idx = grade.maxEls
-              rect.el.setAttribute('data-idx', idx)
-              grade.rects[idx] = rect
-              grade.maxEls++
-            }
-          }
-        }
-
-        node = ni.nextNode()
-      }
-
-      // Atlas Units: relative device profile
-      let wAvg = (vars.fov.w + sel.offsetWidth) / 2
-      let hAvg = (vars.fov.h + sel.offsetHeight) / 2
-
-      grade.minRes = Math.pow(2, Math.ceil(Math.max(wAvg, hAvg) / vars.fov.max)) * 32
-      grade.cells = Math.ceil(Math.sqrt(grade.maxEls / 2)) + 1
-      grade.maxRes = Math.min(grade.cells * grade.minRes, 16_384)
-      grade.canvas.width = grade.canvas.height = grade.maxRes
-      //
-
-      // clear atlas
-      //const ctx = grade.canvas.getContext('2d')
-      //ctx.clearRect(0, 0, grade.canvas.width, grade.canvas.height)
-
-      function setRect(rect, z, mat, unset) {
-        if (rect) {
-          rect.mat = mat
-          rect.z = z
-          // update ux elevated
-          const uxin = rect.mat === 'native' && rect.el.tagName !== 'A' ? 1 : 0
-          rect.ux = { i: uxin, o: 0, u: false }
-
-          // note: portions of this are duplicated in update (r_, priority)
-          if (rect.inPolar >= grade.inPolar) {
-            grade.minEls++
-            if (rect.mat === 'poster' || rect.mat === 'native') {
-              // instanced atlas
-              rect.atlas = grade.atlas++
-            }
-          } else {
-            // off-screen elements
-            mpos.ux.observer?.observe(rect.el)
-          }
-
-          // unset inherits transform from class
-          unset = unset || rect.el.matches(precept.unset)
-          if (unset) {
-            rect.unset = true
-            rect.ux.i = 1
-          }
-
-          // if rect mat.native matches cors, it is not added to atlas (with mat.poster)
-          rect.r_ = rect.mat === 'loader' || rect.mat === 'wire' || rect.el.matches([precept.cors, precept.native3d]) ? 'other' : 'atlas'
-        }
-        return unset
-      }
-      function setMat(node, mat, manual, layer) {
-        if (manual) {
-          // priority score
-          mpos.precept.manual.every(function (classMat) {
-            classMat = classMat.replace('.mp-', '')
-            if (node.className.includes(classMat)) {
-              mat = classMat
-              classMat = false
-            }
-            return classMat
-          })
-        } else if (node.matches([precept.native, precept.native3d])) {
-          // todo: shared 3d spaces
-          mat = 'native'
-        } else if (node.matches(precept.poster) || layer === 0) {
-          mat = 'poster'
-        }
-        return mat
-      }
-
-      function struct(sel, deep, unset) {
-        // DEEP-GRADE: type, count
-        const z = depth - deep
-
-        // SELF
-        const rect = grade.rects[sel.getAttribute('data-idx')]
-
-        let mat = 'self'
-        // specify empty or manual
-        const children = sel.children
-        const manual = rect.el.matches(precept.manual)
-        if (!children.length || manual) {
-          mat = setMat(rect.el, mat, manual, children.length)
-        }
-        unset = setRect(rect, z, mat, unset)
-        if (!manual) {
-          // CHILD
-          for (let i = 0; i < children.length; i++) {
-            const node = children[i]
-
-            const rect = grade.rects[node.getAttribute('data-idx')]
-            if (rect && rect.inPolar) {
-              // CLASSIFY TYPE
-              const block = node.matches(precept.block)
-              const abort = grade.atlas >= grade.minRes
-              if (block || abort) {
-                console.log('skip', node.nodeName)
-                //rect.el = null
-              } else {
-                if (rect.inPolar >= 1) {
-                  const allow = node.matches(precept.allow)
-                  const manual = node.matches(precept.manual)
-                  const child = node.children.length
-
-                  if (deep >= 1 && allow && !manual && child) {
-                    // selector structure output depth
-                    const D = deep - 1
-                    struct(node, D, unset)
-                  } else {
-                    let mat = 'child'
-                    // set box type
-                    mat = setMat(node, mat, manual, child)
-                    setRect(rect, z, mat, unset)
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      struct(sel, depth)
-
-      Object.keys(grade.rects).forEach((idx) => {
-        let rect = grade.rects[idx]
-        // begin two lists: atlas (instanced) || other (mesh)
-        if (rect.mat && rect.inPolar >= grade.inPolar) {
-          //type: other, atlas
-          const type = rect.r_
-          const r_ = grade.r_[type]
-          r_.rects[idx] = rect
-        } else if (!rect.mat) {
-          // free memory
-          mpos.ux.observer?.unobserve(rect.el)
-          rect.el = rect.bound = null
-          delete grade.rects[idx]
-          const node = document.querySelector('[data-idx="' + idx + '"]')
-          node && node.removeAttribute('data-idx')
-        }
-      })
-      grade.key = { x: 1 - 1 / grade.cells, y: 0.0001 }
-
-      // Instanced Mesh, shader atlas
-      const shader = mpos.add.shader(grade.canvas, grade.cells)
-      const instanced = new THREE.InstancedMesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, shader, vars.mat_line], grade.maxEls)
-
-      instanced.layers.set(2)
-      instanced.userData.shader = shader
-      instanced.userData.el = grade.sel
-      instanced.name = [grade.index, selector.tagName].join('_')
-      grade.instanced = instanced
-
-      // Atlas UV Buffer
-      const uvOffset = new THREE.InstancedBufferAttribute(new Float32Array(grade.maxEls * 2).fill(-1), 2)
-      uvOffset.setUsage(THREE.DynamicDrawUsage)
-      instanced.geometry.setAttribute('uvOffset', uvOffset)
-
-      // OUTPUT
-      group.add(instanced)
-      vars.scene && vars.scene.add(group)
-
-      vars.grade = grade
-      mpos.precept.update(grade)
-      return grade
-    },
     box: function (rect, opts = {}) {
       if (rect.frame && rect.ux.u === false) {
         return false
@@ -1249,10 +1308,10 @@ const mpos = {
       const vars = mpos.var
 
       // css: accumulate transforms
-      mpos.add.css(rect, opts.frame)
+      mpos.set.css(rect, opts.frame)
 
       // css: unset for box scale
-      let unset = mpos.add.css(rect, true)
+      let unset = mpos.set.css(rect, true)
       let bound = rect.unset ? unset : rect.bound
 
       //
@@ -1310,7 +1369,7 @@ const mpos = {
 
         // z subset mimics DOM honor (not 100% faithful)
         // being expanded (for z-target ux) AND compressed (into view frustum)
-        const zGrade = rect.z // NodeIterator index [ 1, 2, 3 ... ] from selector
+        const zGrade = rect.z + 1 // NodeIterator index [ 1, 2, 3 ... ] from selector
         const zIndex = rect.css?.style?.zIndex || 'auto' // user-agent stylesheet
         let zDomain = zIndex === 'auto' // inheritance assigned (mimic DOM honor)
         const zSign = zDomain || zIndex >= 0 ? 1 : -1
@@ -1321,8 +1380,8 @@ const mpos = {
 
         let z = zSign * zScale * vars.fov.z
 
-        // extrude bias to cure shadow acne
-        const extrude = rect.mat !== 'self' && rect.mat !== 'child' ? vars.fov.z / 8 : 0
+        // extrude bias to cure z-fighting
+        const extrude = rect.mat !== 'self' && rect.mat !== 'wire' ? vars.fov.z / 2 + vars.fov.z / 4 : 0
         z += extrude
 
         if (obj.isCSS3DObject) {
@@ -1343,7 +1402,7 @@ const mpos = {
           dummy.scale.set(w * rect.css.scale, h * rect.css.scale, d)
           obj.rotation.z = -rect.css.radian
           // dummy from element fits group
-          mpos.add.fit(dummy, obj)
+          mpos.set.fit(dummy, obj)
         } else {
           // generic dummy, i.e. atlas
           obj.position.set(x, y, z)
@@ -1377,7 +1436,7 @@ const mpos = {
         // other custom process
         if (rect.mat === 'loader') {
           // async
-          res = mpos.add.loader(rect.el, object)
+          res = mpos.set.loader(rect.el, object)
           res.userData.el = rect.el
         } else {
           // general (native, wire)
@@ -1416,7 +1475,7 @@ const mpos = {
 
         if (!rect.css || rect.frame < progress) {
           // ux priority may escalate (declarative)
-          const priority = css.pseudo || vars.unset.diffs('tween', { style: css.style })
+          const priority = css.pseudo || mpos.diffs('tween', { style: css.style })
           rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
           // reset transforms
@@ -1456,7 +1515,7 @@ const mpos = {
                 // accumulate ancestor matrix
                 const style = r_.css?.style || css.style //|| window.getComputedStyle(el)
 
-                if (style && vars.unset.diffs('matrix', { style: style })) {
+                if (style && mpos.diffs('matrix', { style: style })) {
                   const transform = style.transform.replace(/(matrix)|[( )]/g, '')
                   // transform matrix
                   const [a, b] = transform.split(',')
@@ -1699,10 +1758,11 @@ const mpos = {
         const texture = new THREE.VideoTexture(source)
         material.map = texture
         const mesh = new THREE.Mesh(vars.geo, [vars.mat, vars.mat, vars.mat, vars.mat, material, vars.mat_line])
-
+        mesh.layers.set(2)
         mesh.matrix.copy(dummy.matrix)
         mesh.name = uri
         // unique overrides
+
         vars.grade.group.add(mesh)
         object = mesh
       } else {
@@ -1718,14 +1778,14 @@ const mpos = {
             source.src = uri
             let unset = document.querySelector('#mp address.mp-offscreen')
             unset.appendChild(source)
-            dummy = mpos.add.box({ el: source })
+            dummy = mpos.set.box({ el: source })
           }
 
-          const [width, height] = mpos.add.pyr(source.naturalWidth, source.naturalHeight, 128)
+          const [width, height] = mpos.set.pyr(source.naturalWidth, source.naturalHeight, 128)
 
           toCanvas(source, { style: vars.unset.style, width: width, height: height, pixelRatio: 1 })
             .then(function (canvas) {
-              mpos.add.opencv(canvas, group, dummy)
+              mpos.set.opencv(canvas, group, dummy)
               canvas = null
             })
             .catch(function (error) {
@@ -1760,7 +1820,7 @@ const mpos = {
             } else if (mime.match('.JSON')) {
               // note: may be small, upside-down, just a light...?
               group.add(data)
-              mpos.add.fit(dummy, group, { add: true })
+              mpos.set.fit(dummy, group, { add: true })
             } else if (mime.match('.SVG')) {
               const paths = data.paths || []
 
@@ -1780,7 +1840,7 @@ const mpos = {
               }
 
               group.name = mime
-              mpos.add.fit(dummy, group, { add: true })
+              mpos.set.fit(dummy, group, { add: true })
             } else if (mime.match('.GIF')) {
               const canvas = loader.get_canvas()
               // SuperGif aka LibGif aka JsGif
@@ -1803,7 +1863,7 @@ const mpos = {
               rect.ux.i = 1
               mesh.animate = { gif: loader }
               vars.grade.r_.queue.push(idx)
-              mpos.precept.update(vars.grade, 'trim')
+              mpos.update(vars.grade, 'trim')
 
               if (gc) {
                 gc = null
@@ -1866,7 +1926,7 @@ const mpos = {
 
             // KMEANS
             const pyr = src.clone()
-            const [width, height] = mpos.add.pyr(pyr.cols, pyr.rows, clusters * 8)
+            const [width, height] = mpos.set.pyr(pyr.cols, pyr.rows, clusters * 8)
             cv.resize(pyr, pyr, new cv.Size(width, height), 0, 0, cv.INTER_NEAREST) //AREA,LINEAR,NEAREST
 
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
@@ -2086,6 +2146,7 @@ const mpos = {
                   // todo: cv.copyMakeBorder reduce triangles near corners
                   const mergedBoxes = mergeGeometries(mergedGeoms)
                   const mesh = new THREE.Mesh(mergedBoxes, material)
+                  mesh.layers.set(2)
                   group.add(mesh)
                 }
               })
@@ -2093,7 +2154,7 @@ const mpos = {
 
               group.name = 'OpenCV'
 
-              mpos.add.fit(dummy, group, { add: true })
+              mpos.set.fit(dummy, group, { add: true })
             } catch (error) {
               console.warn(error)
             }
