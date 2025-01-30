@@ -14,6 +14,7 @@ import Stats from 'three/examples/jsm/libs/stats.module.js'
 const mpos = {
   var: {
     count: 0,
+    cache: {},
     opt: {
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
@@ -36,6 +37,10 @@ const mpos = {
 
         mpos.add(selector, options)
       }
+    },
+    time: {
+      previous: Date.now(),
+      delta: 0
     },
     fov: {
       w: window.innerWidth,
@@ -382,29 +387,34 @@ const mpos = {
     },
     render: function () {
       const vars = mpos.var
-      const grade = vars.grade
+      const time = Date.now()
 
-      if (grade) {
-        // animation step
-        const time = Date.now() / 100
-        grade.group.traverse((obj) => {
-          if (obj.animate) {
-            if (obj.animate === true) {
-              // wiggle root
-              obj.rotation.x = Math.sin(time) / 100
-              obj.rotation.y = Math.cos(time) / 100
-              obj.position.z = -9
-            } else if (obj.animate.gif) {
-              // refresh SuperGif
-              obj.material.map.needsUpdate = true
+      vars.time.delta = (time - vars.time.previous) / 1000
+      vars.time.previous = time
+      if (vars.time.delta > 0.06) {
+        //console.log('60fps')
+
+        if (vars.grade) {
+          // animation step
+          vars.grade.group.traverse((obj) => {
+            if (obj.animate) {
+              if (obj.animate === true) {
+                // wiggle root
+                obj.rotation.x = Math.sin(time / 100) / 100
+                obj.rotation.y = Math.cos(time / 100) / 100
+                obj.position.z = -9
+              } else if (obj.animate.gif) {
+                // refresh SuperGif
+                obj.material.map.needsUpdate = true
+              }
             }
-          }
-        })
+          })
 
-        // instanced elements need texture update
-        grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true
-        vars.mat_shader.userData.t.needsUpdate = true
-        //instanced.instanceColor.needsUpdate = true
+          // instanced elements need texture update
+          vars.grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true
+          vars.mat_shader.userData.t.needsUpdate = true
+          //instanced.instanceColor.needsUpdate = true
+        }
       }
 
       vars.renderer.render(vars.scene, vars.camera)
@@ -415,82 +425,86 @@ const mpos = {
     },
     raycast: function (e) {
       const vars = mpos.var
-      vars.ux.pointer.x = (e.clientX / window.innerWidth) * 2 - 1
-      vars.ux.pointer.y = -(e.clientY / window.innerHeight) * 2 + 1
-
       const grade = vars.grade
-      if (grade && !grade.wait) {
-        vars.ux.raycaster.setFromCamera(vars.ux.pointer, vars.camera)
+
+      if (grade && grade.wait !== Infinity) {
+        const ux = vars.ux
+        ux.pointer.x = (e.clientX / window.innerWidth) * 2 - 1
+        ux.pointer.y = -(e.clientY / window.innerHeight) * 2 + 1
+
+        ux.raycaster.setFromCamera(ux.pointer, vars.camera)
         let intersects = vars.ux.raycaster.intersectObjects(grade.group.children, false)
         intersects = intersects.filter(function (hit) {
-          // - raycaster is currently using layers(2) which is only the atlas
-          // - intersects.instanceId is any Instanced atlas (child, self...)
-          // - targets: { instanceId:0, dataIdx: 0, rect: rect ... uv }
-          // - vars.ux.ray { instance: data-idx }
-
-          // Set other filter by prefix + dataIdx
-          // Set atlas filter by instanceId directly
-
-          // atlas/other(video) subscribe to this layer
-          // but we filter more by inPolar-type
           const atlas = hit.object.isInstancedMesh
-          let target = atlas ? hit.instanceId : 'r_other_idx_' + hit.object.userData.el.getAttribute('data-idx')
+          const target = atlas ? hit.instanceId : 'r_idx_' + hit.object.userData.idx
+          // Ray match from whiteliet (atlas/other)
 
-          return vars.ux.target.has(target)
+          // TO-DO:
+          // map instanceId to atlas instanced.userData.idx[...] 
+          // hit.idx = idx
+          // PRO: make atlas/other consistent, reduce multiple getters, ensure index accuracy 
+          // CON: another map, another data-idx record
+
+          // every frame: 
+
+          // FILTERS:
+          // raycast (group + layer 2) > ux.target ( ~inPolar:: userData[idx] ) 
+
+          return ux.target.has(target)
         })
 
+        let synthetic = {}
         if (intersects.length) {
           const hit = intersects[0]
+          console.log('hit', hit)
           const atlas = hit.object.isInstancedMesh
 
           //if (hit.object) {
-          
-            // note: to update instanceMatrix, indexes would need to be constant from transforms()
-            // ... i.e. inPolar<3, noscroll, append only...
-            const rect = atlas ? Object.values(grade.r_.atlas.rects)[hit.instanceId] : grade.r_.other.rects[hit.object.userData.el.getAttribute('data-idx')]
-            console.log('rect',rect)
-            //console.log(hit.instanceId, rect.el, uv)
-            // note: raycast element may be non-interactive (atlas), but not CSS3D or loader (other)
-            vars.ux.synthetic = { uv: hit.uv, el: rect.el, mat: rect.mat, position: rect.css?.style.position || {}, bound: rect.bound }
-            //
-            vars.caret.title = rect.el.getAttribute('data-idx') + rect.el.nodeName
-            const caret = vars.caret.style
-            // visibility
-            const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
-            caret.backgroundColor = color
-            // location
-            const cell = 100 * (1 / grade.cells)
-            caret.width = caret.height = cell + '%'
-            caret.left = 100 * rect.x + '%'
-            caret.bottom = 100 * (1 - rect.y) + '%'
-            if (!rect.atlas) {
-              // child container
-              caret.width = '100%'
-              caret.left = caret.bottom = 0
-            }
-         // }
+
+          // synthetic dispatch event
+          const rect = atlas ? Object.values(grade.r_.atlas.rects)[hit.instanceId] : grade.r_.other.rects[hit.object.userData.idx]
+          synthetic = { uv: hit.uv, rect: rect }
+
+          //
+          // minimap debug
+          vars.caret.title = rect.idx + rect.el.nodeName
+          const caret = vars.caret.style
+          // visibility
+          const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
+          caret.backgroundColor = color
+          // location
+          const cell = 100 * (1 / grade.cells)
+          caret.width = caret.height = cell + '%'
+          caret.left = 100 * rect.x + '%'
+          caret.bottom = 100 * (1 - rect.y) + '%'
+          if (!rect.atlas) {
+            // child container
+            caret.width = '100%'
+            caret.left = caret.bottom = 0
+          }
+          // }
         } else {
-          vars.ux.synthetic = {}
+          synthetic = {}
         }
+
+        //vars.ux.synthetic = synthetic // delayed access?
+        return synthetic
       }
     },
     event: function (e) {
       // dispatch synthetic events
+      const vars = mpos.var
+      vars.controls.enablePan = true
 
-      //console.log(e.type)
-      mpos.var.controls.enablePan = true
-      const synthetic = mpos.var.ux.synthetic
+      let synthetic = mpos.ux.raycast(e)
+      if (!synthetic.uv) return
+      let rect = synthetic.rect
 
       if (e.type === 'mousemove' || e.type === 'mousedown') {
-        mpos.ux.raycast(e)
       }
-
-      if (!synthetic.el) {
-        return
-      }
-
-      if (synthetic.mat === 'native' && (e.type === 'mousemove' || e.type === 'mousedown')) {
-        mpos.var.controls.enablePan = false
+      if (rect.mat === 'native') {
+        // forms, draggables (i.e: rect.ux.o && MOUSE_BUTTON_1_ACTIVE)
+        vars.controls.enablePan = false
       }
 
       //github.com/mrdoob/three.js/blob/dev/examples/jsm/interactive/HTMLMesh.js#L512C1-L563C2
@@ -499,51 +513,50 @@ const mpos = {
       //const source = document.querySelector('body > :not(.mp-block) [data-idx="' + idx + '"]')
 
       // raycaster
-      const element = synthetic.el
-      const uv = { x: synthetic.uv.x, y: 1 - synthetic.uv.y }
 
-      // eventListener
-      const event = e.type
-      //const pageX = e.offsetX
-      //const pageY = e.offsetY
+      const position = rect.css?.style.position || 'auto'
+      
 
-      const [scrollX, scrollY] = synthetic.position === 'fixed' ? [0, 0] : [window.scrollX, window.scrollY]
+      const element = rect.el
+      const uv = synthetic.uv
+      const [scrollX, scrollY] = position === 'fixed' ? [0, 0] : [window.scrollX, window.scrollY]
+
+      //  -+   ++
+      //  uv : xy
+      //  --   +-
+      //
+      //  --   +-
+      //    dom
+      //  -+   ++
 
       const MouseEventInit = {
-        clientX: uv.x * element.offsetWidth + element.offsetLeft + scrollX,
-        clientY: uv.y * element.offsetHeight + element.offsetTop + scrollY,
-        view: element.ownerDocument.defaultView
-        //bubbles: true,
-        //cancelable: true
+        offsetX: uv.x * element.offsetWidth,
+        offsetY: -((1 - uv.y) * element.offsetHeight),
+        view: element.ownerDocument.defaultView,
+        bubbles: true,
+        cancelable: true
       }
 
-      //window.dispatchEvent(new MouseEvent(event, MouseEventInit))
-      const bound = synthetic.bound
+      const event = new MouseEvent(e.type, MouseEventInit)
+      element.dispatchEvent(event)
+
+      //
+      // we only know target element (uv/xy) at depth of mpos
+      // ... but a native form may have finer control elements
+      const bound = rect.bound
       let x = uv.x * bound.width + bound.left + scrollX
-      let y = uv.y * bound.height + bound.top + scrollY
+      let y = -((1 - uv.y) * bound.height) + bound.top + scrollY
+      const el = document.elementFromPoint(x, y)
 
-      //const el = document.elementFromPoint(x, y)
-      //el.dispatchEvent(new MouseEvent(event, MouseEventInit))
-
-      function traverse(element) {
-        const bound = element.getBoundingClientRect()
-        if (x >= bound.left && x <= bound.right && y >= bound.top && y <= bound.bottom) {
-          element.dispatchEvent(new MouseEvent(event, MouseEventInit))
-        }
-
-        for (let i = 0; i < element.children.length; i++) {
-          traverse(element.children[i])
-        }
-      }
-
-      traverse(element)
+      //
+      console.log(synthetic.uv, rect, position)
     }
   },
   update: function (grade, rType) {
     const vars = mpos.var
     let r_queue = grade.r_.queue
 
-    if ((rType && !r_queue.length) || grade.wait || document.hidden) {
+    if ((rType && !r_queue.length) || !!grade.wait || !grade.canvas || document.hidden) {
       // skip frame
       return
     }
@@ -671,38 +684,27 @@ const mpos = {
 
     //console.log('queue', r_queue.length, dataIdx, r_frame)
     const promise = new Promise((resolve, reject) => {
+      //if (!grade.canvas) {
+      //  console.log(grade)
+      // resolve(grade)
+      //}
       // Instanced Mesh
       const instanced = grade.instanced
       const uvOffset = instanced.geometry.getAttribute('uvOffset')
       const step = grade.maxRes / grade.cells
 
+      //
       // Offscreen Canvas
       //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
       //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
-      let osc = grade.osc
-      if (!osc) {
-        //if (window.OffscreenCanvas) {
-        //  osc = new OffscreenCanvas(grade.canvas.width, grade.canvas.height)
-        //} else {
-        osc = document.createElement('canvas')
-        osc.width = grade.canvas.width
-        osc.height = grade.canvas.height
-        //}
-        grade.osc = osc //.transferControlToOffscreen();
-
-        // multiple readback
+      let ctx = grade.ctx
+      if (!ctx) {
+        // etc: offscreen, transfercontrols, multiple readback
         let options = { willReadFrequently: true, alpha: true }
         grade.ctx = grade.canvas.getContext('2d', options)
-        grade.ctx_osc = grade.osc.getContext('2d', options)
-
         grade.ctx.imageSmoothingEnabled = false
-        grade.ctx_osc.imageSmoothingEnabled = false
-
-        osc = grade.osc
       }
-      // transfer control
       const ctxC = grade.ctx
-      const ctxO = grade.ctx_osc
 
       function atlas(grade, opts = {}) {
         if (opts.queue === undefined) {
@@ -731,8 +733,9 @@ const mpos = {
           } else {
             if (!rType) {
               // atlas key structure
-              ctxO.fillStyle = 'rgba(0,255,255,0.125)'
-              ctxO.fillRect(grade.maxRes - step, grade.maxRes - step, step, step)
+              ctxC.clearRect(grade.maxRes - step, grade.maxRes - step, step, step)
+              ctxC.fillStyle = 'rgba(0,255,255,0.125)'
+              ctxC.fillRect(grade.maxRes - step, grade.maxRes - step, step, step)
             }
             // resolve
 
@@ -785,18 +788,19 @@ const mpos = {
           //  options.style.transform = 'initial'
           //}
 
-          // to-do: transfer this to an offscreen worker
           toCanvas(rect.el, options)
             .then(function (canvas) {
               if (canvas.width === 0 || canvas.height === 0) {
                 // no box
               } else {
-                //noBox && (rect.el.style.display = 'initial')
                 // canvas xy, from top (FIFO)
-                const x = (rect.atlas % grade.cells) * step
-                const y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
+                let x = (rect.atlas % grade.cells) * step
+                let y = (Math.floor(rect.atlas / grade.cells) % grade.cells) * step
+                // canvas rounding trick, bitwise or
+                x = (0.5 + x) | 0
+                y = (0.5 + y) | 0
                 r_frame && ctxC.clearRect(x, y, step, step)
-                ctxO.drawImage(canvas, x, y, step, step)
+                ctxC.drawImage(canvas, x, y, step, step)
                 // shader xy, from bottom
                 // avoid 0 edge, so add 0.0001
                 rect.x = (0.0001 + x) / grade.maxRes
@@ -821,21 +825,14 @@ const mpos = {
       function transforms(grade, paint) {
         // Update meshes from queue
 
-        //let targets = mpos.ux.targets
-        const target = [] //{
-        //atlas: [],
-        //other: []
-        // Set() add() delete(key) clear()
+        //
+        // Ray whitelist atlas/other
+        // - more similar to inPolar than layout reflow
         // atlas :: instanceId (from ROIs) => intersect (ray) => rect (by dataIdx) => synthetic dispatch (element)
         // other :: ?=> intersect (ray) ?=> Mesh.userData.el ?=> rect (by dataIdx) => ...ditto
-
-        // target singleton
-        // 0: { instanceId?: 0, dataIdx: 0, rect: {}, uv: {} }
-        // ...element, uv, mat, position, bound
-        //}
-        // const cloneTemplate = { ...targets[0] };
-
-        //
+        // Example: synthetic dispatch
+        // 0: { rect: {}, uv: {} } ...instanceId/dataIdx, element, uv, mat, position, bound
+        const target = []
 
         if (!paint) {
           //
@@ -853,8 +850,8 @@ const mpos = {
               let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
               rect.obj.visible = vis
 
-              //
-              target.push('r_other_idx_' + rect.idx)
+              // Ray whitelist data-idx
+              target.push('r_idx_' + rect.idx)
             }
 
             if (rect.obj && rect.obj.animate && rect.obj.animate.gif) {
@@ -917,15 +914,12 @@ const mpos = {
 
             // bug frame: force inPolar/css, update instance.count, update render/texture, 3rd condition
             uvOffset.setXY(count, x || vis, y || vis)
+          }
 
-            //
-            // Update raycast whitelist
-            // from instanceId (not data-idx)
-            // more similar to inPolar than layout change
-            if (rect.atlas !== undefined && inPolar) {
-              target.push(Number(count))
-              //targets: { instanceId:0, dataIdx: 0, rect: rect ... uv }
-            }
+          // Ray whitelist instanceId
+          if (rect.atlas !== undefined && inPolar) {
+            target.push(Number(count))
+            //targets: { instanceId:0, dataIdx: 0, rect: rect ... uv }
           }
 
           count++
@@ -934,17 +928,16 @@ const mpos = {
         // Apply Updates
         instanced.count = count
         instanced.computeBoundingSphere() // cull and raycast
+        instanced.computeBoundingBox()
         instanced.instanceMatrix.needsUpdate = true
-        newMap && (instanced.instanceColor.needsUpdate = true)
-
-        ctxC.drawImage(osc, 0, 0)
-        ctxO.clearRect(0, 0, osc.width, osc.height)
+        if (newMap) instanced.instanceColor.needsUpdate = true
+        // Atlas Postprocessing...?
+        //ctxC.drawImage(OffscreenCanvas, 0, 0)
         mpos.ux.render()
 
         if (!paint) {
           vars.ux.target.clear()
           target.forEach((item) => vars.ux.target.add(item))
-          //console.log('target',target)
           // frame done
           grade.wait = false
           resolve(grade)
@@ -1018,7 +1011,7 @@ const mpos = {
     }
 
     // OLD group
-    console.log(grade_r)
+    console.log('grade_r', grade_r)
     await mpos.set.old(selector)
     // NEW group
     const group = new THREE.Group()
@@ -1222,7 +1215,7 @@ const mpos = {
           r_.rects[idx] = rect
         }
         // note: observe off-screen (!inPolar) elements, greedy since pageLoad may be inconsistent
-        rect.idx = idx
+        rect.idx = Number(idx)
         mpos.ux.observer?.observe(rect.el)
       } else {
         // free memory
@@ -1437,6 +1430,7 @@ const mpos = {
           // async
           res = mpos.set.loader(rect.el, object)
           res.userData.el = rect.el
+          res.userData.idx = rect.idx
         } else {
           // general (native, wire)
           vars.grade.group.add(object)
@@ -1609,18 +1603,16 @@ const mpos = {
             for (let o = group.length - 1; o >= 0; o--) {
               const obj = group[o]
               if (obj.type === 'Mesh') {
-                if (obj.animate && obj.animate.gif) {
-                  // SuperGif
-                  obj.animate.gif.pause()
-                  obj.animate.gif = null
-                }
-
-                obj.geometry.dispose()
                 const material = obj.material
+                // Cache flag from loader asset to dispose...?
+                let cache
                 if (material.length) {
                   for (let m = material.length - 1; m >= 0; m--) {
                     const mat = material[m]
                     if (mat) {
+                      // ...?
+                      cache = mat.userData.cache
+                      // cubemap front [5]
                       mat.canvas && (mat.canvas = null)
                       mat.map && mat.map.dispose()
                       // shader
@@ -1630,14 +1622,41 @@ const mpos = {
                     }
                   }
                 } else {
-                  material.map && material.map.dispose()
-                  material.dispose()
+                  // ...?
+                  cache = material.userData.cache
+                  // front
+                  if (!cache) {
+                    material.map && material.map.dispose()
+                    material.dispose()
+                  }
+                }
+
+                // Loader rules...?
+                if (obj.animate?.gif) {
+                  // Cache loader SuperGif case study:
+                  // hogs memory, frames backwards reused, strange loader signature...?
+                  obj.animate.gif.pause()
+                  obj.animate.gif = null
+                }
+                //
+                cache = obj.userData.cache
+                if (!cache) {
+                  obj.geometry.dispose()
                 }
               }
               obj.removeFromParent()
             }
             groups[g].removeFromParent()
           }
+        }
+
+        //
+        // Canvas
+        const vars = mpos.var
+        if (vars.grade) {
+          const ctxC = vars.grade.ctx
+          ctxC.clearRect(0, 0, ctxC.width, ctxC.height)
+          vars.grade.canvas = vars.grade.ctx = null
         }
 
         // CSS3D
@@ -1738,6 +1757,15 @@ const mpos = {
       }
       return [pyr.cols, pyr.rows]
     },
+    cache: function (asset, uri, data) {
+      if (data) asset.data = data
+      console.log('set cache', asset)
+      mpos.var.cache[uri] = asset
+      // dispose...?
+      Object.values(asset.flag).forEach((obj) => {
+        if (obj.isObject3D && obj.userData) obj.userData.cache = true
+      })
+    },
     loader: function (source, dummy) {
       const vars = mpos.var
 
@@ -1748,6 +1776,10 @@ const mpos = {
       mime = mime ? mime[0].toUpperCase() : 'File'
       let loader = !!((mime === 'File' && uri) || mime.match(/(JSON|SVG|GIF)/g))
       //console.log(loader, mime, uri)
+
+      //
+      // Cache: models (or whatever...?)
+      let asset = vars.cache[uri] || { mime: mime, data: false, flag: {} }
 
       //console.log(mime, uri, source, dummy, dummy.matrix)
       let object
@@ -1767,6 +1799,7 @@ const mpos = {
       } else {
         let group = new THREE.Group()
         let gc
+
         if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
           //
           // LOAD Element: OpenCV
@@ -1796,20 +1829,37 @@ const mpos = {
             gc = source = null
           }
         } else {
-          //
-          // LOAD Custom: stage specific or generic
-          if (mime.match('.GIF')) {
-            gc = source.cloneNode()
-            document.querySelector('#custom').appendChild(gc)
-          }
+          if (asset.data) {
+            console.log('cache hit')
+            callback(asset.data)
+          } else {
+            //
+            // LOAD Custom: stage specific or generic
+            if (mime.match('.GIF')) {
+              gc = source.cloneNode()
+              document.querySelector('#custom').appendChild(gc)
+            }
 
-          loader = mime.match('.SVG')
-            ? new SVGLoader()
-            : mime.match('.GIF')
-            ? new SuperGif({ gif: gc, max_width: 128 })
-            : mime.match('.JSON')
-            ? new THREE.ObjectLoader()
-            : new THREE.FileLoader()
+            loader = mime.match('.SVG')
+              ? new SVGLoader()
+              : mime.match('.GIF')
+              ? new SuperGif({ gif: gc, max_width: 128 })
+              : mime.match('.JSON')
+              ? new THREE.ObjectLoader()
+              : new THREE.FileLoader()
+
+            const params = loader instanceof THREE.Loader ? uri : callback
+            const res = loader.load(
+              params,
+              callback,
+              function (xhr) {
+                console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`)
+              },
+              function (error) {
+                console.log('error', error)
+              }
+            )
+          }
 
           function callback(data) {
             console.log('load', mime, data)
@@ -1820,6 +1870,7 @@ const mpos = {
               // note: may be small, upside-down, just a light...?
               group.add(data)
               mpos.set.fit(dummy, group, { add: true })
+              if (!asset.data) mpos.set.cache(asset, uri, data)
             } else if (mime.match('.SVG')) {
               const paths = data.paths || []
 
@@ -1840,6 +1891,7 @@ const mpos = {
 
               group.name = mime
               mpos.set.fit(dummy, group, { add: true })
+              if (!asset.data) mpos.set.cache(asset, uri, data)
             } else if (mime.match('.GIF')) {
               const canvas = loader.get_canvas()
               // SuperGif aka LibGif aka JsGif
@@ -1863,6 +1915,7 @@ const mpos = {
               mesh.animate = { gif: loader }
               vars.grade.r_.queue.push(idx)
               mpos.update(vars.grade, 'trim')
+              mesh.animate.gif.play()
 
               if (gc) {
                 gc = null
@@ -1876,23 +1929,18 @@ const mpos = {
                   gif.parentElement.removeChild(gif)
                 })
               }
-            }
-          }
 
-          const params = loader instanceof THREE.Loader ? uri : callback
-          const res = loader.load(
-            params,
-            callback,
-            function (xhr) {
-              console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`)
-            },
-            function (error) {
-              console.log('error', error)
+              //
+              asset.flag.loader = loader
+              asset.flag.material = material
             }
-          )
+
+            //
+          }
         }
         object = group
       }
+
       return object
     },
     opencv: function (img, group, dummy) {
@@ -2072,7 +2120,7 @@ const mpos = {
         postRun: [
           function (e) {
             try {
-              console.log('cv', Object.keys(kmeans).length, group.userData.el.getAttribute('data-idx'))
+              console.log('load cv', Object.keys(kmeans).length, group.userData.el.getAttribute('data-idx'))
 
               let counts = []
               Object.values(kmeans).forEach((label) => counts.push(label.count))

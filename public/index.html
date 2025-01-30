@@ -18,7 +18,7 @@
   <body class="mp-unstyle">
     <div id="errorMessage"></div>
     <main>
-      <h2 class='mp-native'>
+      <h2 class="mp-native">
         <span>main</span>
         <label class="cycle">
           <input type="checkbox" checked onChange="document.body.classList.toggle('mp-unstyle')" />
@@ -110,7 +110,7 @@
           <object class="mp-loader w33 hinge" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=20"></object>
           <img alt="" class="mp-loader w33 hinge" src="./image.jpg?t=21" crossorigin="anonymous" />
           <img alt="" class="mp-loader w33 hinge" src="./image.gif?t=21" />
-          <video class="mp-loader w33 hinge" crossorigin="anonymous" loop autoplay muted>
+          <video class="mp-loader w33 hinge" crossorigin="anonymous" loop autoplay muted >
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
           </video>
@@ -156,17 +156,18 @@
                   <?xml version="1.0" encoding="UTF-8"?>
                   <xml>XML</xml>
                   <!--//_THREE
-                  const loader = new THREE.BufferGeometryLoader();
-                  loader.load(
-	                  '//raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/json/suzanne_buffergeometry.json',
-                  	function ( geometry ) {
-                  		const material = new THREE.MeshBasicMaterial( { color: 0x00c0c0, wireframe: true } );
-                  		const object = new THREE.Mesh( geometry, material );
-                      object.scale.multiplyScalar( 50 );
-                      object.position.set( -50, 50, 0 );
-                  		mpos.var.grade.group.add( object );
-                  	}
-                  );
+                    const uri = '//raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/json/suzanne_buffergeometry.json'
+                    const loader = new THREE.BufferGeometryLoader();
+                    loader.load( uri, function ( data ){
+                      const material = new THREE.MeshBasicMaterial( { color: 0x00c0c0, wireframe: true } );
+                      const object = new THREE.Mesh( data, material );
+                      
+                      let scale = 50;
+                      object.scale.multiplyScalar( scale );
+                      object.position.set( -scale, scale, 0 );
+                      
+                      mpos.var.grade.group.add( object );
+                    });
                   -->
                   <script>
                     noscript
@@ -218,35 +219,36 @@
           <summary class="mp-native">section<span>#live</span></summary>
 
           <article>
-            <h2>Article 01</h2>
-            <p>Praesent in elementum risus, a vehicula justo.</p>
+            <h2>Article 01: Carousel</h2>
+            <p>Media slides with content-aware policy.</p>
             <img alt="" class="w50" src="data:," style="height: 8em; background-color: rgb(128, 0, 0)" />
             <ul>
-              <span class="mp-poster" style="display: initial">Phasellus eu sapien tellus. </span>
-              <li>Praesent in elementum risus, a vehicula justo.</li>
-              <li>Consectetur adipiscing elit.</li>
-              <li>Phasellus massa mauris, rutrum ac semper posuere.</li>
+              Proposal...
+              <li>config: default, custom</li>
+              <li>source: h264, MVC/SBS</li>
+              <li>user-agent: advertisement</li>
             </ul>
           </article>
           <article>
-            <h2>Article 02</h2>
-            <p>Praesent in elementum risus, a vehicula justo.</p>
+            <h2>Article 02: Predictive</h2>
+            <p>Defined slot to sample for systems.</p>
             <img alt="" class="w100" src="data:," style="height: 8em; background-color: rgb(0, 128, 0)" />
             <ul>
-              <li>Nunc at dolor lacus.</li>
-              <li>Lorem ipsum dolor sit amet.</li>
-              <li>Phasellus massa mauris, rutrum ac semper posuere.</li>
+              Proposal...
+              <li>script: cast data routine</li>
+              <li>unify i/o: session layers</li>
+              <li>handoff: XR, auto, foreign</li>
             </ul>
           </article>
           <article>
-            <h2>Article 03</h2>
-            <p>Consectetur adipiscing elit.</p>
+            <h2>Article 03: Indeterminate</h2>
+            <p>Mutation and polymorphism and garbage.</p>
             <img alt="" class="w50" src="data:," style="height: 8em; background-color: rgb(0, 0, 128)" />
             <ul>
-              Sed viverra quis nisl et vulputate.
-              <li>Phasellus eu sapien tellus.</li>
-              <li>Lorem ipsum dolor sit amet.</li>
-              <li>Morbi eget eros non felis tempor sodales.</li>
+              Proposal...
+              <li>alert: !!can or !!is in a coalmine</li>
+              <li>ingest: contain or isolate</li>
+              <li>seal: environment pipeline</li>
             </ul>
           </article>
         </details>
@@ -291,6 +293,19 @@
         last.innerText = symbol
         document.querySelector(selector).prepend(snakes)
       }
+
+      //
+      // User Events (Native or Intercepted)
+      document.addEventListener('click', e => {
+        const target = e.target
+        target.classList.toggle('active')
+
+        if(target.nodeName == 'VIDEO'){
+          if (target.paused) target.play()
+          else target.pause()
+        }
+        
+      }, true)
     </script>
   </body>
 </html>
