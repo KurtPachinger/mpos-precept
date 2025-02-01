@@ -377,7 +377,7 @@ const mpos = {
     //
     // Build DOM Tree Structure
     vars.grade = { wait: Infinity }
-    const grade = {
+    grade = {
       // Template Isolate
       el: sel,
       group: group,
