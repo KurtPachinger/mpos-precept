@@ -17,7 +17,7 @@ const mpos = {
     count: 0,
     cache: {},
     time: {
-      previous: Date.now(),
+      clock: new THREE.Clock(),
       delta: 0
     },
     ux: {
@@ -2115,37 +2115,39 @@ const mpos = {
       const vars = mpos.var
       const time = Date.now()
 
-      vars.time.delta = (time - vars.time.previous) / 1000
-      vars.time.previous = time
-      if (vars.time.delta > 0.06) {
-        //console.log('60fps')
-
-        if (vars.grade) {
-          // animation step
-          vars.grade.group.traverse((obj) => {
-            if (obj.animate) {
-              if (obj.animate === true) {
-                // wiggle root
-                obj.rotation.x = Math.sin(time / 100) / 100
-                obj.rotation.y = Math.cos(time / 100) / 100
-                obj.position.z = -9
-              } else if (obj.animate.gif) {
-                // refresh SuperGif
-                obj.material.map.needsUpdate = true
-              }
-            }
-          })
-
-          // instanced elements need texture update
-          vars.grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true
-          vars.mat_shader.userData.t.needsUpdate = true
-          //instanced.instanceColor.needsUpdate = true
-        }
-
-        vars.renderer.render(vars.scene, vars.camera)
-        vars.rendererCSS.render(vars.scene, vars.camera)
-
+      // 30 fps
+      let interval = 1 / 30
+      vars.time.delta += vars.time.clock.getDelta()
+      if (vars.time.delta > interval) {
+        // The draw or time dependent code are here
+        vars.time.delta = vars.time.delta % interval
       }
+
+      if (vars.grade) {
+        // animation step
+        vars.grade.group.traverse((obj) => {
+          if (obj.animate) {
+            if (obj.animate === true) {
+              // wiggle root
+              obj.rotation.x = Math.sin(time / 100) / 100
+              obj.rotation.y = Math.cos(time / 100) / 100
+              obj.position.z = -9
+            } else if (obj.animate.gif) {
+              // refresh SuperGif
+              obj.material.map.needsUpdate = true
+            }
+          }
+        })
+
+        // instanced elements need texture update
+        vars.grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true
+        vars.mat_shader.userData.t.needsUpdate = true
+        //instanced.instanceColor.needsUpdate = true
+      }
+
+      vars.renderer.render(vars.scene, vars.camera)
+      vars.rendererCSS.render(vars.scene, vars.camera)
+
       stats.update()
 
       //requestAnimationFrame(vars.animate)
@@ -2216,7 +2218,6 @@ const mpos = {
     },
     event: function (e) {
       const vars = mpos.var
-      if (vars.time.delta > 0.06) return
 
       //
       // Raycaster Targets
