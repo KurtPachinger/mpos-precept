@@ -17,9 +17,9 @@ const mpos = {
     batch: 0,
     cache: {},
     time: {
-      clock: new THREE.Clock(),
-      delta: 0,
-      interval: 1 / 30 // 30 fps
+      intClock: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
+      intDelta: 0,
+      intFPS: 1 / 30 // 30 fps
     },
     fov: {
       w: window.innerWidth,
@@ -276,10 +276,14 @@ const mpos = {
     const ux = mpos.ux
     window.stats = new Stats()
     mp.appendChild(stats.dom)
+    //
+    const gridHelper = new THREE.GridHelper(fov.w, 4, 0x444444, 0xc0c0c0)
+    gridHelper.rotateX(3.14 / 2)
+    vars.scene.add(gridHelper)
 
     // First Paint
     ux.events.raycaster.layers.set(2)
-    ux.render()
+    //ux.render()
 
     // User Events: Window, Scene, Raycaster
     controls.addEventListener('change', ux.render, false)
@@ -377,7 +381,7 @@ const mpos = {
     //
     // Build DOM Tree Structure
     vars.grade = { wait: Infinity }
-    grade = {
+    const grade = {
       // Template Isolate
       el: sel,
       group: group,
@@ -1611,14 +1615,33 @@ const mpos = {
     }
   },
   update: function (grade, rType) {
-    const { opt, reset } = mpos.var
+    const { opt, reset, time } = mpos.var
     //const vars = mpos.var
 
     //
     // Emulate Page Flow: reduce and detect changes
 
+    time.intDelta += time.intClock.getDelta()
+
+    //TEST:
+    // Render may invoke target != 30fps so qualify delay
+    // specified 'frame tear' versus expected 'frame rate'
+    const intervalMilliseconds = time.intFPS * 1000
+    let syncFPS = 0.8
+    syncFPS = time.intFPS / time.intDelta
+    console.log('syncFPS', syncFPS, time.intFPS, time.intDelta)
+    // ...obtain some normal quality deviance from nominal
+    // ...for better logic control: default fallback, standard terminal behavioure
+
+    if (time.intDelta > time.intFPS) {
+      //stackoverflow.com/questions/11285065/#answer-51942991
+      time.intDelta %= time.intFPS
+    } else {
+      return
+    }
+
     let r_queue = grade.r_.queue
-    if ((rType && !r_queue.length) || grade.wait === true || grade.wait === Infinity || !grade.canvas || document.hidden) {
+    if ((rType && !r_queue.length) || !!grade?.wait || !grade.canvas || document.hidden) {
       // skip frame
       return
     }
@@ -1662,11 +1685,13 @@ const mpos = {
             const timers = mpos.ux.timers
             r_frame = timers[idx][timers[idx].length - 1]
             // quality limits pixelRatio of html-to-image
-            const now = performance.now()
-            const elapsed = now - timers.last
-            timers.last = now
+            const now = time.intClock.oldTime
+            const elapsed = now - time.nomLast
+            time.nomLast = now
 
-            quality = Math.max(mpos.var.opt[idx] / elapsed, 0.8).toFixed(2)
+            let q = opt[idx] / elapsed
+            //console.log('q', q, Math.min(q, 1))
+            quality = Math.max(opt[idx] / elapsed, 0.8).toFixed(2)
           }
         }
       }
@@ -1683,7 +1708,7 @@ const mpos = {
             mpos.set.inPolar(rect)
 
             if (reQueue) {
-              if (rect.inPolar >= mpos.var.opt.inPolar) {
+              if (rect.inPolar >= opt.inPolar) {
                 if (rect.el.tagName === 'BODY') {
                   // no propagate
                   r_queue.push(idx)
@@ -1823,7 +1848,7 @@ const mpos = {
 
         if (rect && rect.hasOwnProperty('atlas') && !shallow(rect.ux)) {
           // Unset or override element box style
-          const pixelRatio = rect.ux.o ? quality : 0.8
+          const pixelRatio = rect.ux.o || rect.ux.u ? quality : 0.8
           const options = {
             style: { ...reset },
             canvasWidth: step,
@@ -2130,21 +2155,15 @@ const mpos = {
     render: function () {
       const { grade, time, mat_shader, scene, camera, renderer, rendererCSS } = mpos.var
 
-      time.delta += time.clock.getDelta()
-      if (time.delta > time.interval) {
-        // The draw or time dependent code are here
-        time.delta %= time.interval
-      }
-
       if (grade) {
         // animation step
         grade.group.traverse((obj) => {
           if (obj.animate) {
             if (obj.animate === true) {
-              const animationTime = Date.now() / 100
+              const animationTime = Date.now() / 50
               // wiggle root
               obj.rotation.x = Math.sin(animationTime) / 100
-              obj.rotation.y = Math.cos(animationTime) / 100
+              obj.rotation.y = Math.cos(animationTime) / 200
               obj.position.z = -9
             } else if (obj.animate.gif) {
               // refresh SuperGif

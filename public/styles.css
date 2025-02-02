@@ -9,7 +9,7 @@
 
 html,
 body {
-  /*height: 100%;*/
+  height: 100%;
 }
 
 main {
@@ -63,11 +63,15 @@ main {
 
   & {
     /*user-select: none;*/
-    position: absolute;
+    /*position: absolute;*/
+    position: relative;
     z-index: 2;
     margin: var(--u2);
     width: 16rem;
     max-width: var(--unit);
+  }
+  #tools {
+    position: absolute;
   }
 
   aside {
@@ -142,7 +146,8 @@ main {
   table tr,
   li,
   summary {
-    &:hover, &:focus {
+    &:hover,
+    &:focus {
       background-color: var(--sub);
     }
   }
@@ -295,19 +300,19 @@ EFFECTS, ANIMATION */
   }
 }
 
-:focus, :active, .active{
- box-shadow: inset 0 0 .125em .125em red;
- animation: active .5s linear infinite alternate;
+:focus,
+:active,
+.active {
+  box-shadow: inset 0 0 0.125em 0.125em red;
+  animation: active 0.5s linear infinite alternate;
 }
 @keyframes active {
-  to { 
-    box-shadow: inset 0 0 .000em .125em cyan;
-
-   }
+  to {
+    box-shadow: inset 0 0 0em 0.125em cyan;
+  }
 }
 
 /**/
-
 
 .w33:hover {
   scale: 2;
