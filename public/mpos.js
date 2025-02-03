@@ -17,9 +17,9 @@ const mpos = {
     batch: 0,
     cache: {},
     time: {
-      intClock: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
-      intDelta: 0,
-      intFPS: 1 / 30 // 30 fps
+      sFence: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
+      sFenceDelta: 0,
+      sFenceFPS: 1 / 30 // 30 fps
     },
     fov: {
       w: window.innerWidth,
@@ -1624,6 +1624,8 @@ const mpos = {
       return
     }
 
+    //
+    // Emulate Page Flow: reduce and detect changes
     grade.wait = true
     grade.inPolar = opt.inPolar
     const r_atlas = grade.r_.atlas
@@ -1639,52 +1641,22 @@ const mpos = {
     const step = grade.mapMax / grade.mapCell
 
     //
-    // Emulate Page Flow: reduce and detect changes
+    // Frame Sync and Feedback: render may invoke targets to collocate
+    let sPhaseSync = 0.5
+    time.sFenceDelta += time.sFence.getDelta()
+    let sFenceSync = 10 * (time.sFenceDelta - time.sFenceFPS - time.sFenceFPS / 2)
+    sFenceSync = 0.5 / Math.abs(sFenceSync - 0.5)
 
-    time.intDelta += time.intClock.getDelta()
-
-    //TEST: Real Basis
-    // Render may invoke target != 30fps so qualify delay
-    // specified 'frame tear' versus expected 'frame rate'
-    //const intervalMilliseconds = time.intFPS * 1000
-    //let syncFPS = 0.8
-    //syncFPS = time.intFPS / time.intDelta
-    //console.log('syncFPS', syncFPS, time.intFPS, time.intDelta)
-    // ...obtain some normal quality deviance from nominal
-    // ...for better logic control: default fallback, standard terminal behavioure
-    //
-
-    //const intProduct = (1 / ((time.intDelta - time.intFPS) / (time.intFPS / 2))) * 1.5
-    //const intProduct = 1 / ((time.intDelta - time.intFPS) / (time.intFPS / 2))
-    let intProduct = 10 * (time.intDelta - time.intFPS - time.intFPS / 2)
-    intProduct = 0.5 / Math.abs(intProduct - 0.5)
-    let nomProduct = 0.5
-
-    //screenTear, vsync, limitrate, FrameCap, fence, phase
-    let syncFPS = time.intDelta > time.intFPS
+    const syncFPS = time.sFenceDelta > time.sFenceFPS
     if (syncFPS) {
+      // Framerate Limit: pivot sFenceSync describes execution priority, since event queue is indeterminate
       //stackoverflow.com/questions/11285065/#answer-51942991
-      time.intDelta %= time.intFPS
+      time.sFenceDelta %= time.sFenceFPS
     } else if (rType) {
-      transforms(grade) // return early
-
-      // note: the render() tail is not reached
-      // ...so FPS will read 30fps (misleading)
-      // ...unless controls invoke render calls... it will climb to 150+
-      //note: the purpose was to selectively update
-      //...so...
-      // 1. save intProduct (NOT nomProduct?)  as variable
-      //    - [...or accumulate average]
-      //    - other functions can refer to flag easily
-      //    - it is our primary pivot, not nomProduct (which is atlas quality from delay)
-      // 2. always update targets (to raycast, synthetic event)
-      //    - css() and inPolar() are already set to check (once per frame during queue evaluation)
-      //    - skip atlas, skip box()
-      //    ... that's it, call render() and set wait=false
-      //    ... FPS should be more responsive across intDelta reporting and not locked at 30!
       //
-      //mpos.ux.render()
-      //return
+      // Feedback Sample: state boundry value analysis
+      transforms(grade)
+      // todo: is [...accumulate average] beneficial?
     }
 
     if (rType) {
@@ -1718,26 +1690,20 @@ const mpos = {
             const timers = mpos.ux.timers
             r_frame = timers[idx][timers[idx].length - 1]
             // quality limits pixelRatio of html-to-image
-            const now = time.intClock.oldTime
-            const elapsed = now - time.nomLast
-            time.nomLast = now
-            //console.log('delay', elapsed, opt.delay)
+            const now = time.sFence.oldTime
+            const elapsed = now - time.sPhaseLast
+            time.sPhaseLast = now
 
-            //let q = opt[idx] / elapsed
-            //console.log('q', q, Math.min(q, 1))
-            //quality = Math.max(opt[idx] / elapsed, 0.8).toFixed(2)
-
-            nomProduct = Math.abs(0.5 - opt.delay / elapsed)
+            //quality = Math.max(opt[idx] / elapsed, sPhaseSync).toFixed(2)
+            sPhaseSync = Math.abs(0.5 - opt[idx] / elapsed)
           }
         }
       }
 
       //
-      // Nominal Time Partition
-      //1 intProduct: Normalized Deviation from FPS Limit
-      //
-      const quality = Math.min(intProduct + nomProduct, 1)
-      console.log('?:', intProduct, nomProduct, quality)
+      // Nominal Time Partition: real deviation
+      quality = Math.min(sFenceSync + sPhaseSync, 1)
+      console.log('?:', [+sFenceSync.toFixed(3), +sPhaseSync.toFixed(3), +quality.toFixed(3)].join('      __      '))
 
       if (reflow) {
         function vis(rects, reQueue) {
@@ -2064,7 +2030,7 @@ const mpos = {
       // Apply Updates
       instanced.count = count
       instanced.computeBoundingSphere() // cull and raycast
-      instanced.computeBoundingBox()
+      //instanced.computeBoundingBox()
       instanced.instanceMatrix.needsUpdate = true
       if (newMap) instanced.instanceColor.needsUpdate = true
       // Atlas Postprocessing...?
@@ -2372,7 +2338,7 @@ const mpos = {
       // Event Dispatch
       const event = new MouseEvent(e.type, MouseEventInit)
       NodeWalker.dispatchEvent(event)
-      //console.log(synthetic, emits, NodeWalker)
+      //console.log(rect, uv, emits, NodeWalker)
     }
   }
 }
