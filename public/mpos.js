@@ -337,7 +337,7 @@ const mpos = {
   },
   add: async function (selector, opts = {}) {
     const vars = mpos.var
-    const { opt, fov, atlas, geo, mat, mat_line, scene } = vars // grade needs attention pre/post
+    const { opt, fov, atlas, geo, mat, mat_shader, mat_line, scene } = vars // grade needs attention pre/post
     const precept = mpos.precept
 
     //
@@ -611,7 +611,7 @@ const mpos = {
 
     //
     // Instanced Mesh and Shader Atlas
-    const shader = mpos.set.shader(grade.canvas, grade.mapCell)
+    const shader = mpos.set.shader(grade.canvas, grade.mapCell, mat_shader)
     const instanced = new THREE.InstancedMesh(geo, [mat, mat, mat, mat, shader, mat_line], grade.elsMax)
 
     instanced.layers.set(2)
@@ -961,12 +961,12 @@ const mpos = {
 
       return unset || rect.ux.u
     },
-    shader: function (canvas, texStep) {
+    shader: function (canvas, texStep, mat_shader) {
       //discourse.threejs.org/t/13221/17
       const texAtlas = new THREE.CanvasTexture(canvas)
       texAtlas.minFilter = THREE.NearestFilter
       // update
-      const m = mpos.var.mat_shader
+      const m = mat_shader
       m.uniforms.map.value = texAtlas
       m.uniforms.atlasSize.value = texStep
       // output
@@ -1626,12 +1626,16 @@ const mpos = {
     //TEST:
     // Render may invoke target != 30fps so qualify delay
     // specified 'frame tear' versus expected 'frame rate'
-    const intervalMilliseconds = time.intFPS * 1000
-    let syncFPS = 0.8
-    syncFPS = time.intFPS / time.intDelta
-    console.log('syncFPS', syncFPS, time.intFPS, time.intDelta)
+    //const intervalMilliseconds = time.intFPS * 1000
+    //let syncFPS = 0.8
+    //syncFPS = time.intFPS / time.intDelta
+    //console.log('syncFPS', syncFPS, time.intFPS, time.intDelta)
     // ...obtain some normal quality deviance from nominal
     // ...for better logic control: default fallback, standard terminal behavioure
+    //
+
+    const intProduct = (1 / ((time.intDelta - time.intFPS) / (time.intFPS / 2))) * 1.5
+    let nomProduct = 0.5
 
     if (time.intDelta > time.intFPS) {
       //stackoverflow.com/questions/11285065/#answer-51942991
@@ -1688,13 +1692,21 @@ const mpos = {
             const now = time.intClock.oldTime
             const elapsed = now - time.nomLast
             time.nomLast = now
+            //console.log('delay', elapsed, opt.delay)
 
-            let q = opt[idx] / elapsed
+            //let q = opt[idx] / elapsed
             //console.log('q', q, Math.min(q, 1))
-            quality = Math.max(opt[idx] / elapsed, 0.8).toFixed(2)
+            //quality = Math.max(opt[idx] / elapsed, 0.8).toFixed(2)
+
+            nomProduct = Math.abs(0.5 - opt.delay / elapsed)
           }
         }
       }
+
+      //
+      // Nominal Time Partition
+      const quality = intProduct + nomProduct
+      //console.log('?:', intProduct, nomProduct, quality)
 
       if (reflow) {
         function vis(rects, reQueue) {
