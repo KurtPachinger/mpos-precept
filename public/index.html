@@ -21,7 +21,7 @@
       <h2 class="mp-native">
         <span>main</span>
         <label class="cycle">
-          <input type="checkbox" checked onChange="document.body.classList.toggle('mp-unstyle')" />
+          <input name="cycles" type="checkbox" checked onChange="document.body.classList.toggle('mp-unstyle')" />
           cycle
         </label>
       </h2>
@@ -39,7 +39,7 @@
           <form onSubmit="return false;">
             <fieldset class="sub">
               <legend>form</legend>
-              <input class="w50" type="text" placeholder="listen" />
+              <input name="listen" class="w50" type="text" placeholder="listen" />
               <input class="w25" type="button" value="&#x2714;" />
               <input class="w25" type="reset" value="&#x2716;" />
               <input class="w100" type="range" />

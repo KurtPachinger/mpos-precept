@@ -50,6 +50,10 @@ main {
   table {
     margin-bottom: var(--u2);
   }
+  .resize,
+  .scroll {
+    will-change: scroll-position;
+  }
   .resize {
     resize: both;
     overflow: hidden;
@@ -392,16 +396,16 @@ EFFECTS, ANIMATION */
 
   /* wiggle */
   mp {
-    animation-delay: 0.125s;
+    animation-delay: 0.125s !important;
     z-index: 1;
     mp {
-      animation-delay: 0.25s;
+      animation-delay: 0.25s !important;
       z-index: 1;
       mp {
-        animation-delay: 0.5s;
+        animation-delay: 0.5s !important;
         z-index: 2;
         mp {
-          animation-delay: 0.75s;
+          animation-delay: 0.75s !important;
           z-index: 3;
         }
       }

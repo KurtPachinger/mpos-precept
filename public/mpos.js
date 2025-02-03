@@ -1623,7 +1623,7 @@ const mpos = {
 
     time.intDelta += time.intClock.getDelta()
 
-    //TEST:
+    //TEST: Real Basis
     // Render may invoke target != 30fps so qualify delay
     // specified 'frame tear' versus expected 'frame rate'
     //const intervalMilliseconds = time.intFPS * 1000
@@ -1634,14 +1634,37 @@ const mpos = {
     // ...for better logic control: default fallback, standard terminal behavioure
     //
 
-    const intProduct = (1 / ((time.intDelta - time.intFPS) / (time.intFPS / 2))) * 1.5
+    //const intProduct = (1 / ((time.intDelta - time.intFPS) / (time.intFPS / 2))) * 1.5
+    //const intProduct = 1 / ((time.intDelta - time.intFPS) / (time.intFPS / 2))
+    let intProduct = 10 * (time.intDelta - time.intFPS - time.intFPS / 2)
+    intProduct = 0.5 / Math.abs(intProduct - 0.5)
     let nomProduct = 0.5
 
-    if (time.intDelta > time.intFPS) {
+    //screenTear, vsync, limitrate, FrameCap, fence, phase
+    let syncFPS = time.intDelta > time.intFPS
+    if (syncFPS) {
       //stackoverflow.com/questions/11285065/#answer-51942991
       time.intDelta %= time.intFPS
     } else {
-      return
+      transforms(grade)
+      
+      // note: the render() tail is not reached
+      // ...so FPS will read 30fps (misleading)
+      // ...unless controls invoke render calls... it will climb to 150+
+      //note: the purpose was to selectively update
+      //...so...
+      // 1. save intProduct (NOT nomProduct?)  as variable
+      //    - [...or accumulate average]
+      //    - other functions can refer to flag easily
+      //    - it is our primary pivot, not nomProduct (which is atlas quality from delay)
+      // 2. always update targets (to raycast, synthetic event)
+      //    - css() and inPolar() are already set to check (once per frame during queue evaluation)
+      //    - skip atlas, skip box()
+      //    ... that's it, call render() and set wait=false
+      //    ... FPS should be more responsive across intDelta reporting and not locked at 30!
+      //
+      //mpos.ux.render()
+      //return
     }
 
     let r_queue = grade.r_.queue
@@ -1705,8 +1728,10 @@ const mpos = {
 
       //
       // Nominal Time Partition
-      const quality = intProduct + nomProduct
-      //console.log('?:', intProduct, nomProduct, quality)
+      //1 intProduct: Normalized Deviation from FPS Limit
+      //
+      const quality = Math.min(intProduct + nomProduct, 1)
+      console.log('?:', intProduct, nomProduct, quality)
 
       if (reflow) {
         function vis(rects, reQueue) {
