@@ -266,7 +266,22 @@
           // toast some march-mpallows
           snake('#overflow', 4, '-')
           snake('#underflow', 4, '+')
-          snake('#nest', 16)
+
+          // snake to depth under cutoff
+          let nest = document.querySelector('#nest')
+          let find = document.querySelector(mpos.var.opt.selector)
+          let depth = 0
+          while (nest) {
+            if (nest.isSameNode(find) || !nest.parentElement || ++depth > 32) {
+              break
+            }
+            nest = nest.closest(mpos.precept.allow)
+          }
+
+          // (-2): extend (child) to depth -1, and head (poster) -1
+          depth += mpos.var.opt.depth - depth - 2
+
+          snake('#nest', depth, depth)
 
           mpos.add().then(function (grade) {
             console.log('grade', grade)

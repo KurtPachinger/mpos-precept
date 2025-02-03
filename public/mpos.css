@@ -2,7 +2,7 @@
 MP SELECTORS */
 
 [data-idx],
-#css3d > .mp-block > .mp-block > .mp-block {
+#css3d {
   /* memory hints */
 
   &.mp-unset {
@@ -19,10 +19,12 @@ MP SELECTORS */
     /*if full-width rules are uncommented*/
     /*will-change: position, width, height;*/
   }
-  &,
-  > * {
-    /* css3d and children */
-    will-change: transform;
+  &#css3d > .mp-block > .mp-block > .mp-block {
+    &,
+    > * {
+      /* css3d and children */
+      will-change: transform;
+    }
   }
 }
 
