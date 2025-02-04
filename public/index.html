@@ -119,6 +119,7 @@
               <mp class="mp-allow">
                 <mp class="mp-allow">
                   <mp class="mp-allow">
+                    &#65532;
                     <object
                       class="mp-loader"
                       data="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json"
@@ -260,54 +261,26 @@
       const mp = setInterval(() => {
         if (typeof window.mpos !== 'undefined') {
           clearInterval(mp)
-          // mode: standalone
-          mpos.init()
 
           // toast some march-mpallows
-          snake('#overflow', 4, '-')
-          snake('#underflow', 4, '+')
+          mpos.fnVar('snake', '#overflow', { count: 4, symbol: '-' })
+          mpos.fnVar('snake', '#underflow', { count: 4, symbol: '+' })
 
-          // snake to depth under cutoff
-          let nest = document.querySelector('#nest')
-          let find = document.querySelector(mpos.var.opt.selector)
-          let depth = 0
-          while (nest) {
-            if (nest.isSameNode(find) || !nest.parentElement || ++depth > 32) {
-              break
-            }
-            nest = nest.closest(mpos.precept.allow)
-          }
+          mpos.fnVar('depthTo', '#nest', {}).then(function (res) {
+            mpos.fnVar('snake', '#nest', { count: res, symbol: res }).then((res) => {
+              console.log('fnVar', res)
+            })
+          })
 
-          // (-2): extend (child) to depth -1, and head (poster) -1
-          depth += mpos.var.opt.depth - depth - 2
-
-          snake('#nest', depth, depth)
-
-          mpos.add().then(function (grade) {
-            console.log('grade', grade)
+          // mode: standalone
+          mpos.init().then((res) => {
+            console.log('mpos:', res)
+            mpos.add().then((res) => {
+              console.log('precept grade:', res)
+            })
           })
         }
       }, 250)
-
-      //
-      // Filler Content
-      function snake(selector, count = 4, symbol = '') {
-        let nodeName = 'mp'
-        let snakes = document.createElement(nodeName)
-        snakes.classList.add('march', 'mp-allow')
-        let last = snakes
-        while (--count) {
-          let snake = document.createElement(nodeName)
-          snake.classList.add('mp-allow')
-          if (count % 2 === 0) {
-            snake.classList.add('zebra')
-          }
-          last.append(snake)
-          last = snake
-        }
-        last.innerText = symbol
-        document.querySelector(selector).prepend(snakes)
-      }
 
       //
       // User Events (Native or Intercepted)

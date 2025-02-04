@@ -13,7 +13,32 @@ import { toCanvas } from 'html-to-image'
 // ...OpenCV, SuperGif
 
 const mpos = {
+  fnVar: function (tool, value, opts = {}) {
+    // Syntactic Suger: allow keys and map variable scope
+    switch (tool) {
+      case 'depthTo':
+        opts.selector = opts.selector || this.var.opt.selector
+        opts.depth = opts.depth || this.var.opt.depth
+        break
+      default:
+        opts.var = this.var
+    }
+
+    const promise = new Promise((resolve, reject) => {
+      //
+      let response = this.var.tool[tool](value, opts)
+      resolve(response)
+      reject('err' + tool)
+    })
+
+    //console.log('fnVar:', promise)
+    return promise
+  },
   var: {
+    fnPrivate(opts) {
+      console.log('fnPrivate!')
+      console.log(this, opts)
+    },
     batch: 0,
     cache: {},
     time: {
@@ -111,7 +136,268 @@ const mpos = {
         gl_FragColor = texture2D(map, vUv);
       }
       `
-    })
+    }),
+    tool: {
+      //
+      // Tools and fnVar: compatibility or direct access?
+      avg: function (val, acc) {
+        // moving average
+        let avg = acc.average + (val - acc.average) / (1 + acc.count)
+        // moving average
+        acc.average = avg
+        acc.count++
+      },
+      snake: function (selector, opts = {}) {
+        // chain of elements
+        let nodeName = opts.nodeName || 'mp'
+        let snakes = document.createElement(nodeName)
+        snakes.classList.add('march', 'mp-allow')
+        let last = snakes
+        while (--opts.count) {
+          let snake = document.createElement(nodeName)
+          snake.classList.add('mp-allow')
+          if (opts.count % 2 === 0) {
+            snake.classList.add('zebra')
+          }
+          last.append(snake)
+          last = snake
+        }
+        last.innerText = opts.symbol
+        document.querySelector(selector)?.prepend(snakes)
+
+        return snakes
+      },
+      depthTo: function (selector, opts = {}) {
+        // snake to depth under cutoff
+        let nest = document.querySelector(selector)
+        let find = document.querySelector(opts.selector || mpos.var.opt.selector)
+        let depth = 0
+        while (nest) {
+          if (nest.isSameNode(find) || !nest.parentElement || ++depth > 32) {
+            break
+          }
+          nest = nest.closest(mpos.precept.allow)
+        }
+
+        // (-2): extend (child) to depth -1, and head (poster) -1
+        depth += (opts.depth || mpos.var.opt.depth) - depth - 2
+
+        return depth
+      },
+      diffs: function (type, opts = {}) {
+        let differ = false
+        let style = opts.style || {}
+
+        //
+        // Different from Baseline Generic Primitive
+
+        if (type === 'rect') {
+          differ = !opts.node.clientWidth || !opts.node.clientHeight
+          // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
+        } else if (type === 'matrix') {
+          // note: style may be version from css frame accumulating
+          differ = style.transform?.startsWith('matrix')
+        } else if (type === 'tween') {
+          // note: loose definition
+          differ =
+            style.transform !== 'none' ||
+            style.transitionDuration !== '0s' ||
+            (style.animationName !== 'none' && style.animationPlayState === 'running')
+        } else if (type === 'flow') {
+          // note: if position overflows scrollOffset, canvas may not draw
+          differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
+          //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
+        } else if (type === 'pseudo') {
+          // note: get pseudo capture once per frame for all rects
+          let rect = opts.rect
+          let css = rect.css
+          if (css) {
+            let capture = opts.capture
+            capture = capture || {
+              // deepest pseudo match
+              hover: [...opts.sel.querySelectorAll(':hover')].pop(),
+              active: [...opts.sel.querySelectorAll(':active')].pop(),
+              focus: [...opts.sel.querySelectorAll(':focus')].pop()
+            }
+
+            // note: pseudo (or unset prior frame) enqueued for atlas
+            differ = css.pseudo
+            css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
+            differ = differ || css.pseudo
+
+            rect.ux.p = differ
+          }
+        }
+
+        if (opts.node) {
+          // todo: node may be set manually
+          // check on tail, so other updates (like pseudo) bubble to queue
+          differ = differ || opts.node.classList.contains('mp-diff')
+        }
+
+        return differ
+      },
+      dpr: function (distance) {
+        const { fov, camera, grade } = mpos.var
+        //
+        // todo: could be used for anisotropy
+        const dprPractical = (fov.w + fov.h) / 2
+        const camPosition = camera.position
+        const distanceToZ = camPosition.distanceTo({ x: camPosition.x, y: camPosition.y, z: 0 })
+        //const distanceTo0 = camPosition.distanceTo({ x: 0, y: 0, z: 0 })
+        let sample = distance || camPosition.distanceTo(grade.group)
+
+        const eDPI = dprPractical / ((sample + distanceToZ) / 2)
+        fov.dpr = Math.min(eDPI, 1)
+      },
+      old: function (selector) {
+        const { scene, grade } = mpos.var
+        //console.log(mpos.var.renderer.info)
+        return new Promise((resolve, reject) => {
+          // dispose of scene and release listeners
+          const groups = scene?.getObjectsByProperty('type', 'Group')
+
+          if (groups && groups.length) {
+            for (let g = groups.length - 1; g >= 0; g--) {
+              const group = groups[g].children || []
+              for (let o = group.length - 1; o >= 0; o--) {
+                const obj = group[o]
+                if (obj.type === 'Mesh') {
+                  const material = obj.material
+                  // Cache flag from loader asset to dispose...?
+                  let cache
+                  if (material.length) {
+                    for (let m = material.length - 1; m >= 0; m--) {
+                      const mat = material[m]
+                      if (mat) {
+                        // ...?
+                        cache = mat.userData.cache
+                        // cubemap front [5]
+                        mat.canvas && (mat.canvas = null)
+                        mat.map && mat.map.dispose()
+                        // shader
+                        mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
+                        mat.userData.t && mat.userData.t.dispose()
+                        mat.dispose()
+                      }
+                    }
+                  } else {
+                    // ...?
+                    cache = material.userData.cache
+                    // front
+                    if (!cache) {
+                      material.map && material.map.dispose()
+                      material.dispose()
+                    }
+                  }
+
+                  // Loader rules...?
+                  if (obj.animate?.gif) {
+                    // Cache loader SuperGif case study:
+                    // hogs memory, frames backwards reused, strange loader signature...?
+                    obj.animate.gif.pause()
+                    obj.animate.gif = null
+                  }
+                  //
+                  cache = obj.userData.cache
+                  if (!cache) {
+                    obj.geometry.dispose()
+                  }
+                }
+                obj.removeFromParent()
+              }
+              groups[g].removeFromParent()
+            }
+          }
+
+          //
+          // Canvas
+          const vars = mpos.var
+          if (grade) {
+            const ctxC = grade.ctx
+            ctxC.clearRect(0, 0, ctxC.width, ctxC.height)
+            // note: more grades would destroy canvases
+            //grade.canvas = grade.ctx = null
+          }
+
+          // CSS3D
+          /*
+          const css3d = mpos.var.rendererCSS.domElement
+          const clones = css3d.querySelectorAll(':not(.mp-block)')
+          clones.forEach(function (el) {
+          el.parentElement.removeChild(el)
+          })
+          */
+
+          // Shader Atlas
+          //let atlas = document.getElementById('atlas').children
+          //for (let c = atlas.length - 1; c >= 0; c--) {
+          // atlas[c].parentElement.removeChild(atlas[c])
+          //}
+          document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
+          mpos.ux.observer?.disconnect()
+
+          //
+          // Performance ResourceTiming
+          // - clear it
+          // - entries against DOM to release last batch
+          function resourceUse(initiatorType = ['img', 'source', 'object', 'iframe']) {
+            const entries = []
+
+            /*'fetch','xmlhttprequest','script'*/
+            for (const res of window.performance.getEntriesByType('resource')) {
+              const media = initiatorType.indexOf(res.initiatorType) > -1
+              if (media) {
+                const name = res.name.split('/').pop()
+                if (!document.querySelector(`[src$="${name}"], [data$="${name}"]`)) {
+                  // none use
+                  //console.log('none:', res.initiatorType, name, res.name)
+                } else {
+                  // some use and parent
+                  ;['src', 'data'].forEach(function (attr) {
+                    let els = document.querySelectorAll(`[${attr}$="${name}"]`)
+                    if (els.length) {
+                      //console.log('some:', els)
+                      els.forEach(function (el) {
+                        //console.log('parent:', el.parentNode)
+                      })
+                      entries.push(els)
+                    }
+                  })
+                }
+              }
+            }
+
+            //console.log('entries:', entries)
+            performance.clearResourceTimings()
+            return entries
+          }
+
+          resourceUse()
+
+          resolve('clear')
+          reject('no')
+        })
+      },
+      pyr: function (width, height, thumb = 16) {
+        // Reduce image to thumbnail
+        let pyr = { cols: width, rows: height }
+        if (Math.min(pyr.cols, pyr.rows) > thumb) {
+          // limit long edge
+          const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
+          const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
+          pyr = { cols: Math.ceil(pyr.cols * scale), rows: Math.ceil(pyr.rows * scale) }
+        }
+        return [pyr.cols, pyr.rows]
+      },
+      src: function (element, uri, attribute) {
+        return new Promise((resolve, reject) => {
+          element.onload = (e) => resolve(e)
+          element.onerror = (e) => reject(e)
+          element.setAttribute(attribute, uri)
+        })
+      }
+    }
   },
   precept: {
     //
@@ -144,89 +430,38 @@ const mpos = {
       }
     }
   },
-  diffs: function (type, opts = {}) {
-    let differ = false
-    let style = opts.style || {}
 
-    //
-    // Different from Baseline Generic Primitive
-
-    if (type === 'rect') {
-      differ = !opts.node.clientWidth || !opts.node.clientHeight
-      // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
-    } else if (type === 'matrix') {
-      // note: style may be version from css frame accumulating
-      differ = style.transform?.startsWith('matrix')
-    } else if (type === 'tween') {
-      // note: loose definition
-      differ =
-        style.transform !== 'none' ||
-        style.transitionDuration !== '0s' ||
-        (style.animationName !== 'none' && style.animationPlayState === 'running')
-    } else if (type === 'flow') {
-      // note: if position overflows scrollOffset, canvas may not draw
-      differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
-      //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
-    } else if (type === 'pseudo') {
-      // note: get pseudo capture once per frame for all rects
-      let rect = opts.rect
-      let css = rect.css
-      if (css) {
-        let capture = opts.capture
-        capture = capture || {
-          // deepest pseudo match
-          hover: [...opts.sel.querySelectorAll(':hover')].pop(),
-          active: [...opts.sel.querySelectorAll(':active')].pop(),
-          focus: [...opts.sel.querySelectorAll(':focus')].pop()
-        }
-
-        // note: pseudo (or unset prior frame) enqueued for atlas
-        differ = css.pseudo
-        css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
-        differ = differ || css.pseudo
-
-        rect.ux.p = differ
-      }
-    }
-
-    if (opts.node) {
-      // todo: node may be set manually
-      // check on tail, so other updates (like pseudo) bubble to queue
-      differ = differ || opts.node.classList.contains('mp-diff')
-    }
-
-    return differ
-  },
   init: function (opts = {}) {
-    const vars = this.var
+    const vars = mpos.var
     const { opt, fov } = vars
 
-    //
-    // Mode: Proxy or Standalone
-    const proxy = !!(opts.scene && opts.camera && opts.renderer)
+    const promise = new Promise((resolve, reject) => {
+      //
+      // Mode: Proxy or Standalone
+      const proxy = !!(opts.scene && opts.camera && opts.renderer)
 
-    vars.scene = opts.scene || new THREE.Scene()
-    vars.renderer =
-      opts.renderer ||
-      new THREE.WebGLRenderer({
-        //antialias: false,
-        //precision: 'lowp',
-        //powerPreference: 'low-power',
-      })
+      vars.scene = opts.scene || new THREE.Scene()
+      vars.renderer =
+        opts.renderer ||
+        new THREE.WebGLRenderer({
+          //antialias: false,
+          //precision: 'lowp',
+          //powerPreference: 'low-power',
+        })
 
-    vars.renderer.setPixelRatio(fov.dpr)
-    const domElement = vars.renderer.domElement
-    const container = proxy ? domElement.parentElement : document.body
+      vars.renderer.setPixelRatio(fov.dpr)
+      const domElement = vars.renderer.domElement
+      opts.container = proxy ? domElement.parentElement : document.body
 
-    fov.w = container.offsetWidth
-    fov.h = container.offsetHeight
-    const frustum = fov.max * opt.depth
-    vars.camera = opts.camera || new THREE.PerspectiveCamera(45, fov.w / fov.h, fov.z / 2, frustum * 4)
+      fov.w = opts.container.offsetWidth
+      fov.h = opts.container.offsetHeight
+      const frustum = fov.max * opt.depth
+      vars.camera = opts.camera || new THREE.PerspectiveCamera(45, fov.w / fov.h, fov.z / 2, frustum * 4)
 
-    //
-    // Inject Stage
-    const template = document.createElement('template')
-    template.innerHTML = `
+      //
+      // Inject Stage
+      const template = document.createElement('template')
+      template.innerHTML = `
     <section id='mp'>
       <div class='tool mp-offscreen' id='custom'>
         <object></object>
@@ -238,111 +473,117 @@ const mpos = {
       <div id='css3d'></div>
     </section>`
 
-    container.appendChild(template.content)
-    mpos.var.atlas = document.querySelector('#atlas canvas')
-    vars.caret = document.getElementById('caret')
-    const mp = proxy ? container : document.getElementById('mp')
-    mp.classList.add('mp-block')
+      opts.container.appendChild(template.content)
+      mpos.var.atlas = document.querySelector('#atlas canvas')
+      vars.caret = document.getElementById('caret')
+      const mp = proxy ? container : document.getElementById('mp')
+      mp.classList.add('mp-block')
 
-    vars.camera.layers.enableAll()
-    if (!proxy) {
-      vars.camera.position.z = frustum / 8
-      vars.renderer.setSize(fov.w * fov.dpr, fov.h * fov.dpr)
-      mp.appendChild(domElement)
-      vars.renderer.setClearColor(0x00ff00, 0)
-      // helpers
-      const axes = new THREE.AxesHelper(fov.max)
-      vars.scene.add(axes)
-    }
-
-    // CSS3D
-    const css3d = document.getElementById('css3d')
-    vars.rendererCSS = new CSS3DRenderer()
-    vars.rendererCSS.setSize(fov.w * fov.dpr, fov.h * fov.dpr)
-    css3d.appendChild(vars.rendererCSS.domElement)
-    css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
-
-    const controls = new MapControls(vars.camera, domElement)
-    controls.screenSpacePanning = true
-    controls.maxDistance = frustum
-
-    const halfHeight = -(fov.h / 2)
-    vars.camera.position.setY(halfHeight + 0.125)
-    controls.target.setY(halfHeight)
-    controls.update()
-    vars.controls = controls
-
-    //
-    // Enable UX
-    const ux = mpos.ux
-    window.stats = new Stats()
-    mp.appendChild(stats.dom)
-    //
-    const gridHelper = new THREE.GridHelper(fov.w, 4, 0x444444, 0xc0c0c0)
-    gridHelper.rotateX(3.14 / 2)
-    vars.scene.add(gridHelper)
-
-    // First Paint
-    ux.events.raycaster.layers.set(2)
-    //ux.render()
-
-    // User Events: Window, Scene, Raycaster
-    controls.addEventListener('change', ux.render, false)
-
-    const events = ['mousedown', 'mousemove', 'click']
-    events.forEach(function (event) {
-      domElement.addEventListener(event, ux.event, false)
-    })
-
-    // User Events: Window Layout Shift
-    window.addEventListener('scroll', ux.reflow, false)
-
-    const resize = new ResizeObserver((entries) => {
-      ux.reflow({ type: 'resize' })
-    })
-    resize.observe(mp)
-
-    const callback = function (entries, observer) {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          observer.unobserve(entry.target)
-          ux.reflow(entry)
-        }
-      })
-    }
-
-    ux.observer = new IntersectionObserver(callback, {
-      // note: relax error range, for canvas threshold
-      threshold: [0.125, 0.875]
-    })
-
-    // User Events: CSS Clones
-    //const cloneCSS = mp.querySelector('#css3d > div > div > div')
-    //domElement.addEventListener('input', ux.event, false)
-
-    const gui = new GUI()
-    gui.domElement.classList.add('mp-native')
-    Object.keys(opt).forEach(function (key) {
-      const params = {
-        selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
-        depth: [0, 32, 1],
-        inPolar: [1, 4, 1],
-        delay: [0, 300, 5],
-        arc: [0, 1, 0.25]
+      vars.camera.layers.enableAll()
+      if (!proxy) {
+        vars.camera.position.z = frustum / 8
+        vars.renderer.setSize(fov.w * fov.dpr, fov.h * fov.dpr)
+        mp.appendChild(domElement)
+        vars.renderer.setClearColor(0x00ff00, 0)
+        // helpers
+        const axes = new THREE.AxesHelper(fov.max)
+        vars.scene.add(axes)
       }
-      const param = params[key] || []
-      const controller = gui.add(opt, key, ...param).listen()
 
-      if (key === 'delay') {
-        controller.onFinishChange(function (v) {
-          ux.reflow({ type: 'delay', value: v })
+      // CSS3D
+      const css3d = document.getElementById('css3d')
+      vars.rendererCSS = new CSS3DRenderer()
+      vars.rendererCSS.setSize(fov.w * fov.dpr, fov.h * fov.dpr)
+      css3d.appendChild(vars.rendererCSS.domElement)
+      css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
+
+      const controls = new MapControls(vars.camera, domElement)
+      controls.screenSpacePanning = true
+      controls.maxDistance = frustum
+
+      const halfHeight = -(fov.h / 2)
+      vars.camera.position.setY(halfHeight + 0.125)
+      controls.target.setY(halfHeight)
+      controls.update()
+      vars.controls = controls
+
+      //
+      // Enable UX
+      const ux = mpos.ux
+      window.stats = new Stats()
+      mp.appendChild(stats.dom)
+      //
+      const gridHelper = new THREE.GridHelper(fov.w, 4, 0x444444, 0xc0c0c0)
+      gridHelper.rotateX(3.14 / 2)
+      vars.scene.add(gridHelper)
+
+      // First Paint
+      ux.events.raycaster.layers.set(2)
+      //ux.render()
+
+      // User Events: Window, Scene, Raycaster
+      controls.addEventListener('change', ux.render, false)
+
+      const events = ['mousedown', 'mousemove', 'click']
+      events.forEach(function (event) {
+        domElement.addEventListener(event, ux.event, false)
+      })
+
+      // User Events: Window Layout Shift
+      window.addEventListener('scroll', ux.reflow, false)
+
+      const resize = new ResizeObserver((entries) => {
+        ux.reflow({ type: 'resize' })
+      })
+      resize.observe(mp)
+
+      const callback = function (entries, observer) {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            observer.unobserve(entry.target)
+            ux.reflow(entry)
+          }
         })
       }
+
+      ux.observer = new IntersectionObserver(callback, {
+        // note: relax error range, for canvas threshold
+        threshold: [0.125, 0.875]
+      })
+
+      // User Events: CSS Clones
+      //const cloneCSS = mp.querySelector('#css3d > div > div > div')
+      //domElement.addEventListener('input', ux.event, false)
+
+      const gui = new GUI()
+      gui.domElement.classList.add('mp-native')
+      Object.keys(opt).forEach(function (key) {
+        const params = {
+          selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
+          depth: [0, 32, 1],
+          inPolar: [1, 4, 1],
+          delay: [0, 300, 5],
+          arc: [0, 1, 0.25]
+        }
+        const param = params[key] || []
+        const controller = gui.add(opt, key, ...param).listen()
+
+        if (key === 'delay') {
+          controller.onFinishChange(function (v) {
+            ux.reflow({ type: 'delay', value: v })
+          })
+        }
+      })
+
+      resolve(opts)
+      reject('err')
     })
+
+    return promise
   },
   add: async function (selector, opts = {}) {
     const vars = mpos.var
-    const { opt, fov, atlas, geo, mat, mat_shader, mat_line, scene } = vars // grade needs attention pre/post
+    const { opt, fov, atlas, geo, mat, mat_shader, mat_line, scene, tool } = vars // grade needs attention pre/post
     const precept = mpos.precept
 
     //
@@ -361,7 +602,7 @@ const mpos = {
       return
     } else if (opts.custom) {
       // load resource from external uri (into object)
-      await mpos.set
+      await tool
         .src(sel, opts.custom, 'data')
         .then(function (res) {
           console.log('res', res)
@@ -377,8 +618,7 @@ const mpos = {
     }
 
     // Old Group
-    console.log('grade_r', grade_r)
-    await mpos.set.old(selector)
+    await tool.old(selector)
     // New Group
     const group = new THREE.Group()
     group.name = selector
@@ -411,13 +651,6 @@ const mpos = {
     }
 
     const boxSize = { count: 0, average: 0 }
-    function avg(val, acc) {
-      // moving average
-      let avg = acc.average + (val - acc.average) / (1 + acc.count)
-      // moving average
-      acc.average = avg
-      acc.count++
-    }
 
     //
     // Flat-Grade: filter, grade, sanitize
@@ -459,7 +692,7 @@ const mpos = {
             grade.elsMax++
             // Atlas Cell
             const avgRect = (rect.el.offsetWidth + rect.el.offsetHeight) / 2
-            avg(avgRect, boxSize)
+            tool.avg(avgRect, boxSize)
           }
         }
       }
@@ -837,7 +1070,7 @@ const mpos = {
       return res
     },
     css: function (rect, progress) {
-      const { grade } = mpos.var
+      const { grade, tool } = mpos.var
 
       //
       // CSS Style Transforms: accumulate a natural box model
@@ -862,7 +1095,7 @@ const mpos = {
 
         if (!rect.hasOwnProperty('css') || rect.frame < progress) {
           // ux priority may escalate (declarative)
-          const priority = css.pseudo || mpos.diffs('tween', { style: css.style })
+          const priority = css.pseudo || tool.diffs('tween', { style: css.style })
           rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
           // reset transforms
@@ -902,7 +1135,7 @@ const mpos = {
                 // accumulate ancestor matrix
                 const style = r_.css?.style || css.style //|| window.getComputedStyle(el)
 
-                if (style && mpos.diffs('matrix', { style: style })) {
+                if (style && tool.diffs('matrix', { style: style })) {
                   const transform = style.transform.replace(/(matrix)|[( )]/g, '')
                   // transform matrix
                   const [a, b] = transform.split(',')
@@ -978,142 +1211,7 @@ const mpos = {
       m.userData.t = texAtlas
       return m
     },
-    src: function (el, url, attr) {
-      return new Promise((resolve, reject) => {
-        el.onload = (e) => resolve(e)
-        el.onerror = (e) => reject(e)
-        el.setAttribute(attr, url)
-      })
-    },
-    old: function (selector) {
-      const { scene, grade } = mpos.var
-      //console.log(mpos.var.renderer.info)
-      return new Promise((resolve, reject) => {
-        // dispose of scene and release listeners
-        const groups = scene?.getObjectsByProperty('type', 'Group')
 
-        if (groups && groups.length) {
-          for (let g = groups.length - 1; g >= 0; g--) {
-            const group = groups[g].children || []
-            for (let o = group.length - 1; o >= 0; o--) {
-              const obj = group[o]
-              if (obj.type === 'Mesh') {
-                const material = obj.material
-                // Cache flag from loader asset to dispose...?
-                let cache
-                if (material.length) {
-                  for (let m = material.length - 1; m >= 0; m--) {
-                    const mat = material[m]
-                    if (mat) {
-                      // ...?
-                      cache = mat.userData.cache
-                      // cubemap front [5]
-                      mat.canvas && (mat.canvas = null)
-                      mat.map && mat.map.dispose()
-                      // shader
-                      mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
-                      mat.userData.t && mat.userData.t.dispose()
-                      mat.dispose()
-                    }
-                  }
-                } else {
-                  // ...?
-                  cache = material.userData.cache
-                  // front
-                  if (!cache) {
-                    material.map && material.map.dispose()
-                    material.dispose()
-                  }
-                }
-
-                // Loader rules...?
-                if (obj.animate?.gif) {
-                  // Cache loader SuperGif case study:
-                  // hogs memory, frames backwards reused, strange loader signature...?
-                  obj.animate.gif.pause()
-                  obj.animate.gif = null
-                }
-                //
-                cache = obj.userData.cache
-                if (!cache) {
-                  obj.geometry.dispose()
-                }
-              }
-              obj.removeFromParent()
-            }
-            groups[g].removeFromParent()
-          }
-        }
-
-        //
-        // Canvas
-        const vars = mpos.var
-        if (grade) {
-          const ctxC = grade.ctx
-          ctxC.clearRect(0, 0, ctxC.width, ctxC.height)
-          // note: more grades would destroy canvases
-          //grade.canvas = grade.ctx = null
-        }
-
-        // CSS3D
-        /*
-        const css3d = mpos.var.rendererCSS.domElement
-        const clones = css3d.querySelectorAll(':not(.mp-block)')
-        clones.forEach(function (el) {
-        el.parentElement.removeChild(el)
-        })
-        */
-
-        // Shader Atlas
-        //let atlas = document.getElementById('atlas').children
-        //for (let c = atlas.length - 1; c >= 0; c--) {
-        // atlas[c].parentElement.removeChild(atlas[c])
-        //}
-        document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
-        mpos.ux.observer?.disconnect()
-
-        //
-        // Performance ResourceTiming
-        // - clear it
-        // - entries against DOM to release last batch
-        function resourceUse(initiatorType = ['img', 'source', 'object', 'iframe']) {
-          const entries = []
-
-          /*'fetch','xmlhttprequest','script'*/
-          for (const res of window.performance.getEntriesByType('resource')) {
-            const media = initiatorType.indexOf(res.initiatorType) > -1
-            if (media) {
-              const name = res.name.split('/').pop()
-              if (!document.querySelector(`[src$="${name}"], [data$="${name}"]`)) {
-                // none use
-                //console.log('none:', res.initiatorType, name, res.name)
-              } else {
-                // some use and parent
-                ;['src', 'data'].forEach(function (attr) {
-                  let els = document.querySelectorAll(`[${attr}$="${name}"]`)
-                  if (els.length) {
-                    //console.log('some:', els)
-                    els.forEach(function (el) {
-                      //console.log('parent:', el.parentNode)
-                    })
-                    entries.push(els)
-                  }
-                })
-              }
-            }
-          }
-
-          //console.log('entries:', entries)
-          performance.clearResourceTimings()
-          return entries
-        }
-
-        resourceUse()
-
-        resolve('clear')
-        reject('no')
-      })
-    },
     fit: function (dummy, group, opts = {}) {
       // Group Scale from Element Dummy
       if (group.children.length) {
@@ -1143,17 +1241,7 @@ const mpos = {
         mpos.ux.render()
       }
     },
-    pyr: function (width, height, thumb = 16) {
-      // Reduce image to thumbnail
-      let pyr = { cols: width, rows: height }
-      if (Math.min(pyr.cols, pyr.rows) > thumb) {
-        // limit long edge
-        const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
-        const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
-        pyr = { cols: Math.ceil(pyr.cols * scale), rows: Math.ceil(pyr.rows * scale) }
-      }
-      return [pyr.cols, pyr.rows]
-    },
+
     cache: function (asset, uri, data) {
       // Stash resource at uri, with flag for disposal
       if (data) asset.data = data
@@ -1166,7 +1254,7 @@ const mpos = {
     },
     loader: function (source, dummy) {
       //const vars = mpos.var
-      const { cache, grade, reset, geo, mat, mat_shape, mat_line } = mpos.var
+      const { cache, grade, reset, geo, mat, mat_shape, mat_line, tool } = mpos.var
 
       // source is location or contains one
       let uri = typeof source === 'string' ? source : source.data || source.src || source.currentSrc || source.href
@@ -1212,7 +1300,7 @@ const mpos = {
             dummy = mpos.set.box({ el: source })
           }
 
-          const [width, height] = mpos.set.pyr(source.naturalWidth, source.naturalHeight, 128)
+          const [width, height] = tool.pyr(source.naturalWidth, source.naturalHeight, 128)
 
           toCanvas(source, { style: { ...reset }, width: width, height: height, pixelRatio: 1 })
             .then(function (canvas) {
@@ -1348,10 +1436,10 @@ const mpos = {
 
       return object
     },
-    opencv: function (img, group, dummy) {
+    opencv: function (image, group, dummy) {
       let kmeans = {}
       let Module = {
-        _stdin: { img: img, kmeans: kmeans },
+        _stdin: { image: image, kmeans: kmeans },
         wasmBinaryFile: './opencv_js.wasm',
         preRun: [
           function (e) {
@@ -1361,7 +1449,7 @@ const mpos = {
         _main: function (c, v, o) {
           //console.log('_main', c, v, o)
           const cv = this
-          let img = this._stdin.img
+          let image = this._stdin.image
           let kmeans = this._stdin.kmeans
 
           try {
@@ -1372,13 +1460,13 @@ const mpos = {
               mat.delete()
             }
 
-            const src = cv.imread(img)
-            img = null
+            const src = cv.imread(image)
+            image = null
             const size = src.size()
 
             // KMEANS
             const pyr = src.clone()
-            const [width, height] = mpos.set.pyr(pyr.cols, pyr.rows, clusters * 8)
+            const [width, height] = mpos.var.tool.pyr(pyr.cols, pyr.rows, clusters * 8)
             cv.resize(pyr, pyr, new cv.Size(width, height), 0, 0, cv.INTER_NEAREST) //AREA,LINEAR,NEAREST
 
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
@@ -1620,7 +1708,8 @@ const mpos = {
     }
   },
   update: function (grade, rType) {
-    const { opt, reset, time, fov } = mpos.var
+    const { opt, reset, time, fov, tool } = mpos.var
+
     //const vars = mpos.var
 
     let r_queue = grade.r_.queue
@@ -1728,7 +1817,7 @@ const mpos = {
                   // no propagate
                   r_queue.push(idx)
                 } else {
-                  let pseudo = mpos.diffs('pseudo', { rect: rect, sel: grade.el, capture: capture })
+                  let pseudo = tool.diffs('pseudo', { rect: rect, sel: grade.el, capture: capture })
                   if (pseudo || rect.ux.u || rect.ux.o) {
                     // element ux changed or elevated
                     // note: pseudo evaluates first, so atlas unset has consistent off-state
@@ -1876,23 +1965,28 @@ const mpos = {
 
         // Feature tests
         if (rect.css && rect.css.style) {
-          const float = mpos.diffs('flow', { style: rect.css.style })
+          const float = tool.diffs('flow', { style: rect.css.style })
           if (float) {
             options.style.top = options.style.right = options.style.bottom = options.style.left = 'initial'
           }
         }
 
-        const noBox = mpos.diffs('rect', { node: rect.el })
+        const noBox = tool.diffs('rect', { node: rect.el })
         if (noBox) {
           //options.style.display = 'inline-block' // tame pop-in
           options.width = rect.el.offsetWidth // force size
           options.height = rect.el.offsetHeight // force size
         }
 
-        //const isMatrix = mpos.diffs('matrix', { style: rect.css.style })
+        //const isMatrix = tool.diffs('matrix', { style: rect.css.style })
         //if (isMatrix) {
         //  options.style.transform = 'initial'
         //}
+
+        //
+        // 1. step size even (atlas cells %0 no sub-pixels i.e. odd ~11)
+        // canvas width/height pyr/step
+        // *dpr (dpr on pixelratio causes font subpixel jitter)
 
         toCanvas(rect.el, options)
           .then(function (canvas) {
@@ -2163,7 +2257,7 @@ const mpos = {
       }
     },
     render: function () {
-      const { grade, time, mat_shader, scene, camera, renderer, rendererCSS } = mpos.var
+      const { grade, mat_shader, scene, camera, renderer, rendererCSS } = mpos.var
 
       if (grade) {
         // animation step
@@ -2196,7 +2290,7 @@ const mpos = {
       //requestAnimationFrame(this)
     },
     raycast: function (e) {
-      const { grade, camera, caret, fov } = mpos.var
+      const { grade, camera, caret, tool } = mpos.var
       let synthetic = {}
 
       //
@@ -2228,15 +2322,7 @@ const mpos = {
           //console.log('hit', hit)
           const useId = hit.object.isInstancedMesh
 
-          //
-          // todo: could be used for anisotropy
-          const dprPractical = (fov.w + fov.h) / 2
-          const camPosition = camera.position
-          const distanceToZ = camPosition.distanceTo(new THREE.Vector3(camPosition.x, camPosition.y, 0))
-          const distanceTo0 = camPosition.distanceTo(new THREE.Vector3(0, 0, 0))
-
-          const eDPI = dprPractical / ((hit.distance + distanceToZ + distanceTo0) / 3)
-          fov.dpr = Math.min(eDPI, 1)
+          tool.dpr(hit.distance)
 
           //
           //if (hit.object) {
@@ -2326,6 +2412,7 @@ const mpos = {
         // NodeWalking...
         emit = emits[0]
       } else {
+        // note: quirk, such as scroll overflow
         console.log('no ux target')
       }
 
