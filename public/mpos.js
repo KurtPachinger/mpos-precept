@@ -22,6 +22,7 @@ const mpos = {
       sFenceFPS: 1 / 30 // 30 fps
     },
     fov: {
+      dpr: Math.min(devicePixelRatio, 1),
       w: window.innerWidth,
       h: window.innerHeight,
       z: 8,
@@ -55,8 +56,9 @@ const mpos = {
     },
     reset: {
       margin: 'initial',
-      transform: 'initial'
+      transform: 'initial',
       //display: 'block',
+      imageRendering: 'pixelated'
     },
     geo: new THREE.BoxGeometry(1, 1, 1),
     mat: new THREE.MeshBasicMaterial({
@@ -203,7 +205,6 @@ const mpos = {
     // Mode: Proxy or Standalone
     const proxy = !!(opts.scene && opts.camera && opts.renderer)
 
-    let dpr = Math.min(devicePixelRatio, 1)
     vars.scene = opts.scene || new THREE.Scene()
     vars.renderer =
       opts.renderer ||
@@ -213,7 +214,7 @@ const mpos = {
         //powerPreference: 'low-power',
       })
 
-    vars.renderer.setPixelRatio(devicePixelRatio)
+    vars.renderer.setPixelRatio(fov.dpr)
     const domElement = vars.renderer.domElement
     const container = proxy ? domElement.parentElement : document.body
 
@@ -246,7 +247,7 @@ const mpos = {
     vars.camera.layers.enableAll()
     if (!proxy) {
       vars.camera.position.z = frustum / 8
-      vars.renderer.setSize(fov.w * dpr, fov.h * dpr)
+      vars.renderer.setSize(fov.w * fov.dpr, fov.h * fov.dpr)
       mp.appendChild(domElement)
       vars.renderer.setClearColor(0x00ff00, 0)
       // helpers
@@ -257,7 +258,7 @@ const mpos = {
     // CSS3D
     const css3d = document.getElementById('css3d')
     vars.rendererCSS = new CSS3DRenderer()
-    vars.rendererCSS.setSize(fov.w * dpr, fov.h * dpr)
+    vars.rendererCSS.setSize(fov.w * fov.dpr, fov.h * fov.dpr)
     css3d.appendChild(vars.rendererCSS.domElement)
     css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
 
@@ -309,7 +310,11 @@ const mpos = {
         }
       })
     }
-    ux.observer = new IntersectionObserver(callback)
+
+    ux.observer = new IntersectionObserver(callback, {
+      // note: relax error range, for canvas threshold
+      threshold: [0.125, 0.875]
+    })
 
     // User Events: CSS Clones
     //const cloneCSS = mp.querySelector('#css3d > div > div > div')
@@ -1615,7 +1620,7 @@ const mpos = {
     }
   },
   update: function (grade, rType) {
-    const { opt, reset, time } = mpos.var
+    const { opt, reset, time, fov } = mpos.var
     //const vars = mpos.var
 
     let r_queue = grade.r_.queue
@@ -1644,8 +1649,8 @@ const mpos = {
     // Frame Sync and Feedback: render may invoke targets to collocate
     let sPhaseSync = 0.5
     time.sFenceDelta += time.sFence.getDelta()
-    let sFenceSync = 10 * (time.sFenceDelta - time.sFenceFPS - time.sFenceFPS / 2)
-    sFenceSync = 0.5 / Math.abs(sFenceSync - 0.5)
+    let sFenceSync = 1 / ((time.sFenceDelta - time.sFenceFPS) / (time.sFenceFPS / 2))
+    sFenceSync *= 2
 
     const syncFPS = time.sFenceDelta > time.sFenceFPS
     if (syncFPS) {
@@ -1657,6 +1662,7 @@ const mpos = {
       // Feedback Sample: state boundry value analysis
       transforms(grade)
       // todo: is [...accumulate average] beneficial?
+      // is hit.distance
     }
 
     if (rType) {
@@ -1703,7 +1709,7 @@ const mpos = {
       //
       // Nominal Time Partition: real deviation
       quality = Math.min(sFenceSync + sPhaseSync, 1)
-      console.log('?:', [+sFenceSync.toFixed(3), +sPhaseSync.toFixed(3), +quality.toFixed(3)].join('      __      '))
+      //console.log('?:', [+sFenceSync.toFixed(3), +sPhaseSync.toFixed(3), +quality.toFixed(3)].join('      __      '))
 
       if (reflow) {
         function vis(rects, reQueue) {
@@ -1856,7 +1862,7 @@ const mpos = {
           style: { ...reset },
           canvasWidth: step,
           canvasHeight: step,
-          pixelRatio: pixelRatio,
+          pixelRatio: pixelRatio * fov.dpr,
           preferredFontFormat: 'woff'
           //filter: function (node) {
           //  todo: test clone children for diffs
@@ -2190,7 +2196,7 @@ const mpos = {
       //requestAnimationFrame(this)
     },
     raycast: function (e) {
-      const { grade, camera, caret } = mpos.var
+      const { grade, camera, caret, fov } = mpos.var
       let synthetic = {}
 
       //
@@ -2222,8 +2228,18 @@ const mpos = {
           //console.log('hit', hit)
           const useId = hit.object.isInstancedMesh
 
-          //if (hit.object) {
+          //
+          // todo: could be used for anisotropy
+          const dprPractical = (fov.w + fov.h) / 2
+          const camPosition = camera.position
+          const distanceToZ = camPosition.distanceTo(new THREE.Vector3(camPosition.x, camPosition.y, 0))
+          const distanceTo0 = camPosition.distanceTo(new THREE.Vector3(0, 0, 0))
 
+          const eDPI = dprPractical / ((hit.distance + distanceToZ + distanceTo0) / 3)
+          fov.dpr = Math.min(eDPI, 1)
+
+          //
+          //if (hit.object) {
           // Synthetic Dispatch Event
           const rect = useId ? Object.values(grade.r_.atlas.rects)[hit.instanceId] : grade.r_.other.rects[hit.object.userData.idx]
           synthetic = { rect: rect, uv: hit.uv }

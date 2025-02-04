@@ -131,6 +131,9 @@ MP INTERFACE */
     position: absolute;
     cursor: crosshair;
   }
+  canvas {
+    image-rendering: pixelated;
+  }
 
   #atlas {
     background-color: rgba(255, 255, 255, 0.75);
@@ -146,7 +149,6 @@ MP INTERFACE */
     canvas {
       width: 100%;
       height: auto;
-      image-rendering: pixelated;
       background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
       background-size: auto 100%;
     }
