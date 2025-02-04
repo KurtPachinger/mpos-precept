@@ -29,7 +29,7 @@ MP SELECTORS */
 }
 
 .mp-offscreen {
-  /* pointer-events: none; */
+  pointer-events: none;
   > * {
     z-index: 999;
   }

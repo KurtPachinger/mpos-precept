@@ -68,7 +68,9 @@ const mpos = {
 
         if (this.selector === 'custom') {
           // Document from URI (CORS?)
-          if (this.custom.startsWith('//') || this.custom.startsWith('http')) {
+          if (this.custom.startsWith('//') || this.custom.startsWith('http') ) {
+            //|| this.custom === '#fragment'
+            // '#custom template'
             selector = '#custom object'
             options.custom = this.custom
           } else {
@@ -245,7 +247,7 @@ const mpos = {
         const camPosition = camera.position
         const distanceToZ = camPosition.distanceTo({ x: camPosition.x, y: camPosition.y, z: 0 })
         //const distanceTo0 = camPosition.distanceTo({ x: 0, y: 0, z: 0 })
-        let sample = distance || camPosition.distanceTo(grade.group)
+        let sample = distance || camPosition.distanceTo(grade.group.position)
 
         const eDPI = dprPractical / ((sample + distanceToZ) / 2)
         fov.dpr = Math.min(eDPI, 1)
@@ -465,6 +467,7 @@ const mpos = {
     <section id='mp'>
       <div class='tool mp-offscreen' id='custom'>
         <object></object>
+        <template></template>
       </div>
       <aside class='tool' id='atlas'>
         <canvas></canvas>
@@ -602,6 +605,7 @@ const mpos = {
       return
     } else if (opts.custom) {
       // load resource from external uri (into object)
+
       await tool
         .src(sel, opts.custom, 'data')
         .then(function (res) {
@@ -2257,7 +2261,7 @@ const mpos = {
       }
     },
     render: function () {
-      const { grade, mat_shader, scene, camera, renderer, rendererCSS } = mpos.var
+      const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool } = mpos.var
 
       if (grade) {
         // animation step
@@ -2276,6 +2280,9 @@ const mpos = {
           }
         })
 
+        // dpr set despite frameloop
+        tool.dpr()
+
         // instanced elements need texture update
         grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true
         mat_shader.userData.t.needsUpdate = true
@@ -2290,7 +2297,7 @@ const mpos = {
       //requestAnimationFrame(this)
     },
     raycast: function (e) {
-      const { grade, camera, caret, tool } = mpos.var
+      const { grade, camera, caret } = mpos.var
       let synthetic = {}
 
       //
@@ -2322,7 +2329,7 @@ const mpos = {
           //console.log('hit', hit)
           const useId = hit.object.isInstancedMesh
 
-          tool.dpr(hit.distance)
+          //tool.dpr(hit.distance)
 
           //
           //if (hit.object) {
