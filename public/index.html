@@ -128,22 +128,7 @@
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
           </video>
-          <div class="w33">
-            <mp class="march mp-allow">
-              <mp class="mp-allow">
-                <mp class="mp-allow">
-                  <mp class="mp-allow">
-                    &#65532;
-                    <object
-                      class="mp-loader"
-                      data="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json"
-                      style="display: block; width: 2em; height: 2em"
-                    ></object>
-                  </mp>
-                </mp>
-              </mp>
-            </mp>
-          </div>
+          <div class="w33" id="Object3D"></div>
         </section>
         <section id="media" class="sub">
           <h2>section<span>#media</span></h2>
@@ -276,28 +261,69 @@
         if (typeof window.mpos !== 'undefined') {
           clearInterval(mp)
 
-          // toast some march-mpallows
-          mpos.fnVar('snake', '#overflow', { count: 4, symbol: '-' })
-          mpos.fnVar('snake', '#underflow', { count: 4, symbol: '+' })
+          //
+          // Extract some visual hierarchy
+          /*
+          mpos.fnVar('chain', '#overflow', { count: 4, symbol: '-' })
+          mpos.fnVar('chain', '#underflow', { count: 4, symbol: '+' })
 
-          mpos.fnVar('depthTo', '#nest', {}).then(function (res) {
-            mpos.fnVar('snake', '#nest', { count: res, symbol: res }).then((res) => {
+          mpos.fnVar('march', '#nest', {}).then(function (res) {
+            mpos.fnVar('chain', '#nest', { count: res, symbol: res }).then((res) => {
+              // Analogue of raymarch chain
               console.log('fnVar', res)
             })
           })
+          */
 
-          // mode: standalone
+          //
+          // Object Preload
+          const Object3D = document.createElement('object')
+          Object3D.classList.add('mp-loader')
+          Object3D.data = '//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json'
+          Object3D.style = 'display: block; width: 2em; height: 2em;'
+
+          //
+          // Initialize in standalone mode
           mpos.init().then((res) => {
             console.log('mpos:', res)
-            mpos.add().then((res) => {
-              console.log('precept grade:', res)
+
+            //
+            // Depth March
+            mpos.fnVar('march', '#Object3D', {}).then(function (res) {
+              console.log(res)
+              // Count -1 so Object appears under Depth
+              mpos.fnVar('chain', '#Object3D', { count: res - 1, symbol: '&#65532;' }).then((res) => {
+                console.log('fnVar', res)
+                // Object Append
+                res.querySelector('.last').append(Object3D)
+
+                // DOM has Object, so add it
+                mpos.add().then((res) => {
+                  console.log('precept grade:', res)
+
+                  // Find element rect, and flip-y
+                  const idx = Object3D.getAttribute('data-idx')
+                  mpos.fnVar('find', idx, {}).then(function (res) {
+                    // ObjectLoader can complete later...?
+                    console.log('poll res.obj?:', res)
+                    // unlike rotateZ(), scale(-1, 0) flickers visibility
+                    Object3D.style.transform = 'rotateZ(180deg)'
+                  })
+                })
+
+                //
+                //
+              })
             })
           })
+
+          //
+          //
         }
       }, 250)
 
       //
-      // User Events (Native or Intercepted)
+      // User events (native or synthetic)
       document.addEventListener(
         'click',
         (e) => {

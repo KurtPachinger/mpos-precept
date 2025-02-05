@@ -5,6 +5,7 @@
   --sup: rgba(255, 255, 0, 0.5);
   --sub: rgba(255, 0, 0, 0.25);
   --med: rgba(128, 128, 128, 0.125);
+  --active: rgba(0, 255, 0, 0.25);
 }
 
 html,
@@ -152,7 +153,7 @@ main {
   summary {
     &:hover,
     &:focus {
-      background-color: var(--sub);
+      background-color: var(--active);
     }
   }
 
@@ -297,7 +298,7 @@ EFFECTS, ANIMATION */
     animation: hinge 12s linear infinite;
   }
   .march mp {
-    animation: snake 12s linear infinite alternate;
+    animation-play-state: running;
   }
   span.mp-poster {
     box-shadow: inset 0 -0.125em 0 0 var(--sub);
@@ -307,7 +308,7 @@ EFFECTS, ANIMATION */
 :focus,
 :active,
 .active {
-  box-shadow: inset 0 0 0.125em 0.125em red;
+  box-shadow: inset 0 0 0.125em 0.125em var(--active);
   animation: active 0.5s linear infinite alternate;
 }
 @keyframes active {
@@ -335,111 +336,4 @@ EFFECTS, ANIMATION */
 .stage {
   position: relative;
   overflow: visible;
-}
-
-.march {
-  animation: snake 12s linear infinite alternate;
-  & mp {
-    animation: none;
-  }
-
-  &,
-  mp {
-    background-color: rgba(255, 0, 0, 0.5);
-    position: relative;
-    border-radius: 0.25em;
-    box-shadow: rgba(255, 255, 255, 0.75) 0em 0.125em 0.25em 0.125em inset, rgba(0, 0, 0, 0.25) 0px -0.125em 0.125em 0.125em inset;
-    pointer-events: none;
-
-    mp.zebra {
-      background-color: rgba(0, 0, 255, 0.5);
-    }
-
-    &,
-    & :after,
-    & :before {
-      display: block;
-      width: 1em;
-      height: 1em;
-      text-align: center;
-    }
-
-    :after,
-    :before {
-      content: '';
-      position: absolute;
-      font-size: 0.5em;
-      animation-delay: 0.25s;
-      border-radius: 0.5em 0.5em 0.25em 0.25em;
-    }
-    :after {
-      background-color: rgba(255, 255, 0, 0.25);
-      top: 2em;
-      left: -0.5em;
-    }
-    :before {
-      background-color: rgba(0, 255, 128, 0.25);
-      width: 2em;
-    }
-  }
-
-  mp,
-  mp mp {
-    font-size: 1.25em;
-    bottom: 0.125em;
-  }
-
-  mp mp,
-  mp mp mp mp {
-    transform: translate(0.5em, 0);
-  }
-
-  /* wiggle */
-  mp {
-    animation-delay: 0.125s !important;
-    z-index: 1;
-    mp {
-      animation-delay: 0.25s !important;
-      z-index: 1;
-      mp {
-        animation-delay: 0.5s !important;
-        z-index: 2;
-        mp {
-          animation-delay: 0.75s !important;
-          z-index: 3;
-        }
-      }
-    }
-  }
-}
-
-@keyframes snake {
-  0%,
-  20%,
-  40%,
-  60%,
-  80%,
-  100% {
-    bottom: 0.5em;
-  }
-  10%,
-  30%,
-  50%,
-  70%,
-  90% {
-    bottom: -0.25em;
-  }
-
-  50% {
-    zoom: 1.05;
-  }
-
-  50% {
-    left: 0.5em;
-    rotate: 15deg;
-  }
-  100% {
-    left: -0.25em;
-    rotate: -7.5deg;
-  }
 }

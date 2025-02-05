@@ -16,7 +16,7 @@ const mpos = {
   fnVar: function (tool, value, opts = {}) {
     // Syntactic Suger: allow keys and map variable scope
     switch (tool) {
-      case 'depthTo':
+      case 'march':
         opts.selector = opts.selector || this.var.opt.selector
         opts.depth = opts.depth || this.var.opt.depth
         break
@@ -26,7 +26,8 @@ const mpos = {
 
     const promise = new Promise((resolve, reject) => {
       //
-      let response = this.var.tool[tool](value, opts)
+      let fnvar = this.var.tool[tool]
+      let response = fnvar ? this.var.tool[tool](value, opts) : 'no fnVar'
       resolve(response)
       reject('err' + tool)
     })
@@ -68,7 +69,7 @@ const mpos = {
 
         if (this.selector === 'custom') {
           // Document from URI (CORS?)
-          if (this.custom.startsWith('//') || this.custom.startsWith('http') ) {
+          if (this.custom.startsWith('//') || this.custom.startsWith('http')) {
             //|| this.custom === '#fragment'
             // '#custom template'
             selector = '#custom object'
@@ -149,30 +150,36 @@ const mpos = {
         acc.average = avg
         acc.count++
       },
-      snake: function (selector, opts = {}) {
+      chain: function (selector, opts = {}) {
         // chain of elements
         let nodeName = opts.nodeName || 'mp'
-        let snakes = document.createElement(nodeName)
-        snakes.classList.add('march', 'mp-allow')
-        let last = snakes
+        let chains = document.createElement(nodeName)
+        chains.classList.add('march', 'mp-allow')
+        let last = chains
         while (--opts.count) {
-          let snake = document.createElement(nodeName)
-          snake.classList.add('mp-allow')
+          let chain = document.createElement(nodeName)
+          chain.classList.add('mp-allow')
           if (opts.count % 2 === 0) {
-            snake.classList.add('zebra')
+            chain.classList.add('odd')
           }
-          last.append(snake)
-          last = snake
+          last.append(chain)
+          last = chain
         }
-        last.innerText = opts.symbol
-        document.querySelector(selector)?.prepend(snakes)
+        last.classList.add('last')
+        last.innerHTML += opts.symbol
+        document.querySelector(selector)?.prepend(chains)
 
-        return snakes
+        return chains
       },
-      depthTo: function (selector, opts = {}) {
-        // snake to depth under cutoff
+      find: function (idx, opts = {}) {
+        const rect = opts.var.grade.r_.other.rects[idx]
+        console.log('find', idx, rect)
+        return rect
+      },
+      march: function (selector, opts = {}) {
+        // chain to depth under cutoff
+        const find = document.querySelector(opts.selector || mpos.var.opt.selector)
         let nest = document.querySelector(selector)
-        let find = document.querySelector(opts.selector || mpos.var.opt.selector)
         let depth = 0
         while (nest) {
           if (nest.isSameNode(find) || !nest.parentElement || ++depth > 32) {
@@ -710,6 +717,8 @@ const mpos = {
     grade.mapCell = Math.floor(Math.sqrt(grade.elsMax / 2))
     grade.mapMax = Math.min(grade.mapMin * grade.mapCell, 2_048)
     grade.canvas.width = grade.canvas.height = grade.mapMax
+    //
+    grade.canvas.title = [grade.mapCell, grade.mapMax].join('_')
 
     function setRect(rect, z, mat, unset) {
       //
@@ -794,8 +803,11 @@ const mpos = {
           if (rect && rect.inPolar) {
             // CLASSIFY TYPE
             const block = node.matches(precept.block)
-            const abort = grade.atlas > grade.mapMax
-            if (block || abort) {
+            // Despite reported range, impose upper limit on practical quantity
+            const abortEls = grade.elsMin >= 1_024 || grade.elsMin > grade.elsMax
+            const abortAtlas = grade.atlas >= 128 || grade.atlas > grade.mapCell ** 2
+            //const abort = abortEls || abortAtlas
+            if (block || abortEls) {
               console.log('skip', node.nodeName)
               //rect.el = null
             } else {
@@ -812,7 +824,7 @@ const mpos = {
                   let mat = 'child'
                   //
                   // Set Element-Geometry "Final Grade"
-                  mat = setMat(node, mat, manual, child)
+                  mat = abortAtlas ? mat : setMat(node, mat, manual, child)
                   setRect(rect, z, mat, unset)
                 }
               }
@@ -2134,9 +2146,9 @@ const mpos = {
       // Apply Updates
       instanced.count = count
       instanced.computeBoundingSphere() // cull and raycast
-      //instanced.computeBoundingBox()
       instanced.instanceMatrix.needsUpdate = true
       if (newMap) instanced.instanceColor.needsUpdate = true
+      grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true // if buffer has new atlas positions (for example, hover works despite)
       // Atlas Postprocessing...?
       //ctxC.drawImage(OffscreenCanvas, 0, 0)
       mpos.ux.render()
@@ -2211,7 +2223,7 @@ const mpos = {
                 mpos.update(grade, rType)
               }
             },
-            { time: 125 }
+            { time: 33.33 }
           )
         }
       }
@@ -2222,7 +2234,7 @@ const mpos = {
         enqueue(rType)
       } else {
         // event schedule or throttle
-        const [timer, timeout] = e.type === 'delay' ? ['delay', e.value] : ['reflow', 250]
+        const [timer, timeout] = e.type === 'delay' ? ['delay', e.value] : ['reflow', 33.33]
 
         mpos.ux.timers.clear(timer)
         if (e.value === -1) {
@@ -2284,7 +2296,6 @@ const mpos = {
         tool.dpr()
 
         // instanced elements need texture update
-        grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true
         mat_shader.userData.t.needsUpdate = true
         //instanced.instanceColor.needsUpdate = true
       }
@@ -2351,8 +2362,10 @@ const mpos = {
           caretROI.bottom = 100 * (1 - rect.y) + '%'
           if (!rect.hasOwnProperty('atlas')) {
             // child container
-            caretROI.width = '100%'
-            caretROI.left = caretROI.bottom = 0
+            //caretROI.width = '100%'
+            caretROI.backgroundColor = 'transparent'
+            caretROI.left = caretROI.bottom = 'inherit'
+            caretROI.right = 0
           }
           // }
         } else {
