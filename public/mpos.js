@@ -15,13 +15,17 @@ import { toCanvas } from 'html-to-image'
 const mpos = {
   fnVar: function (tool, value, opts = {}) {
     // Syntactic Suger: allow keys and map variable scope
+    const vars = this.var
     switch (tool) {
+      //case 'find':
+      //  opts.grade = vars.grade
+      //  break
       case 'march':
-        opts.selector = opts.selector || this.var.opt.selector
-        opts.depth = opts.depth || this.var.opt.depth
+        opts.selector = opts.selector || vars.opt.selector
+        opts.depth = opts.depth || vars.opt.depth
         break
       default:
-        opts.var = this.var
+        opts.var = vars
     }
 
     const promise = new Promise((resolve, reject) => {
@@ -36,10 +40,6 @@ const mpos = {
     return promise
   },
   var: {
-    fnPrivate(opts) {
-      console.log('fnPrivate!')
-      console.log(this, opts)
-    },
     batch: 0,
     cache: {},
     time: {
@@ -58,7 +58,7 @@ const mpos = {
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 8,
-      inPolar: 4,
+      inPolar: 3,
       arc: 0,
       delay: 0,
       update: function () {
@@ -118,14 +118,14 @@ const mpos = {
       attribute vec3 position;
       attribute vec2 uv;
       attribute mat4 instanceMatrix;
-      attribute vec2 uvOffset;
+      attribute vec3 uvOffset;
 
       uniform float atlasSize;
       varying vec2 vUv;
 
       void main()
       {
-        vUv = uvOffset + (uv / atlasSize);
+        vUv = vec2(uvOffset.x, uvOffset.y) + ((uv* uvOffset.z) / atlasSize ) ;
         gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
       }
       `,
@@ -321,12 +321,12 @@ const mpos = {
 
           //
           // Canvas
-          const vars = mpos.var
+
           if (grade) {
-            const ctxC = grade.ctx
+            const ctxC = grade.atlas.ctx
             ctxC.clearRect(0, 0, ctxC.width, ctxC.height)
             // note: more grades would destroy canvases
-            //grade.canvas = grade.ctx = null
+            //grade.atlas.canvas = grade.ctx = null
           }
 
           // CSS3D
@@ -593,7 +593,7 @@ const mpos = {
   },
   add: async function (selector, opts = {}) {
     const vars = mpos.var
-    const { opt, fov, atlas, geo, mat, mat_shader, mat_line, scene, tool } = vars // grade needs attention pre/post
+    const { opt, tool, fov, geo, mat, mat_shader, mat_line, scene } = vars // grade needs attention pre/post
     const precept = mpos.precept
 
     //
@@ -641,12 +641,15 @@ const mpos = {
       // Template Isolate
       el: sel,
       group: group,
-      canvas: atlas, // || document.createElement('canvas'),
       batch: vars.batch++, // unique group identifier
-      atlas: 0, // implies poster++ (from depth/type) and not other
+      atlas: {
+        canvas: vars.atlas, // || document.createElement('canvas'),
+        idx: 0, // implies poster++ (from depth/type) and not other
+        idxW: 0,
+        size: 2_048
+      },
       elsMin: 0, // implies view range (inPolar++) of Observers
       elsMax: 0, // instance
-      mapMin: 256, // texture
       inPolar: opt.inPolar,
       // sets and subsets
       txt: [],
@@ -657,11 +660,13 @@ const mpos = {
         atlas: { count: 0, rects: {} },
         other: { count: 0, rects: {} }
       }
+
       //ray: {}
       //scroll: { x: window.scrollX, y: -window.scrollY }
     }
 
-    const boxSize = { count: 0, average: 0 }
+    const atlas = grade.atlas
+    const atlasWide = { count: 0, average: 0 }
 
     //
     // Flat-Grade: filter, grade, sanitize
@@ -701,24 +706,15 @@ const mpos = {
             rect.el.setAttribute('data-idx', idx)
             grade.rects[idx] = rect
             grade.elsMax++
-            // Atlas Cell
-            const avgRect = (rect.el.offsetWidth + rect.el.offsetHeight) / 2
-            tool.avg(avgRect, boxSize)
+            //
+            const area = rect.el.offsetWidth * rect.el.offsetHeight
+            tool.avg(area, atlasWide)
           }
         }
       }
 
       node = ni.nextNode()
     }
-
-    //
-    // Atlas Ration: relative device
-    grade.mapMin = Math.pow(2, Math.ceil((boxSize.average * 2) / fov.max)) * 64
-    grade.mapCell = Math.floor(Math.sqrt(grade.elsMax / 2))
-    grade.mapMax = Math.min(grade.mapMin * grade.mapCell, 2_048)
-    grade.canvas.width = grade.canvas.height = grade.mapMax
-    //
-    grade.canvas.title = [grade.mapCell, grade.mapMax].join('_')
 
     function setRect(rect, z, mat, unset) {
       //
@@ -735,7 +731,7 @@ const mpos = {
           grade.elsMin++
           if (rect.mat === 'poster' || rect.mat === 'native') {
             // Instanced Atlas
-            rect.atlas = grade.atlas++
+            rect.atlas = atlas.idx++
           }
         } else {
           // OffScreen Element
@@ -753,6 +749,13 @@ const mpos = {
         // ... atlas "poster" became first-class, so the logic is !!BetterLate
         const other = rect.mat === 'loader' || rect.mat === 'wire' || rect.el.matches([precept.cors, precept.native3d])
         rect.r_ = other ? 'other' : 'atlas'
+
+        //
+        // Atlas Cell
+        if (rect.mat === 'poster' || rect.mat === 'native') {
+          const area = rect.el.offsetWidth * rect.el.offsetHeight
+          tool.avg(area, atlasWide)
+        }
       }
       return unset
     }
@@ -804,8 +807,8 @@ const mpos = {
             // CLASSIFY TYPE
             const block = node.matches(precept.block)
             // Despite reported range, impose upper limit on practical quantity
-            const abortEls = grade.elsMin >= 1_024 || grade.elsMin > grade.elsMax
-            const abortAtlas = grade.atlas >= 128 || grade.atlas > grade.mapCell ** 2
+            const abortEls = grade.elsMin >= 1_024 //|| grade.elsMin > grade.elsMax
+            const abortAtlas = atlas.idx >= 128 // || grade.atlas > grade.elsMin
             //const abort = abortEls || abortAtlas
             if (block || abortEls) {
               console.log('skip', node.nodeName)
@@ -839,19 +842,25 @@ const mpos = {
     Object.keys(grade.rects).forEach((idx) => {
       //
       // Complete Preparation
-      let rect = grade.rects[idx]
+      const rect = grade.rects[idx]
 
       if (rect.mat) {
         rect.idx = Number(idx)
         if (rect.inPolar >= grade.inPolar) {
           // Begin Subsets: atlas || other
-          const type = rect.r_
-          const r_ = grade.r_[type]
-          r_.rects[idx] = rect
-          r_.count++
+          const r_type = grade.r_[rect.r_]
+          r_type.rects[idx] = rect
+          r_type.count++
         } else {
           // note: observe off-screen (!inPolar) elements...?
         }
+
+        const area = rect.el.offsetWidth * rect.el.offsetHeight
+        if ((rect.mat === 'poster' || rect.mat === 'native') && area > atlasWide.average) {
+          //console.log('atlasW', rect)
+          rect.idxW = atlas.idxW++
+        }
+
         // note: observe greedily on pageLoad...?
         mpos.ux.observer?.observe(rect.el)
       } else {
@@ -864,19 +873,25 @@ const mpos = {
     })
 
     //
-    // Instanced Mesh and Shader Atlas
-    const shader = mpos.set.shader(grade.canvas, grade.mapCell, mat_shader)
-    const instanced = new THREE.InstancedMesh(geo, [mat, mat, mat, mat, shader, mat_line], grade.elsMax)
+    // Atlas Ration: relative device
+    atlas.sub = 12
+    atlas.subBin = 4
+    atlas.canvas.width = atlas.canvas.height = atlas.size
+    atlas.canvas.title = [atlas.sub, atlas.size].join('_')
 
+    //
+    // Instanced Mesh and
+    const shader = mpos.set.shader(atlas.canvas, atlas.sub, mat_shader)
+    const instanced = new THREE.InstancedMesh(geo, [mat, mat, mat, mat, shader, mat_line], grade.elsMax)
     instanced.layers.set(2)
+    // Shader Atlas
     instanced.userData.shader = shader
     instanced.userData.el = grade.sel
     instanced.name = [grade.count, selector.tagName].join('_')
     grade.instanced = instanced
-    grade.mapKey = { x: 1 - 1 / grade.mapCell, y: 0.0001 } // empty structure (cyan)
-
+    grade.mapKey = { x: 1 - 1 / (atlas.sub - atlas.subBin), y: 0.0001 } // empty structure (cyan)
     // Atlas UV Buffer
-    const uvOffset = new THREE.InstancedBufferAttribute(new Float32Array(grade.elsMax * 2).fill(-1), 2)
+    const uvOffset = new THREE.InstancedBufferAttribute(new Float32Array(grade.elsMax * 3).fill(-1), 3)
     uvOffset.setUsage(THREE.DynamicDrawUsage)
     instanced.geometry.setAttribute('uvOffset', uvOffset)
 
@@ -1725,11 +1740,11 @@ const mpos = {
   },
   update: function (grade, rType) {
     const { opt, reset, time, fov, tool } = mpos.var
-
+    const { atlas, instanced, r_ } = grade
+    const { atlas: r_atlas, other: r_other, queue: r_queue } = r_
     //const vars = mpos.var
 
-    let r_queue = grade.r_.queue
-    if ((rType && !r_queue.length) || !!grade?.wait || !grade.canvas || document.hidden) {
+    if ((rType && !r_queue.length) || !!grade?.wait || !atlas.canvas || document.hidden) {
       // skip frame
       return
     }
@@ -1738,17 +1753,14 @@ const mpos = {
     // Emulate Page Flow: reduce and detect changes
     grade.wait = true
     grade.inPolar = opt.inPolar
-    const r_atlas = grade.r_.atlas
-    const r_other = grade.r_.other
+
     let r_frame = 0
     let quality = 1
     let capture = false
 
     //
     // Instanced Mesh
-    const instanced = grade.instanced
     const uvOffset = instanced.geometry.getAttribute('uvOffset')
-    const step = grade.mapMax / grade.mapCell
 
     //
     // Frame Sync and Feedback: render may invoke targets to collocate
@@ -1778,20 +1790,19 @@ const mpos = {
         if (isFinite(idx)) {
           // new Observer
           const rect = grade.rects[idx]
-          const type = rect.r_
-          const r_ = grade.r_[type]
+          const r_type = grade.r_[rect.r_]
 
-          if (!r_.rects[idx]) {
+          if (!r_type.rects[idx]) {
             if (rect.mat === 'poster' || (rect.mat === 'native' && rect.r_ === 'atlas')) {
               // Instanced
-              rect.atlas = grade.atlas++
-            } else if (type === 'other') {
+              rect.atlas = atlas.idx++
+            } else if (rect.r_ === 'other') {
               // CSS3D or Loader
               rect.add = true
             }
             // add key
-            r_.rects[idx] = rect
-            r_.count++
+            r_type.rects[idx] = rect
+            r_type.count++
             grade.elsMin++
           }
         } else if (idx === 'delay' || idx === 'move' || idx === 'trim') {
@@ -1903,16 +1914,23 @@ const mpos = {
     // Offscreen Canvas
     //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
     //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
-    let ctx = grade.ctx
+    let ctx = atlas.ctx
     if (!ctx) {
       // etc: offscreen, transfercontrols, multiple readback
       let options = { willReadFrequently: true, alpha: true }
-      grade.ctx = grade.canvas.getContext('2d', options)
-      grade.ctx.imageSmoothingEnabled = false
+      atlas.ctx = atlas.canvas.getContext('2d', options)
+      atlas.ctx.imageSmoothingEnabled = false
     }
-    const ctxC = grade.ctx
+    const ctxC = atlas.ctx
 
-    function atlas(grade, opts = {}) {
+    //
+    // common constants
+    const wSub = atlas.size / atlas.sub
+    const wSub2 = wSub * 2
+    const size = atlas.size - wSub2
+    // ... subBin from average area ( & size & sub )
+
+    function atlasQueue(grade, opts = {}) {
       if (opts.queue === undefined) {
         // update queue, SOFT or HARD
         opts.queue = rType ? r_queue : Object.keys(r_atlas.rects)
@@ -1939,15 +1957,15 @@ const mpos = {
           }
 
           opts.idx--
-          atlas(grade, opts)
+          atlasQueue(grade, opts)
         } else {
           // Resolve
 
           if (!rType) {
             // atlas key structure
-            ctxC.clearRect(grade.mapMax - step, grade.mapMax - step, step, step)
+            ctxC.clearRect((atlas.sub - atlas.subBin) * wSub, atlas.size - wSub, wSub, wSub)
             ctxC.fillStyle = 'rgba(0,255,255,0.125)'
-            ctxC.fillRect(grade.mapMax - step, grade.mapMax - step, step, step)
+            ctxC.fillRect(wSub, wSub, wSub, wSub)
           }
 
           transforms(grade)
@@ -1962,11 +1980,13 @@ const mpos = {
 
       if (rect && rect.hasOwnProperty('atlas') && !shallow(rect.ux)) {
         // Unset or override element box style
+
+        const wSize = rect.hasOwnProperty('idxW') ? wSub2 : wSub // note: rect.idxW may not be honored if atlas.idxW is full
         const pixelRatio = rect.ux.o || rect.ux.u ? quality : 0.8
         const options = {
           style: { ...reset },
-          canvasWidth: step,
-          canvasHeight: step,
+          canvasWidth: wSize,
+          canvasHeight: wSize,
           pixelRatio: pixelRatio * fov.dpr,
           preferredFontFormat: 'woff'
           //filter: function (node) {
@@ -2010,17 +2030,41 @@ const mpos = {
               // no box
             } else {
               // canvas xy, from top (FIFO)
-              let x = (rect.atlas % grade.mapCell) * step
-              let y = (Math.floor(rect.atlas / grade.mapCell) % grade.mapCell) * step
-              // canvas rounding trick, bitwise or
-              x = (0.5 + x) | 0
-              y = (0.5 + y) | 0
-              r_frame && ctxC.clearRect(x, y, step, step)
-              ctxC.drawImage(canvas, x, y, step, step)
-              // shader xy, from bottom
-              // avoid 0 edge, so add 0.0001
-              rect.x = (0.0001 + x) / grade.mapMax
-              rect.y = (0.0001 + y + step) / grade.mapMax
+
+              if (rect.x === undefined || rect.y === undefined) {
+                // texture scale
+                rect.w = rect.hasOwnProperty('idxW') && atlas.idxW-- ? 2 : 1
+
+                // edge was padded and reserved
+                let x, y
+
+                if (rect.w === 1) {
+                  const sub = atlas.sub - atlas.subBin
+                  x = (rect.atlas % sub) * wSub
+                  y = Math.floor(rect.atlas / sub) * wSub
+                } else {
+                  // Wide sub on right-edge
+                  //
+                  x = atlas.size - wSub2
+                  y = wSub2 * rect.idxW
+                }
+                // canvas rounding trick, bitwise or
+                x = (0.5 + x) | 0
+                y = (0.5 + y) | 0
+
+                rect.x = x
+                rect.y = y
+
+                // shader xy, from bottom
+                // avoid 0 edge, so add 0.0001
+                const wSize = rect.w > 1 ? wSub2 : wSub
+                rect.wX = (0.0001 + x) / atlas.size
+                rect.wY = (0.0001 + y + wSize) / atlas.size
+              }
+
+              const wSize = rect.w > 1 ? wSub2 : wSub
+              r_frame && ctxC.clearRect(rect.x, rect.y, wSize, wSize)
+              ctxC.drawImage(canvas, rect.x, rect.y, wSize, wSize)
             }
             // recurse
             canvas = null
@@ -2036,7 +2080,7 @@ const mpos = {
       }
     }
 
-    atlas(grade)
+    atlasQueue(grade)
 
     function transforms(grade, paint) {
       //
@@ -2114,13 +2158,14 @@ const mpos = {
         //
         // Update atlas uv and visibility
         let vis = -1
-        let x, y
+        let x, y, z
         if (rType === undefined || dummy || uxForce) {
           if (rect.hasOwnProperty('atlas') || rect.mat === 'self') {
             // top-tier bracket
             if (inPolar) {
-              x = rect.x || grade.mapKey.x
-              y = 1 - rect.y || grade.mapKey.y
+              x = rect.wX || grade.mapKey.x
+              y = 1 - rect.wY || grade.mapKey.y
+              z = rect.w
             } else if (grade.inPolar === 4) {
               // partial update from split frame (trim), due to scroll delay
               x = grade.mapKey.x
@@ -2130,6 +2175,7 @@ const mpos = {
 
           // bug frame: force inPolar/css, update instance.count, update render/texture, 3rd condition
           uvOffset.setXY(count, x || vis, y || vis)
+          uvOffset.setZ(count, z || 1)
         }
 
         // Ray whitelist instanceId
@@ -2356,10 +2402,11 @@ const mpos = {
           const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
           caretROI.backgroundColor = color
           // location
-          const cell = 100 * (1 / grade.mapCell)
+          const cell = 100 * (1 / grade.atlas.sub)
           caretROI.width = caretROI.height = cell + '%'
-          caretROI.left = 100 * rect.x + '%'
-          caretROI.bottom = 100 * (1 - rect.y) + '%'
+          caretROI.left = 100 * rect.wX + '%'
+          caretROI.bottom = 100 * (1 - rect.wY) + '%'
+          caretROI.right = 'inherit'
           if (!rect.hasOwnProperty('atlas')) {
             // child container
             //caretROI.width = '100%'

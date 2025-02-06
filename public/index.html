@@ -290,10 +290,8 @@
             //
             // Depth March
             mpos.fnVar('march', '#Object3D', {}).then(function (res) {
-              console.log(res)
               // Count -1 so Object appears under Depth
               mpos.fnVar('chain', '#Object3D', { count: res - 1, symbol: '&#65532;' }).then((res) => {
-                console.log('fnVar', res)
                 // Object Append
                 res.querySelector('.last').append(Object3D)
 
@@ -305,7 +303,7 @@
                   const idx = Object3D.getAttribute('data-idx')
                   mpos.fnVar('find', idx, {}).then(function (res) {
                     // ObjectLoader can complete later...?
-                    console.log('poll res.obj?:', res)
+                    console.log('find res.obj:', res)
                     // unlike rotateZ(), scale(-1, 0) flickers visibility
                     Object3D.style.transform = 'rotateZ(180deg)'
                   })
