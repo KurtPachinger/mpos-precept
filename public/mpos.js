@@ -58,7 +58,7 @@ const mpos = {
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 8,
-      inPolar: 3,
+      inPolar: 4,
       arc: 0,
       delay: 0,
       update: function () {
@@ -889,7 +889,7 @@ const mpos = {
     instanced.userData.el = grade.sel
     instanced.name = [grade.count, selector.tagName].join('_')
     grade.instanced = instanced
-    grade.mapKey = { x: 1 - 1 / (atlas.sub - atlas.subBin), y: 0.0001 } // empty structure (cyan)
+    grade.mapKey = { x: 0, y: 0.0001 } // empty structure (cyan)
     // Atlas UV Buffer
     const uvOffset = new THREE.InstancedBufferAttribute(new Float32Array(grade.elsMax * 3).fill(-1), 3)
     uvOffset.setUsage(THREE.DynamicDrawUsage)
@@ -1963,9 +1963,9 @@ const mpos = {
 
           if (!rType) {
             // atlas key structure
-            ctxC.clearRect((atlas.sub - atlas.subBin) * wSub, atlas.size - wSub, wSub, wSub)
+            ctxC.clearRect(0, atlas.size - wSub, wSub, wSub)
             ctxC.fillStyle = 'rgba(0,255,255,0.125)'
-            ctxC.fillRect(wSub, wSub, wSub, wSub)
+            ctxC.fillRect(0, atlas.size - wSub, wSub, wSub)
           }
 
           transforms(grade)
@@ -2269,7 +2269,7 @@ const mpos = {
                 mpos.update(grade, rType)
               }
             },
-            { time: 33.33 }
+            { time: 125 }
           )
         }
       }
@@ -2280,7 +2280,7 @@ const mpos = {
         enqueue(rType)
       } else {
         // event schedule or throttle
-        const [timer, timeout] = e.type === 'delay' ? ['delay', e.value] : ['reflow', 33.33]
+        const [timer, timeout] = e.type === 'delay' ? ['delay', e.value] : ['reflow', 62.5]
 
         mpos.ux.timers.clear(timer)
         if (e.value === -1) {
