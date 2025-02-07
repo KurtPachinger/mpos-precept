@@ -957,9 +957,10 @@ const mpos = {
 
       // css: accumulate transforms
       mpos.set.css(rect, opts.frame)
+      let unset = rect.bound
 
       // css: unset for box scale
-      let unset = mpos.set.css(rect, true)
+      //let unset = mpos.set.css(rect, true)
       let bound = rect.unset ? unset : rect.bound
 
       //
@@ -1004,8 +1005,8 @@ const mpos = {
         // TRANSFORMS: apply accumulate for natural box model
 
         // scale
-        const w = unset.width
-        const h = unset.height
+        const w = rect.el.offsetWidth
+        const h = rect.el.offsetHeight
         const d = fov.z
         // position
         let x = bound.width / 2
@@ -1103,55 +1104,36 @@ const mpos = {
     css: function (rect, progress) {
       const { grade, tool } = mpos.var
 
-      //
-      // CSS Style Transforms: accumulate a natural box model
-
       let el = rect.el
       const frame = typeof progress === 'number'
-      // css style: transform, transformOrigin, backgroundColor, zIndex, position
       const css = rect.css || { style: window.getComputedStyle(el) }
 
       function getBound(element) {
         let bound = element.getBoundingClientRect()
-        //bound.width = element.clientWidth;
-        //bound.height= element.clientHeight;
         return bound
       }
 
       let uxout = {}
       if (progress === undefined || frame) {
-        // ux frame change pre/post calculable? (imperative)
         rect.ux.u = false
         uxout = { bound: rect.bound, scale: css.scale, degree: css.degree }
 
         if (!rect.hasOwnProperty('css') || rect.frame < progress) {
-          // ux priority may escalate (declarative)
           const priority = css.pseudo || tool.diffs('tween', { style: css.style })
           rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
-          // reset transforms
           css.scale = 1
           css.radian = 0
           css.degree = 0
           css.transform = 0
         }
-      } else {
-        // rect.unset
-        // quirks of DOM
-        //if (el.matches('details')) {
-        //  el.open = progress
-        //}
-        //if (el.matches('.mp-offscreen')) {
-        //  rect.z = css.style.zIndex
-        //}
       }
 
       let unset
       const rects = grade.rects
-      function accumulate(progress) {
+      function accumulateTransforms(progress) {
         let el = rect.el
-        //let els = []
-        let max = 8 // deep tree?
+        let max = 8
 
         while (el && max--) {
           if (el.isSameNode(document.body) || el.isSameNode(document.documentElement) || !el.parentElement) {
@@ -1163,61 +1145,45 @@ const mpos = {
           if (r_?.ux.o) {
             if (progress === undefined || frame) {
               if (!rect.hasOwnProperty('css') || rect.frame < progress) {
-                // accumulate ancestor matrix
-                const style = r_.css?.style || css.style //|| window.getComputedStyle(el)
+                const style = r_.css?.style || css.style
 
                 if (style && tool.diffs('matrix', { style: style })) {
-                  const transform = style.transform.replace(/(matrix)|[( )]/g, '')
-                  // transform matrix
-                  const [a, b] = transform.split(',')
-                  const scale = Math.sqrt(a * a + b * b)
-                  const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+                  const transform = style.transform.replace(/matrix\(|\)/g, '')
+                  const values = transform.split(',').map(parseFloat)
+                  const scale = Math.sqrt(values[0] * values[0] + values[1] * values[1])
+                  const degree = Math.atan2(values[1], values[0]) * (180 / Math.PI)
                   const radian = degree * (Math.PI / 180)
-                  // accrue transforms
                   css.scale *= scale
                   css.radian += radian
                   css.degree += degree
                   css.transform++
                 }
               }
-            } else {
-              // unset ancestor style transforms
-              //if (tweens(rect.css) || el.classList.contains('mp-unset')) {
-              el.classList.toggle('mp-unset', progress)
-              //}
             }
           }
-          //els.unshift(el)
           el = el.parentElement
-          //el = el.closest('.mp-unset')
         }
 
         if (progress === true) {
           unset = getBound(rect.el)
-          accumulate(!progress)
+          accumulateTransforms(!progress)
         } else {
           if (progress === undefined || frame) {
-            // update rect properties from frame
             rect.css = css
             rect.bound = getBound(rect.el)
-
             rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
             if (frame) {
               if (rect.frame < progress) {
-                // compare frame result to detect change
                 let newBox = JSON.stringify(uxout.bound) !== JSON.stringify(rect.bound)
                 let newCss = uxout.scale !== rect.css.scale || uxout.degree !== rect.css.degree
                 if (newBox || newCss || rect.ux.o) {
-                  // feature testing
                   let update = 'all'
                   if (newBox) {
-                    // deeper comparison stub
                     newBox = uxout.bound.symmetry !== rect.bound.symmetry
                   }
                   if (!newBox || !newCss) {
                     update = newBox ? 'box' : 'css'
                   }
-                  // to reduce queue of atlas/transforms
                   rect.ux.u = update
                 }
               }
@@ -1226,7 +1192,7 @@ const mpos = {
           }
         }
       }
-      accumulate(progress)
+      accumulateTransforms(progress)
 
       return unset || rect.ux.u
     },
