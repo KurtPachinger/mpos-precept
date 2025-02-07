@@ -221,7 +221,24 @@
           <article>
             <h2>Article 01: Carousel</h2>
             <p>Media slides with content-aware policy.</p>
-            <img alt="" class="w50" src="data:," style="height: 8em; background-color: rgb(128, 0, 0)" />
+            <figure class="slides">
+              <div class="track">
+                <img alt="" srcset="data:," style="height: 8em; background-color: rgb(128, 0, 0)" />
+                <figcaption>srcset</figcaption>
+              </div>
+              <picture class="track">
+                <source alt="" src="data:," style="height: 8em; background-color: rgb(128, 32, 32)" />
+                <figcaption>picture</figcaption>
+              </picture>
+              <div class="track">
+                <img alt="" src="data:," style="height: 8em; background-color: rgb(128, 64, 64)" />
+                <figcaption>source</figcaption>
+              </div>
+              <div class="track">
+                <img alt="" src="data:," style="height: 8em; background-color: rgb(128, 128, 128)" />
+                <figcaption>srcset-4</figcaption>
+              </div>
+            </figure>
             <ul>
               Proposal...
               <li>config: default, custom</li>
@@ -321,7 +338,7 @@
 
       //
       // User events (native or synthetic)
-      document.addEventListener(
+      document.body.addEventListener(
         'click',
         (e) => {
           const target = e.target
@@ -332,7 +349,7 @@
             else target.pause()
           }
         },
-        true
+        false
       )
     </script>
   </body>

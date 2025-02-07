@@ -2072,7 +2072,8 @@ const mpos = {
             next()
           })
           .catch(function (error) {
-            console.log(error)
+            // image source bad or unsupported type
+            //console.log(error)
             next()
           })
       } else {
@@ -2402,7 +2403,7 @@ const mpos = {
           const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
           caretROI.backgroundColor = color
           // location
-          const cell = 100 * (1 / grade.atlas.sub)
+          const cell = 100 * (1 / grade.atlas.sub) * rect.w
           caretROI.width = caretROI.height = cell + '%'
           caretROI.left = 100 * rect.wX + '%'
           caretROI.bottom = 100 * (1 - rect.wY) + '%'

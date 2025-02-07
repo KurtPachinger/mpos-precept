@@ -6,6 +6,7 @@
   --sub: rgba(255, 0, 0, 0.25);
   --med: rgba(128, 128, 128, 0.125);
   --active: rgba(0, 255, 0, 0.25);
+  --slider: 25%;
 }
 
 html,
@@ -279,6 +280,58 @@ EFFECTS, ANIMATION */
   100% {
     background-color: rgba(0, 0, 255, 0.5);
   }
+}
+
+.slides {
+  margin: 0;
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  .track {
+    flex-grow: 1;
+    flex-shrink: 4;
+    flex-basis: 0;
+
+    /* off */
+    position: relative;
+    transition: flex-grow 1.5s;
+    opacity: 50%;
+    img, source, video {
+      display: block;
+    }
+
+    &:hover, &:active, &:focus {
+    /* on (filter doesn't toCanvas) */
+      flex-grow: 4;
+      opacity: 100%;
+      animation: slider 3s linear infinite;
+      img, source { 
+        border-radius: 0.5em;
+      }
+    }
+  }
+  
+  figcaption {
+    position: absolute;
+    top: 0;
+    z-index: 1;
+    transform: rotate(90deg);
+    transform-origin: left bottom;
+    white-space: nowrap;
+    /* consistent */
+    background-color: #fff;
+  }
+}
+
+@keyframes slider {
+  50% {
+    transform: translate(0, -0.5em);
+  }
+
+}
+
+
+
 }
 
 .lil-gui.root {
