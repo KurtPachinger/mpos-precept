@@ -9,8 +9,8 @@
     <script type="importmap">
       {
         "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+          "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
         }
       }
     </script>
@@ -46,7 +46,6 @@
       </p>
       <details id="tools" class="mp-allow" open>
         <summary>Static Content</summary>
-
         <div class="stage" id="underflow"></div>
         <aside id="native" class="tilt scroll">
           <h2>aside<span>#native</span></h2>
@@ -121,9 +120,9 @@
         <section id="loader">
           <h2>section<span>#loader</span></h2>
           <p class="mp-loader">Class <span class="sup">mp-loader</span> TXT2IMG?</p>
-          <object class="mp-loader w33 hinge" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=20"></object>
-          <img alt="" class="mp-loader w33 hinge" src="./image.jpg?t=21" crossorigin="anonymous" />
-          <img alt="" class="mp-loader w33 hinge" src="./image.gif?t=21" />
+          <object class="mp-loader w33 hinge" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=10"></object>
+          <img alt="" class="mp-loader w33 hinge" src="./image.jpg?t=10" crossorigin="anonymous" />
+          <img alt="" class="mp-loader w33 hinge" src="./image.gif?t=10" />
           <video class="mp-loader w33 hinge" crossorigin="anonymous" loop autoplay muted>
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
@@ -133,8 +132,8 @@
         <section id="media" class="sub">
           <h2>section<span>#media</span></h2>
           <article>
-            <img alt="" class="w33 hinge" src="./image.jpg?t=20" />
-            <img alt="" class="w33 hinge" src="./image.gif?t=20" />
+            <img alt="" class="w33 hinge" src="./image.jpg?t=10" />
+            <img alt="" class="w33 hinge" src="./image.gif?t=10" />
           </article>
           <details open class="mp-allow tilt">
             <summary>types</summary>
@@ -162,7 +161,7 @@
                       const material = new THREE.MeshBasicMaterial( { color: 0x00c0c0, wireframe: true } );
                       const object = new THREE.Mesh( data, material );
                       
-                      let scale = 50;
+                      const scale = 50;
                       object.scale.multiplyScalar( scale );
                       object.position.set( -scale, scale, 0 );
                       
@@ -217,7 +216,6 @@
         </section>
         <details id="live" class="mp-allow" open>
           <summary class="mp-native">section<span>#live</span></summary>
-
           <article>
             <h2>Article 01: Carousel</h2>
             <p>Media slides with content-aware policy.</p>
@@ -280,18 +278,15 @@
 
           //
           // Extract some visual hierarchy
-
           mpos.fnVar('chain', '#overflow', { count: 4, symbol: '-' })
           mpos.fnVar('chain', '#underflow', { count: 4, symbol: '+' })
-
           mpos.fnVar('march', '#nest', {}).then(function (res) {
+            // Analogue of raymarch chain
             mpos.fnVar('chain', '#nest', { count: res, symbol: res }).then((res) => {
-              // Analogue of raymarch chain
               console.log('fnVar', res)
             })
           })
 
-          //
           // Object Preload
           const Object3D = document.createElement('object')
           Object3D.classList.add('mp-loader')
@@ -302,37 +297,32 @@
           // Initialize in standalone mode
           mpos.init().then((res) => {
             console.log('mpos:', res)
-
-            //
             // Depth March
             mpos.fnVar('march', '#Object3D', {}).then(function (res) {
               // Count -1 so Object appears under Depth
               mpos.fnVar('chain', '#Object3D', { count: res - 1, symbol: '&#65532;' }).then((res) => {
                 // Object Append
                 res.querySelector('.last').append(Object3D)
-
-                // DOM has Object, so add it
+                // now DOM has Object, so add the page
                 mpos.add().then((res) => {
                   console.log('precept grade:', res)
-
-                  // Find element rect, and flip-y
-                  const idx = Object3D.getAttribute('data-idx')
-                  mpos.fnVar('find', idx, {}).then(function (res) {
-                    // ObjectLoader can complete later...?
+                  // Find element rect
+                  const idxJSON = Object3D.getAttribute('data-idx')
+                  mpos.fnVar('find', idxJSON, {}).then(function (res) {
+                    // ObjectLoader status..?
                     console.log('find res.obj:', res)
-                    // unlike rotateZ(), scale(-1, 0) flickers visibility
+                    // Meanwhile flip-y (scale(-1, 0) flickers visibly)
                     Object3D.style.transform = 'rotateZ(180deg)'
                   })
+
+                  //
+                  // fnVar: first, last, add
                 })
 
-                //
-                //
+                // init has event listeners...?
               })
             })
           })
-
-          //
-          //
         }
       }, 250)
 

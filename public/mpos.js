@@ -886,7 +886,7 @@ const mpos = {
     instanced.layers.set(2)
     // Shader Atlas
     instanced.userData.shader = shader
-    instanced.userData.el = grade.sel
+    instanced.userData.el = grade.el
     instanced.name = [grade.count, selector.tagName].join('_')
     grade.instanced = instanced
     grade.mapKey = { x: 0, y: 0.0001 } // empty structure (cyan)
