@@ -453,6 +453,7 @@ const mpos = {
       const proxy = !!(opts.scene && opts.camera && opts.renderer)
 
       vars.scene = opts.scene || new THREE.Scene()
+      vars.scene.autoUpdate = vars.scene.matrixAutoUpdate = vars.scene.matrixWorldAutoUpdate = false
       vars.renderer =
         opts.renderer ||
         new THREE.WebGLRenderer({
@@ -877,7 +878,7 @@ const mpos = {
 
     //
     // Atlas Ration: relative device
-    atlas.sub = 12
+    atlas.sub = 14
     atlas.subBin = 4
     atlas.canvas.width = atlas.canvas.height = atlas.size
     atlas.canvas.title = [atlas.sub, atlas.size].join('_')
@@ -887,6 +888,7 @@ const mpos = {
     const shader = mpos.set.shader(atlas.canvas, atlas.sub, mat_shader)
     const instanced = new THREE.InstancedMesh(geo, [mat, mat, mat, mat, shader, mat_line], grade.elsMax)
     instanced.layers.set(2)
+    mpos.set.use(instanced)
     // Shader Atlas
     instanced.userData.shader = shader
     instanced.userData.el = grade.el
@@ -995,6 +997,7 @@ const mpos = {
       } else if (rect.mat === 'wire') {
         // Mesh unclassified (currently only root node)
         const mesh = new THREE.Mesh(geo, mat_line)
+        mpos.set.use(mesh)
         mesh.userData.el = rect.el
         mesh.animate = true
         object = mesh
@@ -1199,6 +1202,24 @@ const mpos = {
 
       return unset || rect.ux.u
     },
+    use: function (object, update) {
+      // update usage manually
+      if (!update) {
+        object.matrixAutoUpdate = false
+        //object.matrixWorldAutoUpdate = false // makes stale meshes from slow loader on init
+        if (object.isInstancedMesh) {
+          object.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+        }
+      } else {
+        object.matrixWorldNeedsUpdate = true
+        //object.updateMatrix()
+        //object.updateMatrixWorld()
+        if (object.isInstancedMesh) {
+          object.instanceMatrix.needsUpdate = true
+          object.computeBoundingSphere()
+        }
+      }
+    },
     shader: function (canvas, texStep, mat_shader) {
       //discourse.threejs.org/t/13221/17
       const texAtlas = new THREE.CanvasTexture(canvas)
@@ -1276,6 +1297,7 @@ const mpos = {
         const texture = new THREE.VideoTexture(source)
         material.map = texture
         const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
+        mpos.set.use(mesh)
         mesh.layers.set(2)
         mesh.matrix.copy(dummy.matrix)
         mesh.name = uri
@@ -1376,6 +1398,7 @@ const mpos = {
                   const shape = shapes[j]
                   const geometry = new THREE.ShapeGeometry(shape, 2)
                   const mesh = new THREE.Mesh(geometry, material)
+                  mpos.set.use(mesh)
 
                   group.add(mesh)
                 }
@@ -1394,6 +1417,7 @@ const mpos = {
 
               const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
               mesh.matrix.copy(dummy.matrix)
+              mpos.set.use(mesh)
               mesh.name = uri
 
               // unique overrides
@@ -1686,6 +1710,7 @@ const mpos = {
                   // todo: cv.copyMakeBorder reduce triangles near corners
                   const mergedBoxes = mergeGeometries(mergedGeoms)
                   const mesh = new THREE.Mesh(mergedBoxes, material)
+                  mpos.set.use(mesh)
                   mesh.layers.set(2)
                   group.add(mesh)
                 }
@@ -2074,6 +2099,7 @@ const mpos = {
           let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
 
           const dummy = mpos.set.box(rect, { add: newGeo, scroll: scroll, frame: r_frame })
+          if (dummy && rect.obj) mpos.set.use(rect.obj, true)
 
           if (rect.obj) {
             // update visibility if loaded
@@ -2104,7 +2130,7 @@ const mpos = {
         let inPolar = uxForce ? mpos.set.inPolar(rect) >= grade.inPolar : rect.inPolar >= grade.inPolar
 
         const dummy = mpos.set.box(rect, { frame: r_frame })
-        dummy && instanced.setMatrixAt(count, dummy.matrix)
+        if (dummy) instanced.setMatrixAt(count, dummy.matrix)
 
         //
         // Update feature difference (support background)
@@ -2167,6 +2193,8 @@ const mpos = {
       grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true // if buffer has new atlas positions (for example, hover works despite)
       // Atlas Postprocessing...?
       //ctxC.drawImage(OffscreenCanvas, 0, 0)
+      mpos.set.use(instanced, true)
+      mpos.var.scene.updateMatrixWorld()
       mpos.ux.render()
 
       if (!paint) {
