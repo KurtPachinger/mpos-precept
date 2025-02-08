@@ -1259,6 +1259,7 @@ const mpos = {
         // note: currently, group implies SVG/OpenCV which lack depth
         group.translateZ(mpos.var.fov.z / 2)
 
+        mpos.set.use(group, true)
         mpos.ux.render()
       }
     },
@@ -2318,6 +2319,11 @@ const mpos = {
     },
     render: function () {
       const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool } = mpos.var
+
+      if (document.hidden) {
+        // todo: visibilitychange prevent 300fps
+        return
+      }
 
       if (grade) {
         // animation step
