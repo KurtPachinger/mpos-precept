@@ -154,14 +154,17 @@ const mpos = {
         // chain of elements
         let nodeName = opts.nodeName || 'mp'
         let chains = document.createElement(nodeName)
-        chains.classList.add('march', 'mp-allow')
+        chains.classList.add('mp-allow', 'march')
         let last = chains
         while (--opts.count) {
           let chain = document.createElement(nodeName)
-          chain.classList.add('mp-allow')
+          chain.classList.add('mp-allow', 'p')
           if (opts.count % 2 === 0) {
             chain.classList.add('odd')
           }
+          // path scatter sample (no pointerevents)
+          chain.innerHTML += `<mp class='k'>${opts.count}</mp>`
+
           last.append(chain)
           last = chain
         }
@@ -416,7 +419,7 @@ const mpos = {
     block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,iframe:not([src])`.split(
       ','
     ),
-    poster: `.mp-poster,canvas,picture,img,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
+    poster: `.mp-poster,canvas,img,picture,figcaption,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
     native:
       `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
         ','

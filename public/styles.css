@@ -291,13 +291,23 @@ EFFECTS, ANIMATION */
     flex-grow: 1;
     flex-shrink: 4;
     flex-basis: 0;
+    contain: inline-size;
 
     /* off */
     position: relative;
     transition: flex-grow 1.5s;
     opacity: 50%;
-    img, source, video {
+    img, picture, video {
       display: block;
+      width: 100%;
+      height:8em;
+      image-rendering: pixelated;
+      background-blend-mode: multiply;
+      /*background-attachment: fixed; toCanvas style conflicts inconsistent */
+      background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=");
+      background-size: auto 10vmin; /* 10vmin may be more compatible */
+      background-position: -10vmin -10vmin;
+      animation: media 6s linear infinite;
     }
 
     &:hover, &:active, &:focus {
@@ -305,7 +315,7 @@ EFFECTS, ANIMATION */
       flex-grow: 4;
       opacity: 100%;
       animation: slider 3s linear infinite;
-      img, source { 
+      img, source, video { 
         border-radius: 0.5em;
       }
     }
@@ -327,7 +337,12 @@ EFFECTS, ANIMATION */
   50% {
     transform: translate(0, -0.5em);
   }
+}
 
+@keyframes media {
+  100% {
+    background-position: 0 0;
+  }
 }
 
 
@@ -368,6 +383,8 @@ EFFECTS, ANIMATION */
     box-shadow: inset 0 0 0em 0.125em cyan;
   }
 }
+
+
 
 /* test styles */
 

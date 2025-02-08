@@ -221,20 +221,27 @@
             <p>Media slides with content-aware policy.</p>
             <figure class="slides">
               <div class="track">
-                <img alt="" srcset="data:," style="height: 8em; background-color: rgb(128, 0, 0)" />
+                <img style="background-color: rgba(128, 0, 0, 0.5)" alt="" srcset="data:, 1920w" sizes="(min-width: 1920px)" src="data:," />
                 <figcaption>srcset</figcaption>
               </div>
-              <picture class="track">
-                <source alt="" src="data:," style="height: 8em; background-color: rgb(128, 32, 32)" />
-                <figcaption>picture</figcaption>
-              </picture>
               <div class="track">
-                <img alt="" src="data:," style="height: 8em; background-color: rgb(128, 64, 64)" />
+                <picture style="background-color: rgba(128, 32, 32, 0.5)">
+                  <source srcset="data:," media="(orientation: portrait)" />
+                  <img alt="" src="data:," />
+                  <figcaption>picture</figcaption>
+                </picture>
+              </div>
+              <div class="track">
+                <img style="background-color: rgba(128, 64, 64, 0.5)" alt="" src="data:," />
                 <figcaption>source</figcaption>
               </div>
               <div class="track">
-                <img alt="" src="data:," style="height: 8em; background-color: rgb(128, 128, 128)" />
-                <figcaption>srcset-4</figcaption>
+                <video style="background-color: rgba(128, 128, 128, 0.5)" muted crossorigin="anonymous" preload="metadata">
+                  <source src="data:," type="video/mp4" />
+                  <track label="English" kind="captions" srclang="en" src="./sintel-en.vtt" default />
+                  <p>No video</p>
+                </video>
+                <figcaption>video</figcaption>
               </div>
             </figure>
             <ul>
