@@ -45,14 +45,29 @@ const mpos = {
     time: {
       sFence: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
       sFenceDelta: 0,
-      sFenceFPS: 1 / 30 // 30 fps
+      sFenceFPS: 1 / 60, // 60 fps
+      sFenceFPS_slice: { boundary: 0, gate: Infinity },
+      slice(boundary, gate) {
+        // bitmask power: %1==60fps || %2==30fps || %4==15fps
+        const slice = this.sFenceFPS_slice
+
+        boundary = slice.boundary % boundary === 0
+        // gate of boundary 1:  not a ramp
+        if (gate !== undefined) {
+          gate = gate ? slice.gate === true : slice.gate === Infinity
+        } else {
+          gate = true
+        }
+
+        return boundary && gate
+      }
     },
     fov: {
+      basis: 1024,
       dpr: Math.min(devicePixelRatio, 1),
-      w: window.innerWidth,
-      h: window.innerHeight,
-      z: 8,
-      max: 1024
+      width: window.innerWidth,
+      height: window.innerHeight,
+      z: 8
     },
     opt: {
       selector: 'main',
@@ -253,14 +268,14 @@ const mpos = {
         const { fov, camera, grade } = mpos.var
         //
         // todo: could be used for anisotropy
-        const dprPractical = (fov.w + fov.h) / 2
+        const dprPractical = (fov.width + fov.height) / 2
         const camPosition = camera.position
-        const distanceToZ = camPosition.distanceTo({ x: camPosition.x, y: camPosition.y, z: 0 })
-        //const distanceTo0 = camPosition.distanceTo({ x: 0, y: 0, z: 0 })
-        let sample = distance || camPosition.distanceTo(grade.group.position)
+        const distanceZ = camPosition.distanceTo({ x: camPosition.x, y: camPosition.y, z: 0 })
+        let distanceTarget = grade?.group.position || { x: 0, y: 0, z: 0 }
+        let sample = distance || camPosition.distanceTo(distanceTarget)
 
-        const eDPI = dprPractical / ((sample + distanceToZ) / 2)
-        fov.dpr = Math.min(eDPI, 1)
+        const eDPI = dprPractical / ((sample + distanceZ) / 2)
+        fov.dpr = Math.max(Math.min(eDPI, 1), 0.5)
       },
       old: function (selector) {
         const { scene, grade } = mpos.var
@@ -466,10 +481,10 @@ const mpos = {
       const domElement = vars.renderer.domElement
       opts.container = proxy ? domElement.parentElement : document.body
 
-      fov.w = opts.container.offsetWidth
-      fov.h = opts.container.offsetHeight
-      const frustum = fov.max * opt.depth
-      vars.camera = opts.camera || new THREE.PerspectiveCamera(45, fov.w / fov.h, fov.z / 2, frustum * 4)
+      fov.width = opts.container.offsetWidth
+      fov.height = opts.container.offsetHeight
+      const frustum = fov.basis * opt.depth
+      vars.camera = opts.camera || new THREE.PerspectiveCamera(45, fov.width / fov.height, fov.z / 2, frustum * 4)
 
       //
       // Inject Stage
@@ -496,18 +511,18 @@ const mpos = {
       vars.camera.layers.enableAll()
       if (!proxy) {
         vars.camera.position.z = frustum / 8
-        vars.renderer.setSize(fov.w * fov.dpr, fov.h * fov.dpr)
+        vars.renderer.setSize(fov.width * fov.dpr, fov.height * fov.dpr)
         mp.appendChild(domElement)
         vars.renderer.setClearColor(0x00ff00, 0)
         // helpers
-        const axes = new THREE.AxesHelper(fov.max)
+        const axes = new THREE.AxesHelper(fov.basis)
         vars.scene.add(axes)
       }
 
       // CSS3D
       const css3d = document.getElementById('css3d')
       vars.rendererCSS = new CSS3DRenderer()
-      vars.rendererCSS.setSize(fov.w * fov.dpr, fov.h * fov.dpr)
+      vars.rendererCSS.setSize(fov.width * fov.dpr, fov.height * fov.dpr)
       css3d.appendChild(vars.rendererCSS.domElement)
       css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
 
@@ -515,7 +530,7 @@ const mpos = {
       controls.screenSpacePanning = true
       controls.maxDistance = frustum
 
-      const halfHeight = -(fov.h / 2)
+      const halfHeight = -(fov.height / 2)
       vars.camera.position.setY(halfHeight + 0.125)
       controls.target.setY(halfHeight)
       controls.update()
@@ -527,7 +542,7 @@ const mpos = {
       window.stats = new Stats()
       mp.appendChild(stats.dom)
       //
-      const gridHelper = new THREE.GridHelper(fov.w, 4, 0x444444, 0xc0c0c0)
+      const gridHelper = new THREE.GridHelper(fov.width, 4, 0x444444, 0xc0c0c0)
       gridHelper.rotateX(3.14 / 2)
       vars.scene.add(gridHelper)
 
@@ -843,6 +858,14 @@ const mpos = {
 
     struct(sel, depth)
 
+    //
+    // Atlas Ration: relative device
+    atlas.sub = 14
+    atlas.subBin = 4
+    atlas.canvas.width = atlas.canvas.height = atlas.size
+    atlas.canvas.title = [atlas.sub, atlas.size].join('_')
+
+    let subBinMax = (atlas.sub / 2) * (atlas.subBin / 2)
     Object.keys(grade.rects).forEach((idx) => {
       //
       // Complete Preparation
@@ -860,8 +883,10 @@ const mpos = {
         }
 
         const area = rect.el.offsetWidth * rect.el.offsetHeight
-        if ((rect.mat === 'poster' || rect.mat === 'native') && area > atlasWide.average) {
+
+        if (subBinMax-- && (rect.mat === 'poster' || rect.mat === 'native') && area > atlasWide.average * 0.9) {
           //console.log('atlasW', rect)
+
           rect.idxW = atlas.idxW++
         }
 
@@ -877,13 +902,6 @@ const mpos = {
     })
 
     //
-    // Atlas Ration: relative device
-    atlas.sub = 14
-    atlas.subBin = 4
-    atlas.canvas.width = atlas.canvas.height = atlas.size
-    atlas.canvas.title = [atlas.sub, atlas.size].join('_')
-
-    //
     // Instanced Mesh and
     const shader = mpos.set.shader(atlas.canvas, atlas.sub, mat_shader)
     const instanced = new THREE.InstancedMesh(geo, [mat, mat, mat, mat, shader, mat_line], grade.elsMax)
@@ -895,6 +913,7 @@ const mpos = {
     instanced.name = [grade.count, selector.tagName].join('_')
     grade.instanced = instanced
     grade.mapKey = { x: 0, y: 0.0001 } // empty structure (cyan)
+
     // Atlas UV Buffer
     const uvOffset = new THREE.InstancedBufferAttribute(new Float32Array(grade.elsMax * 3).fill(-1), 3)
     uvOffset.setUsage(THREE.DynamicDrawUsage)
@@ -1070,7 +1089,7 @@ const mpos = {
         if (opt.arc) {
           // arc radial
           const damp = opt.arc
-          const mid = fov.w / 2
+          const mid = fov.width / 2
           const rad = (mid - x) / mid
           const pos = mid * Math.abs(rad)
           // bulge from view center
@@ -1212,6 +1231,7 @@ const mpos = {
         }
       } else {
         object.matrixWorldNeedsUpdate = true
+        // note: instanceColor and uvOffset is udpated elsewhere
         //object.updateMatrix()
         //object.updateMatrixWorld()
         if (object.isInstancedMesh) {
@@ -1760,22 +1780,11 @@ const mpos = {
     //
     // Frame Sync and Feedback: render may invoke targets to collocate
     let sPhaseSync = 0.5
-    time.sFenceDelta += time.sFence.getDelta()
+    // Framerate Limit: pivot sFenceSync describes execution priority, since event queue is indeterminate
     let sFenceSync = 1 / ((time.sFenceDelta - time.sFenceFPS) / (time.sFenceFPS / 2))
     sFenceSync *= 2
-
-    const syncFPS = time.sFenceDelta > time.sFenceFPS
-    if (syncFPS) {
-      // Framerate Limit: pivot sFenceSync describes execution priority, since event queue is indeterminate
-      //stackoverflow.com/questions/11285065/#answer-51942991
-      time.sFenceDelta %= time.sFenceFPS
-    } else if (rType) {
-      //
-      // Feedback Sample: state boundry value analysis
-      transforms(grade)
-      // todo: is [...accumulate average] beneficial?
-      // is hit.distance
-    }
+    // Beacon to render
+    const syncFPS = time.slice(1)
 
     if (rType) {
       // SOFT-update: Observer or frame
@@ -1819,10 +1828,10 @@ const mpos = {
 
       //
       // Nominal Time Partition: real deviation
-      quality = Math.min(sFenceSync + sPhaseSync, 1)
+      quality = Math.max(Math.min(sFenceSync + sPhaseSync, 1), 0.5)
       //console.log('?:', [+sFenceSync.toFixed(3), +sPhaseSync.toFixed(3), +quality.toFixed(3)].join('      __      '))
 
-      if (reflow) {
+      if (reflow && time.slice(1, true)) {
         function vis(rects, reQueue) {
           // update element rect
           Object.keys(rects).forEach(function (idx) {
@@ -1839,7 +1848,7 @@ const mpos = {
                   // no propagate
                   r_queue.push(idx)
                 } else {
-                  let pseudo = tool.diffs('pseudo', { rect: rect, sel: grade.el, capture: capture })
+                  let pseudo = tool.diffs('pseudo', { rect: rect, sel: grade.el, capture: capture }) && (rect.ux.p || time.slice(2))
                   if (pseudo || rect.ux.u || rect.ux.o) {
                     // element ux changed or elevated
                     // note: pseudo evaluates first, so atlas unset has consistent off-state
@@ -1872,7 +1881,7 @@ const mpos = {
                         rect.child = child
                       }
 
-                      r_queue.push(...rect.child)
+                      if (time.slice(2)) r_queue.push(...rect.child)
                     }
                   }
                 }
@@ -1899,11 +1908,13 @@ const mpos = {
     }
 
     //console.log('queue', r_queue.length, dataIdx, r_frame)
-    //const promise = new Promise((resolve, reject) => {
-    //if (!grade.canvas) {
-    //  console.log(grade)
-    //  resolve(grade)
-    //}
+
+    //
+    // common constants
+    const wSub = atlas.size / atlas.sub
+    const wSub2 = wSub * 2
+    const size = atlas.size - wSub2
+    // ... subBin from average area ( & size & sub )
 
     //
     // Offscreen Canvas
@@ -1915,15 +1926,14 @@ const mpos = {
       let options = { willReadFrequently: true, alpha: true }
       atlas.ctx = atlas.canvas.getContext('2d', options)
       atlas.ctx.imageSmoothingEnabled = false
+
+      //
+      // atlas key structure
+      atlas.ctx.clearRect(0, 0, atlas.size, atlas.size)
+      atlas.ctx.fillStyle = 'rgba(0,255,255,0.125)'
+      atlas.ctx.fillRect(0, atlas.size - wSub, wSub, wSub)
     }
     const ctxC = atlas.ctx
-
-    //
-    // common constants
-    const wSub = atlas.size / atlas.sub
-    const wSub2 = wSub * 2
-    const size = atlas.size - wSub2
-    // ... subBin from average area ( & size & sub )
 
     function atlasQueue(grade, opts = {}) {
       if (opts.queue === undefined) {
@@ -1955,13 +1965,6 @@ const mpos = {
           atlasQueue(grade, opts)
         } else {
           // Resolve
-
-          if (!rType) {
-            // atlas key structure
-            ctxC.clearRect(0, atlas.size - wSub, wSub, wSub)
-            ctxC.fillStyle = 'rgba(0,255,255,0.125)'
-            ctxC.fillRect(0, atlas.size - wSub, wSub, wSub)
-          }
 
           transforms(grade)
         }
@@ -2040,8 +2043,10 @@ const mpos = {
                 } else {
                   // Wide sub on right-edge
                   //
-                  x = atlas.size - wSub2
-                  y = wSub2 * rect.idxW
+                  let sub2 = atlas.sub / 2
+                  x = atlas.size - wSub2 * ((Math.floor(rect.idxW / sub2) % sub2) + 1)
+
+                  y = wSub2 * (rect.idxW % sub2)
                 }
                 // canvas rounding trick, bitwise or
                 x = (0.5 + x) | 0
@@ -2058,7 +2063,7 @@ const mpos = {
               }
 
               const wSize = rect.w > 1 ? wSub2 : wSub
-              r_frame && ctxC.clearRect(rect.x, rect.y, wSize, wSize)
+              ctxC.clearRect(rect.x, rect.y, wSize, wSize)
               ctxC.drawImage(canvas, rect.x, rect.y, wSize, wSize)
             }
             // recurse
@@ -2076,7 +2081,14 @@ const mpos = {
       }
     }
 
-    atlasQueue(grade)
+    if (time.slice(1, false)) {
+      // Feedback Sample: state boundry value analysis
+      // ramp (not gate) early exit
+      return transforms(grade)
+      // todo: is [...accumulate average] beneficial?
+    } else {
+      atlasQueue(grade)
+    }
 
     function transforms(grade, paint) {
       //
@@ -2098,11 +2110,11 @@ const mpos = {
         Object.values(r_other.rects).forEach(function (rect) {
           let newGeo = !rect.hasOwnProperty('obj') && (rType === undefined || rect.add)
           let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
-
           const dummy = mpos.set.box(rect, { add: newGeo, scroll: scroll, frame: r_frame })
-          if (dummy && rect.obj) mpos.set.use(rect.obj, true)
+          //if (dummy || rect.obj)
 
           if (rect.obj) {
+            if (dummy) mpos.set.use(rect.obj, true)
             // update visibility if loaded
             // off-screen boxes may "seem" more visible than instancedMesh because they don't have a third state
             let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
@@ -2188,15 +2200,15 @@ const mpos = {
 
       // Apply Updates
       instanced.count = count
-      instanced.computeBoundingSphere() // cull and raycast
-      instanced.instanceMatrix.needsUpdate = true
+
+      //instanced.computeBoundingSphere() // cull and raycast
+      //instanced.instanceMatrix.needsUpdate = true
       if (newMap) instanced.instanceColor.needsUpdate = true
       grade.instanced.geometry.getAttribute('uvOffset').needsUpdate = true // if buffer has new atlas positions (for example, hover works despite)
       // Atlas Postprocessing...?
       //ctxC.drawImage(OffscreenCanvas, 0, 0)
       mpos.set.use(instanced, true)
-      mpos.var.scene.updateMatrixWorld()
-      mpos.ux.render()
+      mpos.ux.render(syncFPS)
 
       if (!paint) {
         const target = mpos.ux.events.target
@@ -2204,18 +2216,10 @@ const mpos = {
         targets.forEach((item) => target.add(item))
         // frame done
         grade.wait = false
-        //resolve(grade)
-        //reject(grade)
+
         return
       }
     }
-    //})
-
-    //promise.catch((error) => console.log(error))
-    //promise.then(function (grade) {
-    //console.log('update', grade)
-    //  return promise
-    //})
   },
   ux: {
     timers: {
@@ -2295,14 +2299,14 @@ const mpos = {
             if (e.type === 'resize') {
               // ...recalculate inPolar and update?
               const container = renderer.domElement.parentElement
-              fov.w = container.offsetWidth
-              fov.h = container.offsetHeight
+              fov.width = container.offsetWidth
+              fov.height = container.offsetHeight
 
-              camera.aspect = fov.w / fov.h
+              camera.aspect = fov.width / fov.height
               camera.updateProjectionMatrix()
 
-              renderer.setSize(fov.w, fov.h)
-              rendererCSS.setSize(fov.w, fov.h)
+              renderer.setSize(fov.width, fov.height)
+              rendererCSS.setSize(fov.width, fov.height)
 
               mpos.ux.render()
             } else {
@@ -2317,43 +2321,77 @@ const mpos = {
         )
       }
     },
-    render: function () {
-      const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool } = mpos.var
+    render: function (timeslice) {
+      const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool, time } = mpos.var
 
       if (document.hidden) {
         // todo: visibilitychange prevent 300fps
         return
       }
 
-      if (grade) {
-        // animation step
-        grade.group.traverse((obj) => {
-          if (obj.animate) {
-            if (obj.animate === true) {
-              const animationTime = Date.now() / 50
-              // wiggle root
-              obj.rotation.x = Math.sin(animationTime) / 100
-              obj.rotation.y = Math.cos(animationTime) / 200
-              obj.position.z = -9
-            } else if (obj.animate.gif) {
-              // refresh SuperGif
-              obj.material.map.needsUpdate = true
+      if (time.slice(1, true)) {
+        //
+        // FPS slice minimum (60fps?)
+        if (grade && time.slice(2, true)) {
+          // animation step
+          grade.group.traverse((obj) => {
+            if (obj.animate) {
+              if (obj.animate === true) {
+                const animationTime = Date.now() / 50
+                // wiggle root
+                obj.rotation.x = Math.sin(animationTime) / 100
+                obj.rotation.y = Math.cos(animationTime) / 200
+                obj.position.z = -9
+              } else if (obj.animate.gif) {
+                // refresh SuperGif
+                obj.material.map.needsUpdate = true
+              }
             }
-          }
-        })
+          })
 
-        // dpr set despite frameloop
-        tool.dpr()
+          // Controls events can stack up render calls outside of frameloop timer
+          tool.dpr()
+        }
 
         // instanced elements need texture update
         mat_shader.userData.t.needsUpdate = true
         //instanced.instanceColor.needsUpdate = true
+
+        // Compile
+        scene.updateMatrixWorld()
+        renderer.render(scene, camera)
+        rendererCSS.render(scene, camera)
+
+        stats.update()
       }
 
-      renderer.render(scene, camera)
-      rendererCSS.render(scene, camera)
+      if (timeslice) {
+        // syncFPS complete from updated transforms
+        time.sFenceFPS_slice.gate = Infinity
+      }
 
-      stats.update()
+      //
+      // Timeslice Boundry: junction of mapcontrols and transform updates
+      time.sFenceDelta += time.sFence.getDelta()
+      const syncFPS = time.sFenceDelta > time.sFenceFPS
+      if (syncFPS) {
+        //stackoverflow.com/questions/11285065/#answer-51942991
+        time.sFenceDelta %= time.sFenceFPS
+        // bitmask power
+        time.sFenceFPS_slice.boundary++
+        // syncFPS aligned (not ramp)
+        time.sFenceFPS_slice.gate = true
+      }
+
+      // ###
+      //if (time.slice(4)) {
+      //console.log('60+30+15')
+      //} else if (time.slice(2)) {
+      //console.log('60+30')
+      //} else if (time.slice(1)) {
+      //console.log('60')
+      //}
+      // ###
 
       //requestAnimationFrame(this)
     },
