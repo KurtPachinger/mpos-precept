@@ -6,7 +6,7 @@
   --sub: rgba(255, 0, 0, 0.25);
   --med: rgba(128, 128, 128, 0.125);
   --active: rgba(0, 255, 0, 0.25);
-  --slider: 25%;
+  --baseKey: 1;
 }
 
 html,
@@ -190,6 +190,7 @@ LAYOUT */
 .w66,
 .w75 {
   float: left;
+  max-width: 10rem;
 }
 .w25 {
   width: 25%;
@@ -249,17 +250,17 @@ EFFECTS, ANIMATION */
 @keyframes hinge {
   25% {
     z-index: 0;
-    transform: rotate(0deg);
+    transform: rotate(0deg) scale(var(--baseKey));
   }
 
   50% {
     z-index: 99;
-    transform: rotate(-15deg);
+    transform: rotate(-15deg) scale(var(--baseKey));
   }
 
   75% {
     z-index: -3;
-    transform: rotate(0deg);
+    transform: rotate(0deg) scale(var(--baseKey));
   }
 
   100% {
@@ -300,7 +301,7 @@ EFFECTS, ANIMATION */
     img, picture, video {
       display: block;
       width: 100%;
-      height:8em;
+      height: 8em;
       image-rendering: pixelated;
       background-blend-mode: multiply;
       /*background-attachment: fixed; toCanvas style conflicts inconsistent */
@@ -388,9 +389,14 @@ EFFECTS, ANIMATION */
 
 /* test styles */
 
-.w33:hover {
-  scale: 2;
-  transition: 3s scale;
+.w33{
+  &:hover{
+    --baseKey: 2;
+    transform: scale(var(--baseKey));
+    
+  }
+  
+  transition: 3s transform;
 }
 
 #live img.w50:hover {

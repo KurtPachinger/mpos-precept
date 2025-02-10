@@ -120,19 +120,25 @@
         <section id="loader">
           <h2>section<span>#loader</span></h2>
           <p class="mp-loader">Class <span class="sup">mp-loader</span> TXT2IMG?</p>
-          <object class="mp-loader w33 hinge" data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=10"></object>
-          <img alt="" class="mp-loader w33 hinge" src="./image.jpg?t=10" crossorigin="anonymous" />
+          <object
+            alt="SVG"
+            class="mp-loader w33 hinge"
+            data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=10"
+            rel="dns-prefetch"
+          ></object>
+          <img alt="" class="mp-loader w33 hinge" src="./image.webp?t=10" crossorigin="anonymous" />
           <img alt="" class="mp-loader w33 hinge" src="./image.gif?t=10" />
           <video class="mp-loader w33 hinge" crossorigin="anonymous" loop autoplay muted>
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
             <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
+            <track kind="captions" />
           </video>
           <div class="w33" id="Object3D"></div>
         </section>
         <section id="media" class="sub">
           <h2>section<span>#media</span></h2>
           <article>
-            <img alt="" class="w33 hinge" src="./image.jpg?t=10" />
+            <img alt="" class="w33 hinge" src="./image.webp?t=10" />
             <img alt="" class="w33 hinge" src="./image.gif?t=10" />
           </article>
           <details id="types" class="mp-allow tilt" open>
@@ -176,14 +182,18 @@
               <tr>
                 <td>object</td>
                 <td>
-                  <object data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg"></object>
+                  <object
+                    alt="SVG"
+                    data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg"
+                    rel="dns-prefetch"
+                  ></object>
                 </td>
               </tr>
               <tr>
                 <td>iframe</td>
                 <td>
                   <div class="yt mp-native">
-                    <iframe src="//youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media;"></iframe>
+                    <iframe src="//youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media;" title="YouTube"></iframe>
                   </div>
                 </td>
               </tr>
@@ -296,6 +306,7 @@
 
           // Object Preload
           const Object3D = document.createElement('object')
+          Object3D.alt = 'Object3D'
           Object3D.classList.add('mp-loader')
           Object3D.data = '//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json'
           Object3D.style = 'display: block; width: 2em; height: 2em;'

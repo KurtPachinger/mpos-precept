@@ -1,4 +1,6 @@
 import './mpos.css'
+import { toCanvas } from 'html-to-image'
+// ...OpenCV, SuperGif
 
 import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
@@ -6,11 +8,8 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
-import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import Stats from 'three/examples/jsm/libs/stats.module.js'
-
-import { toCanvas } from 'html-to-image'
-// ...OpenCV, SuperGif
+import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 
 const mpos = {
   fnVar: function (tool, value, opts = {}) {
@@ -190,7 +189,20 @@ const mpos = {
         return chains
       },
       find: function (idx, opts = {}) {
-        const rect = opts.var.grade.r_.other.rects[idx]
+        // find rects by key
+        let rect
+        const grade = opts.var.grade
+        const rects = Object.values(grade.rects)
+
+        if (idx === 'first' || idx === 'last') {
+          let position = idx === 'first' ? 0 : rects.length - 1
+          rect = rects[position]
+        } else if (idx === 'atlas' || idx === 'other') {
+          rect = grade.r_[idx].rects
+        } else {
+          rect = rects[idx]
+        }
+
         console.log('find', idx, rect)
         return rect
       },
@@ -492,7 +504,7 @@ const mpos = {
       template.innerHTML = `
     <section id='mp'>
       <div class='tool mp-offscreen' id='custom'>
-        <object></object>
+        <object alt='OSC'></object>
         <template></template>
       </div>
       <aside class='tool' id='atlas'>
@@ -725,7 +737,8 @@ const mpos = {
             rect.el.setAttribute('data-idx', idx)
             grade.rects[idx] = rect
             grade.elsMax++
-            //
+
+            // Atlas subBin test 1
             const area = rect.el.offsetWidth * rect.el.offsetHeight
             tool.avg(area, atlasWide)
           }
@@ -769,9 +782,8 @@ const mpos = {
         const other = rect.mat === 'loader' || rect.mat === 'wire' || rect.el.matches([precept.cors, precept.native3d])
         rect.r_ = other ? 'other' : 'atlas'
 
-        //
-        // Atlas Cell
-        if (rect.mat === 'poster' || rect.mat === 'native') {
+        // Atlas subBin test 1
+        if (rect.mat === 'poster' || rect.mat === 'native' /* || rect.mat === 'child' */) {
           const area = rect.el.offsetWidth * rect.el.offsetHeight
           tool.avg(area, atlasWide)
         }
@@ -883,10 +895,8 @@ const mpos = {
         }
 
         const area = rect.el.offsetWidth * rect.el.offsetHeight
-
-        if (subBinMax-- && (rect.mat === 'poster' || rect.mat === 'native') && area > atlasWide.average * 0.9) {
+        if (subBinMax-- && (rect.mat === 'poster' || rect.mat === 'native') && area > atlasWide.average) {
           //console.log('atlasW', rect)
-
           rect.idxW = atlas.idxW++
         }
 
@@ -1901,7 +1911,7 @@ const mpos = {
     } else {
       // HARD-update: viewport
       const root = document.body
-      const idx = root.getAttribute('data-idx') || 999
+      const idx = root.getAttribute('data-idx') || 9999
       const rect = { el: root, mat: 'wire', z: -idx, fix: true, ux: { i: 1, o: 0 }, idx: idx }
 
       r_other.rects[idx] = rect
