@@ -45,7 +45,7 @@ const mpos = {
       sFence: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
       sFenceDelta: 0,
       sFenceFPS: 1 / 60, // 60 fps
-      sFenceFPS_slice: { boundary: 0, gate: Infinity },
+      sFenceFPS_slice: { boundary: 0, gate: Infinity, ramp: 0, quota: { count: 0, average: 0 } },
       slice(boundary, gate) {
         // bitmask power: %1==60fps || %2==30fps || %4==15fps
         const slice = this.sFenceFPS_slice
@@ -2097,6 +2097,7 @@ const mpos = {
       return transforms(grade)
       // todo: is [...accumulate average] beneficial?
     } else {
+      let extraframes = time.slice(2)
       atlasQueue(grade)
     }
 
@@ -2334,6 +2335,7 @@ const mpos = {
     render: function (timeslice) {
       const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool, time } = mpos.var
 
+      const slice = time.sFenceFPS_slice
       if (document.hidden) {
         // todo: visibilitychange prevent 300fps
         return
@@ -2384,14 +2386,52 @@ const mpos = {
       // Timeslice Boundry: junction of mapcontrols and transform updates
       time.sFenceDelta += time.sFence.getDelta()
       const syncFPS = time.sFenceDelta > time.sFenceFPS
+
       if (syncFPS) {
+        // syncFPS aligned and ramp reset
+        slice.gate = true
+        slice.ramp = 0
+
+        //
+        // Framerate Monitor: Forward Performance Trail
+        //
+        // Render calls are non-contiguous (time), and slice boundaries are non-continuous (gate).
+        // - syncFPS power: notional resolution of bitmask slice([1,2,4...]) indicates lossiness
+        // - boundary: time slice composed of gate and 1+ ramp
+        // - gate: notional fps
+        // - ramp: subframe call to render
+        // - quota: average indicator of continuous frames (low is better)
+        //
+        //  -- preventing lag == not having lag -- > -+ > ++ >
+        //  mixin: ramp exceeds 3 (++) or quota exceeds 3 (--)
+        //  - quota 4 @60fps sync indicates 15fps
+        //  - update return early (like grade.wait)
+        //  - compute something else (gc, re-build atlas, hard refresh...)
+        //
+        //
+        // - To modulate more against render queue (delay/interval), sync high sFenceFPS (120fps > moderate > 15fps)
+        // - For denser slice alignment, shift gate boundary if odd (!(quota%2))
+        //   after comparison (of time to gate), so resolution power "resets" (after delay).
+        // - Quota may also be "reset" after a fault or period.
+        //
+        // ..||.|:..
+        //
+
+        const quota = Math.floor(time.sFenceDelta / time.sFenceFPS)
+        slice.boundary += quota // Math.floor((.6) / .3)
+
+        if (slice.boundary % 1000 == 0) slice.quota.count /= 2
+        mpos.var.tool.avg(quota, slice.quota)
+
         //stackoverflow.com/questions/11285065/#answer-51942991
         time.sFenceDelta %= time.sFenceFPS
-        // bitmask power
-        time.sFenceFPS_slice.boundary++
-        // syncFPS aligned (not ramp)
-        time.sFenceFPS_slice.gate = true
       }
+
+      // if this reaches 5, the next sync may only reach 1
+      slice.ramp++
+
+      //console.log(slice.boundary, slice.ramp, slice.quota)
+      // [3,4,5,7,9],[1,2,3,4,1,1,1],[2,3,3,3,4,4]
 
       // ###
       //if (time.slice(4)) {
