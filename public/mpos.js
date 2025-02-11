@@ -93,7 +93,9 @@ const mpos = {
           }
         }
 
-        mpos.add(selector, options)
+        mpos.add(selector, options).then((res) => {
+          mpos.update(res)
+        })
       }
     },
     reset: {
@@ -1061,10 +1063,10 @@ const mpos = {
         const zSign = zDomain || zIndex >= 0 ? 1 : -1
 
         // SCALE domain => range
-        let zRange = zGrade + (zDomain ? 0 : Math.abs(zIndex))
+        let zRange = zGrade + (zDomain ? 0.5 : Math.abs(zIndex))
         const zScale = 1 - 1 / (zRange + 1)
 
-        let z = zSign * zScale * fov.z
+        let z = zSign * zScale * (fov.z * 2)
 
         // extrude bias to cure z-fighting
         const extrude = rect.mat !== 'self' && rect.mat !== 'wire' ? fov.z / 2 + fov.z / 4 : 0
@@ -1763,7 +1765,7 @@ const mpos = {
       opencv(Module)
     }
   },
-  update: function (grade, rType) {
+  update: async function (grade, rType) {
     const { opt, reset, time, fov, tool } = mpos.var
     const { atlas, instanced, r_ } = grade
     const { atlas: r_atlas, other: r_other, queue: r_queue } = r_
@@ -2227,8 +2229,6 @@ const mpos = {
         targets.forEach((item) => target.add(item))
         // frame done
         grade.wait = false
-
-        return
       }
     }
   },

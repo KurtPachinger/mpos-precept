@@ -323,6 +323,7 @@
                 res.querySelector('.last').append(Object3D)
                 // now DOM has Object, so add the page
                 mpos.add().then((res) => {
+                  mpos.update(res)
                   console.log('precept grade:', res)
                   // Find element rect
                   const idxJSON = Object3D.getAttribute('data-idx')

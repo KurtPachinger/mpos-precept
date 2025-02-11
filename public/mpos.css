@@ -255,14 +255,14 @@ extract visual hierarchy*/
   > mp.p {
     font-size: var(--march);
     animation-delay: 0.125s !important;
-    z-index: 2;
+    z-index: 3;
     > mp.p {
       animation-delay: 0.25s !important;
-      z-index: 4;
+      z-index: 6;
       > mp.p {
         animation-delay: 0.5s !important;
-        z-index: 8;
-        mp.p {
+        z-index: 9;
+        > mp.p {
           animation-delay: 0.75s !important;
           z-index: 6;
         }
