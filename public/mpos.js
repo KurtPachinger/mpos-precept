@@ -166,6 +166,24 @@ const mpos = {
         acc.average = avg
         acc.count++
       },
+      add: function (element, opts = {}) {
+        console.log(element, opts)
+        const grade = opts.var.grade
+
+        // create rect
+        const idx = 999999
+        const type = 'poster'
+
+        const rect = { el: element, idx: idx }
+
+        // add rect
+
+        // output
+
+        grade.r_.queue.push(rect.idx)
+        mpos.update(grade, rect.idx)
+        return rect
+      },
       chain: function (selector, opts = {}) {
         // chain of elements
         let nodeName = opts.nodeName || 'mp'
@@ -636,9 +654,25 @@ const mpos = {
     selector = selector || opt.selector
     const depth = opts.depth || opt.depth
     const parse = opts.parse || precept.parse
+    const atlasWide = { count: 0, average: 0 }
+
+    let grade
+    if (opts.grade) {
+      //
+      // Lightweight addition using existing resources
+
+      grade = opts.grade
+      flatWalk(selector)
+      struct(selector, depth)
+      flatDistro(grade.rects)
+      mpos.update(grade)
+
+      return grade
+    }
 
     // Progress
     let sel = document.querySelector(selector)
+
     const grade_r = vars.grade
     if (sel === null || (grade_r && grade_r.wait === Infinity && sel.isSameNode(grade_r.el))) {
       // bad selector or busy
@@ -670,7 +704,7 @@ const mpos = {
     //
     // Build DOM Tree Structure
     vars.grade = { wait: Infinity }
-    const grade = {
+    grade = {
       // Template Isolate
       el: sel,
       group: group,
@@ -679,7 +713,10 @@ const mpos = {
         canvas: vars.atlas, // || document.createElement('canvas'),
         idx: 0, // implies poster++ (from depth/type) and not other
         idxW: 0,
-        size: 2_048
+        // configure
+        size: 2_048,
+        sub: 14,
+        subBin: 4
       },
       elsMin: 0, // implies view range (inPolar++) of Observers
       elsMax: 0, // instance
@@ -699,56 +736,58 @@ const mpos = {
     }
 
     const atlas = grade.atlas
-    const atlasWide = { count: 0, average: 0 }
 
     //
     // Flat-Grade: filter, grade, sanitize
-    const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
-    const sibling = (parent) => {
-      return parent.childElementCount >= 1 && parent.matches([precept.allow])
-    }
-    let node = ni.nextNode()
-    while (node) {
-      if (node.nodeName === '#comment') {
-        // #comment (or CDATA, xml, php)
-        parse(node)
-      } else {
-        //
-        // Prototype for Records
-        const rect = { el: node, inPolar: null }
+    function flatWalk(sel) {
+      const ni = document.createNodeIterator(sel, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
+      const sibling = (parent) => {
+        return parent.childElementCount >= 1 && parent.matches([precept.allow])
+      }
+      let node = ni.nextNode()
+      while (node) {
+        if (node.nodeName === '#comment') {
+          // #comment (or CDATA, xml, php)
+          parse(node)
+        } else {
+          //
+          // Prototype for Records
+          const rect = { el: node, inPolar: null }
 
-        if (mpos.set.inPolar(rect)) {
-          // not empty
-          if (node.nodeName === '#text') {
-            if (mpos.set.inPolar(rect, grade.rects) && sibling(node.parentNode)) {
-              // sanitize #text orphan (semantic or list) with parent visible
-              const wrap = document.createElement('span')
-              wrap.classList.add('mp-poster')
-              node.parentNode.insertBefore(wrap, node)
-              wrap.appendChild(node)
+          if (mpos.set.inPolar(rect)) {
+            // not empty
+            if (node.nodeName === '#text') {
+              if (mpos.set.inPolar(rect, grade.rects) && sibling(node.parentNode)) {
+                // sanitize #text orphan (semantic or list) with parent visible
+                const wrap = document.createElement('span')
+                wrap.classList.add('mp-poster')
+                node.parentNode.insertBefore(wrap, node)
+                wrap.appendChild(node)
 
-              rect.el = wrap
-              mpos.set.inPolar(rect)
-              grade.txt.push(node)
+                rect.el = wrap
+                mpos.set.inPolar(rect)
+                grade.txt.push(node)
+              }
+            }
+
+            if (rect.inPolar >= 2) {
+              // Element in Document
+              const idx = grade.elsMax
+              rect.el.setAttribute('data-idx', idx)
+              grade.rects[idx] = rect
+              grade.elsMax++
+
+              // Atlas subBin test 1
+              const area = rect.el.offsetWidth * rect.el.offsetHeight
+              tool.avg(area, atlasWide)
             }
           }
-
-          if (rect.inPolar >= 2) {
-            // Element in Document
-            const idx = grade.elsMax
-            rect.el.setAttribute('data-idx', idx)
-            grade.rects[idx] = rect
-            grade.elsMax++
-
-            // Atlas subBin test 1
-            const area = rect.el.offsetWidth * rect.el.offsetHeight
-            tool.avg(area, atlasWide)
-          }
         }
-      }
 
-      node = ni.nextNode()
+        node = ni.nextNode()
+      }
     }
+    flatWalk(sel)
 
     function setRect(rect, z, mat, unset) {
       //
@@ -765,7 +804,7 @@ const mpos = {
           grade.elsMin++
           if (rect.mat === 'poster' || rect.mat === 'native') {
             // Instanced Atlas
-            rect.atlas = atlas.idx++
+            rect.atlas = grade.atlas.idx++
           }
         } else {
           // OffScreen Element
@@ -874,44 +913,47 @@ const mpos = {
 
     //
     // Atlas Ration: relative device
-    atlas.sub = 14
-    atlas.subBin = 4
+
     atlas.canvas.width = atlas.canvas.height = atlas.size
     atlas.canvas.title = [atlas.sub, atlas.size].join('_')
 
-    let subBinMax = (atlas.sub / 2) * (atlas.subBin / 2)
-    Object.keys(grade.rects).forEach((idx) => {
-      //
-      // Complete Preparation
-      const rect = grade.rects[idx]
+    function flatDistro(rects) {
+      let subBinMax = (grade.atlas.sub / 2) * (grade.atlas.subBin / 2)
 
-      if (rect.mat) {
-        rect.idx = Number(idx)
-        if (rect.inPolar >= grade.inPolar) {
-          // Begin Subsets: atlas || other
-          const r_type = grade.r_[rect.r_]
-          r_type.rects[idx] = rect
-          r_type.count++
+      Object.keys(rects).forEach((idx) => {
+        //
+        // Complete Preparation
+        const rect = rects[idx]
+
+        if (rect.mat) {
+          rect.idx = Number(idx)
+          if (rect.inPolar >= grade.inPolar) {
+            // Begin Subsets: atlas || other
+            const r_type = grade.r_[rect.r_]
+            r_type.rects[idx] = rect
+            r_type.count++
+          } else {
+            // note: observe off-screen (!inPolar) elements...?
+          }
+
+          const area = rect.el.offsetWidth * rect.el.offsetHeight
+          if (subBinMax-- && (rect.mat === 'poster' || rect.mat === 'native') && area > atlasWide.average) {
+            //console.log('atlasW', rect)
+            rect.idxW = grade.atlas.idxW++
+          }
+
+          // note: observe greedily on pageLoad...?
+          mpos.ux.observer?.observe(rect.el)
         } else {
-          // note: observe off-screen (!inPolar) elements...?
+          // free memory
+          rect.el = rect.bound = null
+          delete rects[idx]
+          const node = document.querySelector('[data-idx="' + idx + '"]')
+          node && node.removeAttribute('data-idx')
         }
-
-        const area = rect.el.offsetWidth * rect.el.offsetHeight
-        if (subBinMax-- && (rect.mat === 'poster' || rect.mat === 'native') && area > atlasWide.average) {
-          //console.log('atlasW', rect)
-          rect.idxW = atlas.idxW++
-        }
-
-        // note: observe greedily on pageLoad...?
-        mpos.ux.observer?.observe(rect.el)
-      } else {
-        // free memory
-        rect.el = rect.bound = null
-        delete grade.rects[idx]
-        const node = document.querySelector('[data-idx="' + idx + '"]')
-        node && node.removeAttribute('data-idx')
-      }
-    })
+      })
+    }
+    flatDistro(grade.rects)
 
     //
     // Instanced Mesh and
@@ -1398,6 +1440,7 @@ const mpos = {
         mesh.matrix.copy(dummy.matrix)
         grade.group.add(mesh)
         rect.obj = mesh
+
         //mpos.set.use(mesh)
       } else {
         let gc
@@ -1868,7 +1911,7 @@ const mpos = {
     let sFenceSync = 1 / ((time.sFenceDelta - time.sFenceFPS) / (time.sFenceFPS / 2))
     sFenceSync *= 2
     // Beacon to render
-    const syncFPS = time.slice(1)
+    const syncFPS = time.slice(1, true)
 
     if (rType) {
       // SOFT-update: Observer or frame
