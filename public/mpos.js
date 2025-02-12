@@ -351,31 +351,31 @@ const mpos = {
             }
           }
 
-          //
-          // Canvas
-
           if (grade) {
+            //
+            // Canvas
             const ctxC = grade.atlas.ctx
             ctxC.clearRect(0, 0, ctxC.width, ctxC.height)
             // note: more grades would destroy canvases
             //grade.atlas.canvas = grade.ctx = null
-          }
 
-          // CSS3D
-          /*
-          const css3d = mpos.var.rendererCSS.domElement
-          const clones = css3d.querySelectorAll(':not(.mp-block)')
-          clones.forEach(function (el) {
-          el.parentElement.removeChild(el)
-          })
-          */
+            // CSS3D
+
+            const css3d = mpos.var.rendererCSS.domElement
+            //const clones = css3d.querySelectorAll(':not(.mp-block)')
+
+            css3d.querySelectorAll('[data-batch]').forEach((el) => {
+              el.parentElement.removeChild(el)
+              el = null
+            })
+          }
 
           // Shader Atlas
           //let atlas = document.getElementById('atlas').children
           //for (let c = atlas.length - 1; c >= 0; c--) {
           // atlas[c].parentElement.removeChild(atlas[c])
           //}
-          document.querySelectorAll('[data-idx]').forEach((el) => el.setAttribute('data-idx', ''))
+          document.querySelectorAll('[data-idx]').forEach((el) => el.removeAttribute('data-idx'))
           mpos.ux.observer?.disconnect()
 
           //
@@ -414,7 +414,7 @@ const mpos = {
             return entries
           }
 
-          resourceUse()
+          //resourceUse()
 
           resolve('clear')
           reject('no')
@@ -605,7 +605,7 @@ const mpos = {
           selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
           depth: [0, 32, 1],
           inPolar: [1, 4, 1],
-          delay: [0, 300, 5],
+          delay: [0, 133.333, 8.333],
           arc: [0, 1, 0.25]
         }
         const param = params[key] || []
@@ -922,7 +922,7 @@ const mpos = {
     // Shader Atlas
     instanced.userData.shader = shader
     instanced.userData.el = grade.el
-    instanced.name = [grade.count, selector.tagName].join('_')
+    instanced.name = [grade.batch, grade.el.tagName].join('_')
     grade.instanced = instanced
     grade.mapKey = { x: 0, y: 0.0001 } // empty structure (cyan)
 
@@ -966,7 +966,8 @@ const mpos = {
           if (node.tagName) {
             // 2: Node is tag
             vis++
-            let bound = rect.bound || node.getBoundingClientRect()
+            rect.bound = node.getBoundingClientRect()
+            const bound = rect.bound
             if (bound.width > 0 && bound.height > 0 && node.checkVisibility()) {
               // 3: Tag is visible
               vis++
@@ -993,10 +994,9 @@ const mpos = {
 
       // css: accumulate transforms
       mpos.set.css(rect, opts.frame)
-      let unset = rect.bound
 
       // css: unset for box scale
-      //let unset = mpos.set.css(rect, true)
+      let unset = mpos.set.css(rect, true)
       let bound = rect.unset ? unset : rect.bound
 
       //
@@ -1004,34 +1004,62 @@ const mpos = {
       let object
       if (rect.obj) {
         object = rect.obj
-      } else if (rect.mat === 'native' && rect.r_ === 'other') {
-        // note: element may not inherit some specific styles
-        const el = rect.el.cloneNode(true)
-        // wrap prevents overwritten transform, and inherits some attributes
-        const stub = rect.el.parentElement
-        const tag = stub.tagName !== 'BODY' ? stub.tagName : 'DIV'
-        const wrap = document.createElement(tag)
-        wrap.classList.add('mp-native')
-        wrap.append(el)
-        wrap.style.zIndex = rect.css.style.zIndex
+      } else if (rect.r_ === 'other') {
+        const resource = grade.group.getObjectByName(rect.idx)
+        if (resource) {
+          // prevent duplicate resource from delayed response during loads
+          // via status of async concurrent requests
+          // native is old by frame 2, whereas loader may take time
+          return
+        } else {
+          const group = new THREE.Group()
+          group.name = rect.idx
+          group.userData.el = rect.el
+          group.userData.idx = rect.idx
+          rect.obj = group
 
-        // hack at some problems:
-        // relative width and height
-        // duplicate ids or data-idx
-        wrap.style.width = stub.clientWidth + 'px'
-        wrap.style.height = bound.height + 'px'
+          if (rect.mat === 'native') {
+            // todo: de-dupe all 'other' (loader) via rect.obj = Group && fit/use scene.getObjectByName
+            //const loaded = mpos.var.rendererCSS.domElement.querySelector(`[data-batch="${grade.batch}"] [data-idx="${rect.idx}"]`)
 
-        const css3d = new CSS3DObject(wrap)
-        // note: most userData.el reference an original, not a clone
-        css3d.userData.el = el
-        object = css3d
-      } else if (rect.mat === 'wire') {
-        // Mesh unclassified (currently only root node)
-        const mesh = new THREE.Mesh(geo, mat_line)
-        mpos.set.use(mesh)
-        mesh.userData.el = rect.el
-        mesh.animate = true
-        object = mesh
+            // note: element may not inherit some specific styles
+            const el = rect.el.cloneNode(true)
+            // wrap prevents overwritten transform, and inherits some attributes
+            const stub = rect.el.parentElement
+            const tag = stub.tagName !== 'BODY' ? stub.tagName : 'DIV'
+            const wrap = document.createElement(tag)
+            wrap.classList.add('mp-native')
+            wrap.setAttribute('data-batch', grade.batch)
+            wrap.append(el)
+            wrap.style.zIndex = rect.css.style.zIndex
+
+            // hack at some problems:
+            // relative width and height
+            // duplicate ids or data-idx
+            wrap.style.width = stub.clientWidth + 'px'
+            wrap.style.height = bound.height + 'px'
+
+            const css3d = new CSS3DObject(wrap)
+            // note: most userData.el reference an original, not a clone
+            css3d.userData.el = el
+            object = css3d
+            //group.add(object)
+            grade.group.add(css3d)
+            rect.obj = css3d
+          } else if (rect.mat === 'wire') {
+            // Mesh unclassified (currently only root node)
+            const mesh = new THREE.Mesh(geo, mat_line)
+            mpos.set.use(mesh)
+            mesh.userData.el = rect.el
+            mesh.animate = true
+            object = mesh
+            group.add(object)
+            grade.group.add(group)
+          } else {
+            // loader dummy
+            object = new THREE.Object3D()
+          }
+        }
       } else {
         // Instanced Mesh
         object = new THREE.Object3D()
@@ -1042,8 +1070,8 @@ const mpos = {
         // TRANSFORMS: apply accumulate for natural box model
 
         // scale
-        const w = rect.el.offsetWidth
-        const h = rect.el.offsetHeight
+        const w = unset.width
+        const h = unset.height
         const d = fov.z
         // position
         let x = bound.width / 2
@@ -1089,8 +1117,12 @@ const mpos = {
           dummy.position.set(x, y, z)
           dummy.scale.set(w * rect.css.scale, h * rect.css.scale, d)
           obj.rotation.z = -rect.css.radian
+
           // dummy from element fits group
+          // ###
+          // fit the OpenCV but not video
           mpos.set.fit(dummy, obj)
+          // ###
         } else {
           // generic dummy, i.e. atlas
           obj.position.set(x, y, z)
@@ -1122,17 +1154,13 @@ const mpos = {
         // Load Additional Resource
         if (rect.mat === 'loader') {
           // Async: dummy fits group with source
-          res = mpos.set.loader(rect.el, object)
-          res.userData.el = rect.el
-          res.userData.idx = rect.idx
+          res = rect.obj
+          mpos.set.loader(rect, object)
         } else {
           // Generic: (wire, native CSS3D)
-          grade.group.add(object)
+          //grade.group.add(object)
+          //object.name = rect.idx
         }
-
-        const name = [rect.z, rect.mat, rect.el.nodeName].join('_')
-        res.name = name
-        rect.obj = res
       }
 
       rect.ux.u = false
@@ -1141,36 +1169,41 @@ const mpos = {
     css: function (rect, progress) {
       const { grade, tool } = mpos.var
 
+      //
+      // CSS Style Transforms: accumulate a natural box model
+
       let el = rect.el
       const frame = typeof progress === 'number'
+      // css style: transform, transformOrigin, backgroundColor, zIndex, position
       const css = rect.css || { style: window.getComputedStyle(el) }
-
-      function getBound(element) {
-        let bound = element.getBoundingClientRect()
-        return bound
-      }
 
       let uxout = {}
       if (progress === undefined || frame) {
+        // ux frame change pre/post calculable? (imperative)
         rect.ux.u = false
         uxout = { bound: rect.bound, scale: css.scale, degree: css.degree }
 
         if (!rect.hasOwnProperty('css') || rect.frame < progress) {
+          // ux priority may escalate (declarative)
           const priority = css.pseudo || tool.diffs('tween', { style: css.style })
           rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
+          // reset transforms
           css.scale = 1
           css.radian = 0
           css.degree = 0
           css.transform = 0
         }
+      } else {
+        // rect.unset
       }
 
       let unset
       const rects = grade.rects
-      function accumulateTransforms(progress) {
+      function accumulate(progress) {
         let el = rect.el
-        let max = 8
+        //let els = []
+        let max = 8 // deep tree?
 
         while (el && max--) {
           if (el.isSameNode(document.body) || el.isSameNode(document.documentElement) || !el.parentElement) {
@@ -1182,45 +1215,61 @@ const mpos = {
           if (r_?.ux.o) {
             if (progress === undefined || frame) {
               if (!rect.hasOwnProperty('css') || rect.frame < progress) {
-                const style = r_.css?.style || css.style
+                // accumulate ancestor matrix
+                const style = r_.css?.style || css.style //|| window.getComputedStyle(el)
 
                 if (style && tool.diffs('matrix', { style: style })) {
-                  const transform = style.transform.replace(/matrix\(|\)/g, '')
-                  const values = transform.split(',').map(parseFloat)
-                  const scale = Math.sqrt(values[0] * values[0] + values[1] * values[1])
-                  const degree = Math.atan2(values[1], values[0]) * (180 / Math.PI)
+                  const transform = style.transform.replace(/(matrix)|[( )]/g, '')
+                  // transform matrix
+                  const [a, b] = transform.split(',')
+                  const scale = Math.sqrt(a * a + b * b)
+                  const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
                   const radian = degree * (Math.PI / 180)
+                  // accrue transforms
                   css.scale *= scale
                   css.radian += radian
                   css.degree += degree
                   css.transform++
                 }
               }
+            } else {
+              // unset ancestor style transforms
+              //if (tweens(rect.css) || el.classList.contains('mp-unset')) {
+              el.classList.toggle('mp-unset', progress)
+              //}
             }
           }
+          //els.unshift(el)
           el = el.parentElement
+          //el = el.closest('.mp-unset')
         }
 
         if (progress === true) {
-          unset = getBound(rect.el)
-          accumulateTransforms(!progress)
+          unset = rect.el.getBoundingClientRect()
+          accumulate(!progress)
         } else {
           if (progress === undefined || frame) {
+            // update rect properties from frame
             rect.css = css
-            rect.bound = getBound(rect.el)
+            rect.bound = rect.el.getBoundingClientRect()
+
             rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
             if (frame) {
               if (rect.frame < progress) {
+                // compare frame result to detect change
                 let newBox = JSON.stringify(uxout.bound) !== JSON.stringify(rect.bound)
                 let newCss = uxout.scale !== rect.css.scale || uxout.degree !== rect.css.degree
                 if (newBox || newCss || rect.ux.o) {
+                  // feature testing
                   let update = 'all'
                   if (newBox) {
+                    // deeper comparison stub
                     newBox = uxout.bound.symmetry !== rect.bound.symmetry
                   }
                   if (!newBox || !newCss) {
                     update = newBox ? 'box' : 'css'
                   }
+                  // to reduce queue of atlas/transforms
                   rect.ux.u = update
                 }
               }
@@ -1229,7 +1278,7 @@ const mpos = {
           }
         }
       }
-      accumulateTransforms(progress)
+      accumulate(progress)
 
       return unset || rect.ux.u
     },
@@ -1243,6 +1292,9 @@ const mpos = {
         }
       } else {
         object.matrixWorldNeedsUpdate = true
+        //object.children.forEach((child) => {
+        //child.matrixWorldNeedsUpdate = true
+        //})
         // note: instanceColor and uvOffset is udpated elsewhere
         //object.updateMatrix()
         //object.updateMatrixWorld()
@@ -1270,8 +1322,8 @@ const mpos = {
       if (group.children.length) {
         let s2 = group.userData.s2
         if (!s2) {
-          const grade = mpos.var.grade
-          grade.group.add(group)
+          //const grade = mpos.var.grade
+          //grade.group.add(group)
 
           const aabb = new THREE.Box3()
           aabb.setFromObject(group)
@@ -1306,10 +1358,19 @@ const mpos = {
         if (obj.isObject3D && obj.userData) obj.userData.cache = true
       })
     },
-    loader: function (source, dummy) {
+    loader: function (rect, dummy) {
       //const vars = mpos.var
       const { cache, grade, reset, geo, mat, mat_shape, mat_line, tool } = mpos.var
 
+      //
+      // deduplicate check: hard to prevent before async box, or after callback parse
+      //const loaded = grade.group.getObjectByName(rect.idx)
+      //if (loaded) {
+      //console.log('loader loaded:',rect)
+      //  return rect.obj
+      //}
+
+      const source = rect.el
       // source is location or contains one
       let uri = typeof source === 'string' ? source : source.data || source.src || source.currentSrc || source.href
       // source is image
@@ -1323,23 +1384,22 @@ const mpos = {
       let asset = cache[uri] || { mime: mime, data: false, flag: {} }
 
       //console.log(mime, uri, source, dummy, dummy.matrix)
-      let object
+      let group = rect.obj
+      group.layers.set(2)
+
       if (mime.match(/(WEBM|MP4|OGV)/g)) {
         // HANDLER: such as VideoTexture, AudioLoader...
         const material = mat_shape.clone()
         const texture = new THREE.VideoTexture(source)
         material.map = texture
         const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
-        mpos.set.use(mesh)
-        mesh.layers.set(2)
-        mesh.matrix.copy(dummy.matrix)
-        mesh.name = uri
         // unique overrides
-
+        mesh.name = rect.idx
+        mesh.matrix.copy(dummy.matrix)
         grade.group.add(mesh)
-        object = mesh
+        rect.obj = mesh
+        //mpos.set.use(mesh)
       } else {
-        let group = new THREE.Group()
         let gc
 
         if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
@@ -1414,8 +1474,13 @@ const mpos = {
             } else if (mime.match('.JSON')) {
               // Object.data Extension: Object/Scene Format
               // todo: assign scene values from data-idx
+
+              // ###
+              mpos.set.use(data)
               group.add(data)
-              mpos.set.fit(dummy, group, { add: true })
+              mpos.set.fit(group, dummy, { add: true })
+              // ###
+
               if (!asset.data) mpos.set.cache(asset, uri, data)
             } else if (mime.match('.SVG')) {
               // Object.data Extension: Scalable Vector Graphics Format
@@ -1431,14 +1496,18 @@ const mpos = {
                   const shape = shapes[j]
                   const geometry = new THREE.ShapeGeometry(shape, 2)
                   const mesh = new THREE.Mesh(geometry, material)
-                  mpos.set.use(mesh)
 
+                  // ###
+                  mpos.set.use(mesh)
                   group.add(mesh)
+                  // ###
                 }
               }
 
-              group.name = mime
-              mpos.set.fit(dummy, group, { add: true })
+              // ###
+              mpos.set.fit(dummy, group)
+              // ###
+
               if (!asset.data) mpos.set.cache(asset, uri, data)
             } else if (mime.match('.GIF')) {
               // File Extension: Graphics Interchange Format
@@ -1447,23 +1516,17 @@ const mpos = {
               // todo: manual frame index from delta (investigate negative order bug?)
               const material = mat_shape.clone()
               material.map = new THREE.CanvasTexture(canvas)
-
               const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
-              mesh.matrix.copy(dummy.matrix)
-              mpos.set.use(mesh)
-              mesh.name = uri
-
               // unique overrides
+              mesh.name = rect.idx
               grade.group.add(mesh)
-              const idx = source.getAttribute('data-idx')
-              const rect = grade.rects[idx]
               rect.obj = mesh
 
               //NOTE: finding a route for special type
               // after loaded, boost priority, re-enqueue, force update
               rect.ux.i = 1
               mesh.animate = { gif: loader }
-              grade.r_.queue.push(idx)
+              grade.r_.queue.push(rect.idx)
               mpos.update(grade, 'trim')
               mesh.animate.gif.play()
 
@@ -1488,10 +1551,13 @@ const mpos = {
             //
           }
         }
-        object = group
       }
 
-      return object
+      //rect.obj.matrix.copy(object.matrix)
+      //rect.obj.matrixWorldNeedsUpdate = true
+      grade.group.add(group)
+
+      //return group
     },
     opencv: function (image, group, dummy) {
       let kmeans = {}
@@ -1743,16 +1809,22 @@ const mpos = {
                   // todo: cv.copyMakeBorder reduce triangles near corners
                   const mergedBoxes = mergeGeometries(mergedGeoms)
                   const mesh = new THREE.Mesh(mergedBoxes, material)
-                  mpos.set.use(mesh)
-                  mesh.layers.set(2)
+
+                  // ###
+                  //mesh.layers.set(2)
+                  //mpos.set.use(mesh)
+                  //mesh.matrix.copy(dummy.matrix)
                   group.add(mesh)
+                  // ###
                 }
               })
               kmeans = null
 
-              group.name = 'OpenCV'
+              //group.name = rect.idx
 
-              mpos.set.fit(dummy, group, { add: true })
+              // ###
+              mpos.set.fit(dummy, group)
+              // ###
             } catch (error) {
               console.warn(error)
             }
@@ -1765,7 +1837,7 @@ const mpos = {
       opencv(Module)
     }
   },
-  update: async function (grade, rType) {
+  update: function (grade, rType) {
     const { opt, reset, time, fov, tool } = mpos.var
     const { atlas, instanced, r_ } = grade
     const { atlas: r_atlas, other: r_other, queue: r_queue } = r_
@@ -2115,6 +2187,10 @@ const mpos = {
       // Example: synthetic dispatch
       // 0: { rect: {}, uv: {} } ...instanceId/dataIdx, element, uv, mat, position, bound
       const targets = []
+      let count = 0
+      let newGeo, newMap
+      //const myPromise = new Promise((resolve, reject) => {
+      //
 
       if (!paint) {
         //
@@ -2147,9 +2223,7 @@ const mpos = {
       //
       // Meshes atlas (general Instance) update priority and raycast
 
-      let count = 0
       const color = new THREE.Color()
-      let newGeo, newMap
 
       for (const [idx, rect] of Object.entries(r_atlas.rects)) {
         let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
@@ -2221,8 +2295,6 @@ const mpos = {
       // Atlas Postprocessing...?
       //ctxC.drawImage(OffscreenCanvas, 0, 0)
       mpos.set.use(instanced, true)
-      mpos.ux.render(syncFPS)
-
       if (!paint) {
         const target = mpos.ux.events.target
         target.clear()
@@ -2230,6 +2302,13 @@ const mpos = {
         // frame done
         grade.wait = false
       }
+
+      // resolve('foo')
+      //})
+      //myPromise.then((res) => {
+      mpos.ux.render(syncFPS)
+      //})
+      //
     }
   },
   ux: {

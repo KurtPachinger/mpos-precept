@@ -164,14 +164,24 @@
                     const uri = '//raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/json/suzanne_buffergeometry.json'
                     const loader = new THREE.BufferGeometryLoader();
                     loader.load( uri, function ( data ){
-                      const material = new THREE.MeshBasicMaterial( { color: 0x00c0c0, wireframe: true } );
-                      const object = new THREE.Mesh( data, material );
+                    
+                      const filename = uri.split('/').pop()
+                      const resource = mpos.var.grade.group.getObjectByName(filename)
                       
-                      const scale = 50;
-                      object.scale.multiplyScalar( scale );
-                      object.position.set( -scale, scale, 0 );
+                      if( !resource ){
+
+                        const material = new THREE.MeshBasicMaterial( { color: 0x00c0c0, wireframe: true } );
+                        const object = new THREE.Mesh( data, material );
+                        object.name = filename
                       
-                      mpos.var.grade.group.add( object );
+                        const scale = 50;
+                        object.scale.multiplyScalar( scale );
+                        object.position.set( -scale, scale, 0 );
+                      
+                        mpos.var.grade.group.add( object );
+                        
+                      }
+
                     });
                   -->
                   <script>
