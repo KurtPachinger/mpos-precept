@@ -13,6 +13,7 @@ html,
 body {
   height: 100%;
   z-index: -9;
+  background-color:#fff;
 }
 
 main {

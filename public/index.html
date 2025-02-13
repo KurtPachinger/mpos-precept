@@ -333,7 +333,7 @@
                 res.querySelector('.last').append(Object3D)
                 // now DOM has Object, so add the page
                 mpos.add().then((res) => {
-                  mpos.update(res)
+                  //mpos.step.sync(res)
                   console.log('precept grade:', res)
                   // Find element rect
                   const idxJSON = Object3D.getAttribute('data-idx')
@@ -347,7 +347,7 @@
                   //
                   // Dynamic content addition
                   const element = document.createElement('div')
-                  element.innerText = '__USE_AFTER_THREE__'
+                  element.innerHTML = `<h2>__USE_AFTER_THREE__</h2><p>Dynamic content tree.</p>`
                   document.querySelector('#live').prepend(element)
 
                   mpos.add(element, { grade: mpos.var.grade }).then((res) => {
