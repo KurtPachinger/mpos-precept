@@ -4,13 +4,12 @@
     <title>mpos-precept</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="opencv.js" async></script>
-    <script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js" async></script>
+    <link rel="modulepreload" href="mpos.js" />
     <script type="importmap">
       {
         "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
+          "three": "//cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+          "three/addons/": "//cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
         }
       }
     </script>
@@ -299,8 +298,9 @@
     <script>
       //
       // Await
+
       const mp = setInterval(() => {
-        if (typeof window.mpos !== 'undefined') {
+        if (typeof window.mpos !== 'undefined' && document.readyState == 'complete') {
           clearInterval(mp)
 
           //
@@ -319,7 +319,7 @@
           Object3D.alt = 'Object3D'
           Object3D.classList.add('mp-loader')
           Object3D.data = '//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json'
-          Object3D.style = 'display: block; width: 2em; height: 2em;'
+          Object3D.style = 'display:block; width: 2em; height: 2em;'
 
           //
           // Initialize in standalone mode
@@ -332,7 +332,7 @@
                 // Object Append
                 res.querySelector('.last').append(Object3D)
                 // now DOM has Object, so add the page
-                mpos.add().then((res) => {
+                mpos.mod.add().then((res) => {
                   //mpos.step.sync(res)
                   console.log('precept grade:', res)
                   // Find element rect
@@ -342,6 +342,7 @@
                     console.log('find res.obj:', res)
                     // Meanwhile flip-y (scale(-1, 0) flickers visibly)
                     Object3D.style.transform = 'rotateZ(180deg)'
+                    Object3D.classList.add('blink')
                   })
 
                   //
@@ -350,7 +351,7 @@
                   element.innerHTML = `<h2>__USE_AFTER_THREE__</h2><p>Dynamic content tree.</p>`
                   document.querySelector('#live').prepend(element)
 
-                  mpos.add(element, { grade: mpos.var.grade }).then((res) => {
+                  mpos.mod.add(element, { grade: mpos.var.grade }).then((res) => {
                     console.log('add new grade:', res)
                   })
 
@@ -382,5 +383,7 @@
         false
       )
     </script>
+    <script src="opencv.js" async></script>
+    <script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js" async></script>
   </body>
 </html>

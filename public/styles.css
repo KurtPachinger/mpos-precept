@@ -13,7 +13,7 @@ html,
 body {
   height: 100%;
   z-index: -9;
-  background-color:#fff;
+  background-color: #fff;
 }
 
 main {
@@ -286,6 +286,17 @@ EFFECTS, ANIMATION */
   }
 }
 
+.blink {
+  border: 0.125em dashed red;
+  animation: blink 3s linear infinite;
+  opacity: 1;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 .slides {
   margin: 0;
   align-items: center;
@@ -301,30 +312,36 @@ EFFECTS, ANIMATION */
     position: relative;
     transition: flex-grow 1.5s;
     opacity: 50%;
-    img, picture, video {
+    img,
+    picture,
+    video {
       display: block;
       width: 100%;
       height: 8em;
       image-rendering: pixelated;
       background-blend-mode: multiply;
       /*background-attachment: fixed; toCanvas style conflicts inconsistent */
-      background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=");
+      background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
       background-size: auto 10vmin; /* 10vmin may be more compatible */
       background-position: -10vmin -10vmin;
       animation: media 6s linear infinite;
     }
 
-    &:hover, &:active, &:focus {
-    /* on (filter doesn't toCanvas) */
+    &:hover,
+    &:active,
+    &:focus {
+      /* on (filter doesn't toCanvas) */
       flex-grow: 4;
       opacity: 100%;
       animation: slider 3s linear infinite;
-      img, source, video { 
+      img,
+      source,
+      video {
         border-radius: 0.5em;
       }
     }
   }
-  
+
   figcaption {
     position: absolute;
     top: 0;
@@ -347,9 +364,6 @@ EFFECTS, ANIMATION */
   100% {
     background-position: 0 0;
   }
-}
-
-
 }
 
 .lil-gui.root {
@@ -388,17 +402,14 @@ EFFECTS, ANIMATION */
   }
 }
 
-
-
 /* test styles */
 
-.w33{
-  &:hover{
+.w33 {
+  &:hover {
     --baseKey: 2;
     transform: scale(var(--baseKey));
-    
   }
-  
+
   transition: 3s transform;
 }
 
