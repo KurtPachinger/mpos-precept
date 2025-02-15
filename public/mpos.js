@@ -1,5 +1,5 @@
 import './mpos.css'
-import { toCanvas } from 'html-to-image'
+import { toSvg, toPng, getFontEmbedCSS } from 'html-to-image'
 // ...OpenCV, SuperGif
 
 import * as THREE from 'three'
@@ -636,7 +636,7 @@ const mpos = {
       manual: `.mp-loader,.mp-poster,.mp-native`.split(','),
       allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
       block:
-        `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,iframe:not([src])`.split(
+        `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,track,source,iframe:not([src])`.split(
           ','
         ),
       poster: `.mp-poster,canvas,img,picture,figcaption,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
@@ -980,6 +980,28 @@ const mpos = {
 
         grade.r_.uvOffset = instanced.geometry.getAttribute('uvOffset')
         grade.mapKey = { x: 0, y: 0.0001 } // empty structure (cyan)
+
+        //
+        // Dom-to-Image: reduce sources of memory
+        // filter unwanted child nodes, which may be malformed or create documents in the loop
+        grade.fontEmbedCSS = await getFontEmbedCSS(grade.el)
+
+        const filter = ['SCRIPT', 'SOURCE', 'TRACK', '#comment'] // VIDEO
+        const keep = ['FORM', 'FIELDSET']
+        const metaOuter = [...this.precept.block, ...this.precept.native3d]
+        const metaInner = [...metaOuter, ...this.precept.native]
+        grade.filter = function (node) {
+          //  todo: test clone children for diffs
+          return (
+            keep.indexOf(node.nodeName) !== -1 ||
+            keep.indexOf(node.parentElement.nodeName) !== -1 ||
+            (metaOuter.indexOf(node.nodeName.toLowerCase()) === -1 &&
+              metaInner.indexOf(node.parentElement.nodeName.toLowerCase()) === -1 &&
+              filter.indexOf(node.nodeName) === -1 &&
+              filter.indexOf(node.parentElement.nodeName) === -1)
+            //node.nodeName === '#text' &&
+          )
+        }
       }
 
       //
@@ -1232,19 +1254,20 @@ const mpos = {
       // CSS Style Transforms: accumulate a natural box model
 
       if (!rect.frame || frame > rect.frame) {
+        // css style: transform, transformOrigin, backgroundColor, zIndex, position
         const css = rect.css
 
+        //
+        // ux priority may escalate (declarative)
         const rotated = tool.diffs('matrix', { rect: rect })
         if (!css.style && (rect.ux.i || rotated)) css.style = window.getComputedStyle(rect.el)
-
-        // css style: transform, transformOrigin, backgroundColor, zIndex, position
-
-        // ux priority may escalate (declarative)
+        // style computed for feature lazily / progressively
         const priority = rect.css.pseudo || rotated || tool.diffs('tween', { rect: rect })
         rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
+
+        //
         // ux frame change pre/post calculable? (imperative)
         rect.ux.u = false
-
         if (!css.style && rect.ux.o) css.style = window.getComputedStyle(rect.el)
         let differ = { bound: rect.bound, scale: css.scale, degree: css.degree }
 
@@ -1263,12 +1286,10 @@ const mpos = {
           }
 
           const r_ = grade.rects[el.getAttribute('data-idx')]
-
           if (r_?.ux.o) {
             // accumulate ancestor matrix
-            const style = r_.css.style || css.style //|| window.getComputedStyle(el)
-
-            if (style && style !== 'none' && tool.diffs('matrix', { rect: rect })) {
+            const style = r_.css.style || css.style // || window.getComputedStyle(el)
+            if (style && style !== 'none' && rotated /*tool.diffs('matrix', { rect: rect })*/) {
               const transform = style.transform.replace(/(matrix)|[( )]/g, '')
               // transform matrix
               const [a, b] = transform.split(',')
@@ -1285,8 +1306,7 @@ const mpos = {
             }
           }
 
-          el = el.parentElement
-          //el = el.closest('.mp-unset')
+          el = el.parentElement.closest('[data-idx]')
         }
 
         // update rect properties from frame
@@ -1294,34 +1314,32 @@ const mpos = {
         rect.bound = rect.el.getBoundingClientRect()
 
         rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
-        if (frame) {
-          if (frame > rect.frame) {
-            // compare frame result to detect change
-            let newBox = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
-            let newCss = differ.scale !== rect.css.scale || differ.degree !== rect.css.degree
-            if (newBox || newCss || rect.ux.o) {
-              // feature testing
-              let update = 'all'
-              if (newBox) {
-                // deeper comparison stub
-                newBox = differ.bound.symmetry !== rect.bound.symmetry
-              }
-              if (!newBox || !newCss) {
-                update = newBox ? 'box' : 'css'
-              }
-              // to reduce queue of atlas/transforms
-              rect.ux.u = update
-            }
+
+        // compare frame result to detect change
+        let newBound = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
+        let newMatrix = differ.scale !== rect.css.scale || differ.degree !== rect.css.degree
+        if (newBound || newMatrix || rect.ux.o) {
+          // feature testing
+          let update = 'all'
+          if (newBound) {
+            // deeper comparison stub
+            newBound = differ.bound.symmetry !== rect.bound.symmetry
           }
+          if (!newBound || !newMatrix) {
+            update = newBound ? 'box' : 'css'
+          }
+          // to reduce queue of atlas/transforms
+          rect.ux.u = update
         }
       }
 
       //
       // Frame or Mouseevent
-      // frame may be undefined or 0
       if (frame > rect.frame || !rect.hasOwnProperty('frame')) {
+        // frame update
         rect.frame = frame || 0
       } else {
+        // mouseevents (0) provide some increment
         const tick = 0.001
         rect.frame += tick
       }
@@ -1332,18 +1350,14 @@ const mpos = {
       // update usage manually
       if (!update) {
         object.matrixAutoUpdate = false
-        //object.matrixWorldAutoUpdate = false // makes stale meshes from slow loader on init
         if (object.isInstancedMesh) {
           object.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
         }
       } else {
         object.matrixWorldNeedsUpdate = true
         //object.children.forEach((child) => {
-        //child.matrixWorldNeedsUpdate = true
+        //  child.matrixWorldNeedsUpdate = true
         //})
-        // note: instanceColor and uvOffset is udpated elsewhere
-        //object.updateMatrix()
-        //object.updateMatrixWorld()
         if (object.isInstancedMesh) {
           object.instanceMatrix.needsUpdate = true
           object.computeBoundingSphere()
@@ -1461,11 +1475,11 @@ const mpos = {
 
           const [width, height] = tool.pyr(source.naturalWidth, source.naturalHeight, 128)
 
-          toCanvas(source, { style: { ...reset }, width: width, height: height, pixelRatio: 1 })
-            .then(function (canvas) {
+          toPng(source, { style: { ...reset }, width: width, height: height, pixelRatio: 1 })
+            .then(function (png) {
               rect.add++
-              mpos.set.opencv(canvas, group, dummy)
-              canvas = null
+              mpos.set.opencv(png, group, dummy)
+              png = null
             })
             .catch(function (error) {
               console.log('src problem', error)
@@ -1938,7 +1952,7 @@ const mpos = {
         }
       })
     },
-    sync: function (grade, rType) {
+    sync: async function (grade, rType) {
       if (document.hidden || !grade || !!grade?.wait || !grade?.atlas.canvas || (rType && !grade?.r_.queue.length)) {
         // skip frame
         return
@@ -2043,6 +2057,7 @@ const mpos = {
         // todo: is [...accumulate average] beneficial?
       } else {
         //let extraframes = time.slice(2)
+
         this.atlas(grade, step)
       }
     },
@@ -2120,16 +2135,16 @@ const mpos = {
 
         const wSize = rect.hasOwnProperty('idxW') ? wSub2 : wSub // note: rect.idxW may not be honored if atlas.idxW is full
         const pixelRatio = rect.ux.o || rect.ux.u ? quality : 0.8
+
+        //const includeStyleProperties = ['background', 'color', 'margin', 'padding', 'border', 'font']
         const options = {
           style: { ...reset },
           canvasWidth: wSize,
           canvasHeight: wSize,
           pixelRatio: pixelRatio * fov.dpr,
-          preferredFontFormat: 'woff'
-          //filter: function (node) {
-          //  todo: test clone children for diffs
-          //  return node
-          //}
+          preferredFontFormat: 'woff2',
+          fontEmbedCSS: grade.fontEmbedCSS,
+          filter: grade.filter
         }
 
         if (!rect.hasOwnProperty('css')) {
@@ -2161,11 +2176,16 @@ const mpos = {
         // canvas width/height pyr/step
         // *dpr (dpr on pixelratio causes font subpixel jitter)
 
-        toCanvas(rect.el, options)
+        toSvg(rect.el, options)
           .then(function (canvas) {
-            if (canvas.width === 0 || canvas.height === 0) {
+            //
+            let img = new Image()
+            let load = img.addEventListener('load', (e) => {
+              removeEventListener('load', load)
+
+              // if (canvas.width === 0 || canvas.height === 0) {
               // no box
-            } else {
+              // } else {
               // canvas xy, from top (FIFO)
 
               if (rect.x === undefined || rect.y === undefined) {
@@ -2203,16 +2223,28 @@ const mpos = {
 
               const wSize = rect.w > 1 ? wSub2 : wSub
               ctxC.clearRect(rect.x, rect.y, wSize, wSize)
-              ctxC.drawImage(canvas, rect.x, rect.y, wSize, wSize)
-            }
+              ctxC.drawImage(e.target, rect.x, rect.y, wSize, wSize)
+              //}
+
+              //canvas.width = e.target.width
+              //canvas.height = e.target.height
+              //ctx.drawImage(e.target, 0, 0, e.target.width, e.target.height)
+              //document.getElementById(image).src = canvas.toDataURL()
+              img.remove()
+              img = null
+            })
+            img.src = canvas
+            //console.log(canvas, domtoimage.impl, domtoimage.toSvg)
+
             // recurse
+
             canvas = null
 
             queue()
           })
           .catch(function (error) {
             // image source bad or unsupported type
-            //console.log(error)
+            console.log(error)
             queue()
           })
       } else {
