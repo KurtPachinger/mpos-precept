@@ -16,7 +16,7 @@ const opts = {
 }
 
 // add element to scene, and listen for updates
-mpos.mod.add 'main', opts )
+mpos.mod.add( 'main', opts )
 ```
 ### grade
 ```mermaid
