@@ -287,7 +287,7 @@ EFFECTS, ANIMATION */
 }
 
 .blink {
-  border: 0.125em dashed red;
+  border: 0.125rem dashed red;
   animation: blink 3s linear infinite;
   opacity: 1;
 }

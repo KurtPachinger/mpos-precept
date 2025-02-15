@@ -30,7 +30,8 @@ const mpos = {
     const promise = new Promise((resolve, reject) => {
       //
       const fnvar = vars.tool[tool]
-      const response = fnvar ? fnvar(value, opts) : 'no fnVar' + tool
+      const response = fnvar ? fnvar(value, opts) : 'no fnVar'
+      console.log(`tool ${tool} ${value}:`, response)
       resolve(response)
       reject('err' + tool)
     })
@@ -204,7 +205,6 @@ const mpos = {
           rect = grade.rects[idx]
         }
 
-        console.log('find', idx, rect)
         return rect
       },
       march: function (selector, opts = {}) {
@@ -226,22 +226,24 @@ const mpos = {
       },
       diffs: function (type, opts = {}) {
         let differ = false
-        let style = opts.style || {}
+        const rect = opts.rect
+        const style = rect.css.style || rect.el.style // computed or direct if not priority
 
         //
         // Different from Baseline Generic Primitive
 
         if (type === 'rect') {
-          differ = !opts.node.clientWidth || !opts.node.clientHeight
+          differ = !rect.el.clientWidth || !rect.el.clientHeight
           // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
         } else if (type === 'matrix') {
           // note: style may be version from css frame accumulating
-          differ = style.transform?.startsWith('matrix')
+          rect.css.rotated = rect.bound.width / rect.bound.height !== rect.el.offsetWidth / rect.el.offsetHeight
+          differ = rect.css.rotated || style.transform?.startsWith('matrix')
         } else if (type === 'tween') {
           // note: loose definition
+          // ...transform, filter, overlay, allow-discrete
           differ =
-            style.transform !== 'none' ||
-            style.transitionDuration !== '0s' ||
+            (style.transitionProperty !== '' && parseFloat(style.transitionDuration) > 0) ||
             (style.animationName !== 'none' && style.animationPlayState === 'running')
         } else if (type === 'flow') {
           // note: if position overflows scrollOffset, canvas may not draw
@@ -249,7 +251,6 @@ const mpos = {
           //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
         } else if (type === 'pseudo') {
           // note: get pseudo capture once per frame for all rects
-          let rect = opts.rect
           let css = rect.css
           if (css) {
             let capture = opts.capture || {
@@ -679,7 +680,7 @@ const mpos = {
         } else {
           //
           // Prototype for Records
-          const rect = { el: node, inPolar: null }
+          const rect = { el: node }
 
           if (mpos.set.inPolar(rect)) {
             // not empty
@@ -699,10 +700,15 @@ const mpos = {
 
             if (rect.inPolar >= 2) {
               // Element in Document
-              const idx = grade.elsMax
+              const idx = grade.elsMax++
               rect.el.setAttribute('data-idx', idx)
               grade.rects[idx] = rect
-              grade.elsMax++
+              rect.css = {
+                degree: 0,
+                radian: 0,
+                scale: 1,
+                transform: 0
+              }
             }
           }
         }
@@ -800,6 +806,7 @@ const mpos = {
         let mat = 'self'
         // specify empty or manual
         const children = sel.children
+
         const manual = rect.el.matches(precept.manual)
         if (!children.length || manual) {
           mat = setMat(rect.el, mat, manual, children.length)
@@ -879,10 +886,10 @@ const mpos = {
           mpos.ux.observer?.observe(rect.el)
         } else {
           // free memory
-          rect.el = rect.bound = null
-          delete rects[idx]
           const node = document.querySelector('[data-idx="' + idx + '"]')
           node && node.removeAttribute('data-idx')
+          rects[idx] = null
+          delete rects[idx]
         }
       })
       return
@@ -1017,14 +1024,15 @@ const mpos = {
             rect.bound = node.getBoundingClientRect()
             const bound = rect.bound
 
-            const hide =
+            const style = rect.css?.style || node.style
+
+            const alphaTest =
               bound.width === 0 ||
               bound.height === 0 ||
               node.style.display === 'none' ||
-              //node.style.visibility === 'hidden' ||
-              (rect?.css?.style.opacity || Infinity) <= 0.25
-            //!node.checkVisibility()
-            if (!hide) {
+              node.style.visibility === 'hidden' ||
+              (style.opacity || Infinity) <= 0.25
+            if (!alphaTest && node.checkVisibility()) {
               // 3: Tag is visible
               vis++
               const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
@@ -1049,10 +1057,9 @@ const mpos = {
       const { geo, mat_line, fov, opt, grade } = mpos.var
 
       // css: accumulate transforms
-      mpos.set.css(rect, opts.frame)
+      let unset = mpos.set.css(rect, opts.frame)
 
       // css: unset for box scale
-      let unset = mpos.set.css(rect, true)
       let bound = rect.unset ? unset : rect.bound
 
       //
@@ -1075,6 +1082,7 @@ const mpos = {
           rect.obj = group
 
           if (rect.mat === 'native') {
+            console.log('CSS3d', rect)
             // todo: de-dupe all 'other' (loader) via rect.obj = Group && fit/use scene.getObjectByName
             //const loaded = mpos.var.rendererCSS.domElement.querySelector(`[data-batch="${grade.batch}"] [data-idx="${rect.idx}"]`)
 
@@ -1087,7 +1095,7 @@ const mpos = {
             wrap.classList.add('mp-native')
             wrap.setAttribute('data-batch', grade.batch)
             wrap.append(el)
-            wrap.style.zIndex = rect.css.style.zIndex
+            wrap.style.zIndex = rect.css.style?.zIndex || ''
 
             // hack at some problems:
             // relative width and height
@@ -1217,43 +1225,36 @@ const mpos = {
       rect.ux.u = false
       return res
     },
-    css: function (rect, progress) {
+    css: function (rect, frame) {
       const { grade, tool } = mpos.var
 
       //
       // CSS Style Transforms: accumulate a natural box model
 
-      let el = rect.el
-      const frame = typeof progress === 'number'
-      // css style: transform, transformOrigin, backgroundColor, zIndex, position
-      const css = rect.css || { style: window.getComputedStyle(el) }
+      if (!rect.frame || frame > rect.frame) {
+        const css = rect.css
 
-      let uxout = {}
-      if (progress === undefined || frame) {
+        const rotated = tool.diffs('matrix', { rect: rect })
+        if (!css.style && (rect.ux.i || rotated)) css.style = window.getComputedStyle(rect.el)
+
+        // css style: transform, transformOrigin, backgroundColor, zIndex, position
+
+        // ux priority may escalate (declarative)
+        const priority = rect.css.pseudo || rotated || tool.diffs('tween', { rect: rect })
+        rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
         // ux frame change pre/post calculable? (imperative)
         rect.ux.u = false
-        uxout = { bound: rect.bound, scale: css.scale, degree: css.degree }
 
-        if (!rect.hasOwnProperty('css') || rect.frame < progress) {
-          // ux priority may escalate (declarative)
-          const priority = css.pseudo || tool.diffs('tween', { style: css.style })
-          rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
+        if (!css.style && rect.ux.o) css.style = window.getComputedStyle(rect.el)
+        let differ = { bound: rect.bound, scale: css.scale, degree: css.degree }
 
-          // reset transforms
-          css.scale = 1
-          css.radian = 0
-          css.degree = 0
-          css.transform = 0
-        }
-      } else {
-        // rect.unset
-      }
+        // reset transforms
+        css.scale = 1
+        css.radian = 0
+        css.degree = 0
+        css.transform = 0
 
-      let unset
-      const rects = grade.rects
-      function accumulate(progress) {
         let el = rect.el
-        //let els = []
         let max = 8 // deep tree?
 
         while (el && max--) {
@@ -1261,77 +1262,71 @@ const mpos = {
             break
           }
 
-          const r_ = rects[el.getAttribute('data-idx')]
+          const r_ = grade.rects[el.getAttribute('data-idx')]
 
           if (r_?.ux.o) {
-            if (progress === undefined || frame) {
-              if (!rect.hasOwnProperty('css') || rect.frame < progress) {
-                // accumulate ancestor matrix
-                const style = r_.css?.style || css.style //|| window.getComputedStyle(el)
+            // accumulate ancestor matrix
+            const style = r_.css.style || css.style //|| window.getComputedStyle(el)
 
-                if (style && tool.diffs('matrix', { style: style })) {
-                  const transform = style.transform.replace(/(matrix)|[( )]/g, '')
-                  // transform matrix
-                  const [a, b] = transform.split(',')
-                  const scale = Math.sqrt(a * a + b * b)
-                  const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-                  const radian = degree * (Math.PI / 180)
-                  // accrue transforms
-                  css.scale *= scale
-                  css.radian += radian
-                  css.degree += degree
-                  css.transform++
-                }
+            if (style && style !== 'none' && tool.diffs('matrix', { rect: rect })) {
+              const transform = style.transform.replace(/(matrix)|[( )]/g, '')
+              // transform matrix
+              const [a, b] = transform.split(',')
+              if (a && b) {
+                const scale = Math.sqrt(a * a + b * b)
+                const degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+                const radian = degree * (Math.PI / 180)
+                // accrue transforms
+                css.scale *= scale
+                css.radian += radian
+                css.degree += degree
+                css.transform++
               }
-            } else {
-              // unset ancestor style transforms
-              //if (tweens(rect.css) || el.classList.contains('mp-unset')) {
-              el.classList.toggle('mp-unset', progress)
-              //}
             }
           }
-          //els.unshift(el)
+
           el = el.parentElement
           //el = el.closest('.mp-unset')
         }
 
-        if (progress === true) {
-          unset = rect.el.getBoundingClientRect()
-          accumulate(!progress)
-        } else {
-          if (progress === undefined || frame) {
-            // update rect properties from frame
-            rect.css = css
-            rect.bound = rect.el.getBoundingClientRect()
+        // update rect properties from frame
+        rect.css = css
+        rect.bound = rect.el.getBoundingClientRect()
 
-            rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
-            if (frame) {
-              if (rect.frame < progress) {
-                // compare frame result to detect change
-                let newBox = JSON.stringify(uxout.bound) !== JSON.stringify(rect.bound)
-                let newCss = uxout.scale !== rect.css.scale || uxout.degree !== rect.css.degree
-                if (newBox || newCss || rect.ux.o) {
-                  // feature testing
-                  let update = 'all'
-                  if (newBox) {
-                    // deeper comparison stub
-                    newBox = uxout.bound.symmetry !== rect.bound.symmetry
-                  }
-                  if (!newBox || !newCss) {
-                    update = newBox ? 'box' : 'css'
-                  }
-                  // to reduce queue of atlas/transforms
-                  rect.ux.u = update
-                }
+        rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
+        if (frame) {
+          if (frame > rect.frame) {
+            // compare frame result to detect change
+            let newBox = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
+            let newCss = differ.scale !== rect.css.scale || differ.degree !== rect.css.degree
+            if (newBox || newCss || rect.ux.o) {
+              // feature testing
+              let update = 'all'
+              if (newBox) {
+                // deeper comparison stub
+                newBox = differ.bound.symmetry !== rect.bound.symmetry
               }
-              rect.frame = progress
+              if (!newBox || !newCss) {
+                update = newBox ? 'box' : 'css'
+              }
+              // to reduce queue of atlas/transforms
+              rect.ux.u = update
             }
           }
         }
       }
-      accumulate(progress)
 
-      return unset || rect.ux.u
+      //
+      // Frame or Mouseevent
+      // frame may be undefined or 0
+      if (frame > rect.frame || !rect.hasOwnProperty('frame')) {
+        rect.frame = frame || 0
+      } else {
+        const tick = 0.001
+        rect.frame += tick
+      }
+
+      return { width: rect.el.offsetWidth, height: rect.el.offsetHeight }
     },
     use: function (object, update) {
       // update usage manually
@@ -1877,18 +1872,19 @@ const mpos = {
     }
   },
   step: {
-    rate: function (grade, rects, rFrame, capture, reQueue) {
+    rate: function (grade, type, rFrame, capture, reQueue) {
       const { tool, time, opt } = mpos.var
       const { r_ } = grade
+      const rects = r_[type].rects
 
       // update element rect
       Object.keys(rects).forEach(function (idx) {
         const rect = rects[idx]
+        // update visibility
+        if (time.slice(2)) mpos.set.inPolar(rect)
         //
         // Traverse: style transforms (set/unset), view settings, and qualify ux
-        mpos.set.css(rect, rFrame)
-        // update visibility
-        mpos.set.inPolar(rect)
+        if (time.slice(1, true)) mpos.set.css(rect, rFrame)
 
         if (reQueue) {
           if (rect.inPolar >= grade.inPolar) {
@@ -1897,7 +1893,7 @@ const mpos = {
               r_.queue.push(idx)
             } else {
               let pseudo = tool.diffs('pseudo', { rect: rect, el: grade.el, capture: capture }) && (rect.ux.p || time.slice(2))
-              if (pseudo || rect.ux.u || rect.ux.o) {
+              if (pseudo || rect.ux.o || rect.ux.u) {
                 // element ux changed or elevated
                 // note: pseudo evaluates first, so atlas unset has consistent off-state
                 if (r_.queue.indexOf(idx) === -1) {
@@ -2023,14 +2019,14 @@ const mpos = {
           }
 
           const reQueue = rFrame > 0
-          this.rate(grade, r_.atlas.rects, rFrame, capture, reQueue)
-          this.rate(grade, r_.other.rects, rFrame, capture)
+          this.rate(grade, 'atlas', rFrame, capture, reQueue)
+          this.rate(grade, 'other', rFrame, capture)
         }
       } else {
         // HARD-update: viewport
         const root = document.body
         const idx = root.getAttribute('data-idx') || 9999
-        const rect = { el: root, mat: 'wire', z: -idx, fix: true, ux: { i: 1, o: 0 }, idx: idx }
+        const rect = { el: root, mat: 'wire', z: -idx, fix: true, ux: { i: 1, o: 0 }, idx: idx, css: {}, bound: {} }
 
         r_.other.rects[idx] = rect
       }
@@ -2041,7 +2037,7 @@ const mpos = {
       // Pass state to recursive loops
       let step = { rType: rType, rFrame: rFrame, syncFPS: syncFPS, quality: quality }
       if (time.slice(1, false)) {
-        // Feedback Sample: state boundry value analysis
+        // Feedback Sample: state boundary value analysis
         // ramp (not gate) early exit
         this.transforms(grade, step)
         // todo: is [...accumulate average] beneficial?
@@ -2142,13 +2138,13 @@ const mpos = {
 
         // Feature tests
         if (rect.css && rect.css.style) {
-          const float = tool.diffs('flow', { style: rect.css.style })
+          const float = tool.diffs('flow', { rect: rect })
           if (float) {
             options.style.top = options.style.right = options.style.bottom = options.style.left = 'initial'
           }
         }
 
-        const noBox = tool.diffs('rect', { node: rect.el })
+        const noBox = tool.diffs('rect', { rect: rect })
         if (noBox) {
           //options.style.display = 'inline-block' // tame pop-in
           options.width = rect.el.offsetWidth // force size
@@ -2282,8 +2278,8 @@ const mpos = {
       const color = new THREE.Color()
 
       for (const [idx, rect] of Object.entries(r_.atlas.rects)) {
-        let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
-        let inPolar = uxForce ? mpos.set.inPolar(rect) >= grade.inPolar : rect.inPolar >= grade.inPolar
+        //let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
+        let inPolar = rect.inPolar >= grade.inPolar
 
         const dummy = mpos.set.box(rect, { frame: rFrame })
         if (dummy) instanced.setMatrixAt(count, dummy.matrix)
@@ -2293,8 +2289,9 @@ const mpos = {
         // ...ad-hoc experiments like tooltip, catmull heatmap
         if (rType === undefined || rect.ux.o) {
           newMap = true
+          const style = rect.css.style || rect.el.style
           // Instance Color (first-run)
-          let bg = rect.css.style.backgroundColor
+          let bg = style.backgroundColor
           let rgba = bg.replace(/[(rgba )]/g, '').split(',')
           const alpha = rgba[3]
           if (alpha === '0') {
@@ -2311,7 +2308,7 @@ const mpos = {
         // Update atlas uv and visibility
         let vis = -1
         let x, y, z
-        if (rType === undefined || dummy || uxForce) {
+        if (rType === undefined || dummy) {
           if (rect.hasOwnProperty('atlas') || rect.mat === 'self') {
             // top-tier bracket
             if (inPolar) {
@@ -2467,58 +2464,23 @@ const mpos = {
         )
       }
     },
-    render: function (timeslice) {
+    render: function (gate) {
       const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool, time } = mpos.var
 
-      const slice = time.sFenceFPS_slice
       if (document.hidden) {
         // todo: visibilitychange prevent 300fps
         return
       }
 
-      if (time.slice(1, true)) {
-        //
-        // FPS slice minimum (60fps?)
-        if (grade && time.slice(2, true)) {
-          // animation step
-          grade.group.traverse((obj) => {
-            if (obj.animate) {
-              if (obj.animate === true) {
-                const animationTime = Date.now() / 50
-                // wiggle root
-                obj.rotation.x = Math.sin(animationTime) / 100
-                obj.rotation.y = Math.cos(animationTime) / 200
-                obj.position.z = -9
-              } else if (obj.animate.gif) {
-                // refresh SuperGif
-                obj.material.map.needsUpdate = true
-              }
-            }
-          })
-
-          // Controls events can stack up render calls outside of frameloop timer
-          tool.dpr()
-        }
-
-        // instanced elements need texture update
-        mat_shader.userData.t.needsUpdate = true
-        //instanced.instanceColor.needsUpdate = true
-
-        // Compile
-        scene.updateMatrixWorld()
-        renderer.render(scene, camera)
-        rendererCSS.render(scene, camera)
-
-        stats.update()
-      }
-
-      if (timeslice) {
-        // syncFPS complete from updated transforms
-        time.sFenceFPS_slice.gate = Infinity
-      }
-
       //
-      // Timeslice Boundry: junction of mapcontrols and transform updates
+      // Sync Boundary: junction of mapcontrols and transform updates
+
+      const slice = time.sFenceFPS_slice
+      if (gate) {
+        // syncFPS complete from updated transforms
+        slice.gate = Infinity
+      }
+
       time.sFenceDelta += time.sFence.getDelta()
       const syncFPS = time.sFenceDelta > time.sFenceFPS
 
@@ -2577,6 +2539,42 @@ const mpos = {
       //console.log('60')
       //}
       // ###
+
+      if (time.slice(1, true)) {
+        //
+        // FPS slice minimum (60fps?)
+        if (grade && time.slice(2, true)) {
+          // animation step
+          grade.group.traverse((obj) => {
+            if (obj.animate) {
+              if (obj.animate === true) {
+                const animationTime = Date.now() / 50
+                // wiggle root
+                obj.rotation.x = Math.sin(animationTime) / 100
+                obj.rotation.y = Math.cos(animationTime) / 200
+                obj.position.z = -9
+              } else if (obj.animate.gif) {
+                // refresh SuperGif
+                obj.material.map.needsUpdate = true
+              }
+            }
+          })
+
+          // Controls events can stack up render calls outside of frameloop timer
+          tool.dpr()
+        }
+
+        // instanced elements need texture update
+        mat_shader.userData.t.needsUpdate = true
+        //instanced.instanceColor.needsUpdate = true
+
+        // Compile
+        scene.updateMatrixWorld()
+        renderer.render(scene, camera)
+        rendererCSS.render(scene, camera)
+
+        stats.update()
+      }
 
       //requestAnimationFrame(this)
     },
@@ -2688,7 +2686,8 @@ const mpos = {
       // Position on Window
       // we know target element (uv/xy) at depth of mpos
       // but native form may have finer control elements
-      const position = rect.css?.style.position || 'auto'
+      const style = rect.css.style || rect.el.style
+      const position = style.position || 'auto'
       const [scrollX, scrollY] = position === 'fixed' ? [0, 0] : [window.scrollX, window.scrollY]
       const x = offsetX + rect.bound.left
       const y = offsetY + rect.bound.top
