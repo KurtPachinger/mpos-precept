@@ -90,7 +90,7 @@
             <li>B. BBBBBBBB</li>
             <li>C. CCCCCCCC</li>
           </ul>
-          <div id="nest" class="resize">
+          <div id="thread" class="resize">
             <div>
               <div>
                 <div>1</div>
@@ -307,10 +307,10 @@
           // Extract some visual hierarchy
           mpos.fnVar('chain', '#overflow', { count: 4, symbol: '-' })
           mpos.fnVar('chain', '#underflow', { count: 4, symbol: '+' })
-          mpos.fnVar('march', '#nest', {}).then(function (res) {
+          mpos.fnVar('march', '#thread', {}).then(function (res) {
             // Analogue of raymarch chain
-            mpos.fnVar('chain', '#nest', { count: res, symbol: res }).then((res) => {
-              console.log('fnVar', res)
+            mpos.fnVar('chain', '#thread', { count: res, symbol: res }).then((res) => {
+              // Demo depth slider and visibility
             })
           })
 
@@ -347,8 +347,8 @@
 
                   //
                   // Dynamic content addition
-                  const element = document.createElement('div')
-                  element.innerHTML = `<h2>__USE_AFTER_THREE__</h2><p>Dynamic content tree.</p>`
+                  const element = document.createElement('article')
+                  element.innerHTML = `<h2>__USE_AFTER_THREE__</h2><div>dynamic<div>content<div>tree</div></div></div>`
                   document.querySelector('#live').prepend(element)
 
                   mpos.mod.add(element, { grade: mpos.var.grade }).then((res) => {
