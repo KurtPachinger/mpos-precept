@@ -200,7 +200,7 @@ const mpos = {
           let position = term === 'first' ? 0 : rects.length - 1
           rect = Object.values(grade.rects)[position]
         } else if (term === 'atlas' || term === 'other') {
-          rect = grade.r_[term].rects
+          rect = grade.major[term].rects
         } else {
           rect = grade.rects[term]
         }
@@ -262,7 +262,7 @@ const mpos = {
 
             // note: pseudo (or unset prior frame) enqueued for atlas
             differ = css.pseudo
-            css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.mat === 'poster')
+            css.pseudo = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.minor === 'poster')
             differ = differ || css.pseudo
 
             rect.ux.p = differ
@@ -650,7 +650,7 @@ const mpos = {
       // sets and subsets
       txt = []
       rects = {}
-      r_ = {
+      major = {
         // live values
         queue: [],
         atlas: { count: 0, rects: {} },
@@ -747,13 +747,13 @@ const mpos = {
         //
         // Qualify Geometry Usage
         if (rect) {
-          rect.mat = mat
+          rect.minor = mat
           rect.z = z
 
           // note: counter logic duplicated in step sync queue (major, priority)
           if (rect.inPolar >= grade.inPolar) {
             grade.elsMin++
-            if (rect.mat === 'poster' || rect.mat === 'native') {
+            if (rect.minor === 'poster' || rect.minor === 'native') {
               // Instanced Atlas
               rect.atlas = grade.atlas.idx++
             }
@@ -764,13 +764,13 @@ const mpos = {
 
           //
           // Assign Archetype
-          // note: atlas excludes rect.mat type "native" that matches CORS... to CSS3D
+          // note: atlas excludes rect.minor type "native" that matches CORS... to CSS3D
           // ... atlas "poster" became first-class, so the logic is !!BetterLate
-          const other = rect.mat === 'loader' || rect.mat === 'wire' || rect.el.matches([precept.cors, precept.native3d])
-          rect.r_ = other ? 'other' : 'atlas'
+          const other = rect.minor === 'loader' || rect.minor === 'wire' || rect.el.matches([precept.cors, precept.native3d])
+          rect.major = other ? 'other' : 'atlas'
 
           // elevate priority for ux update (not hyperlinks or CSS3D)
-          const uxin = rect.mat === 'native' && rect.el.tagName !== 'A' && rect.r_ !== 'other' ? 1 : 0
+          const uxin = rect.minor === 'native' && rect.el.tagName !== 'A' && rect.major !== 'other' ? 1 : 0
           rect.ux = { i: uxin, o: 0, u: false }
 
           // Class to unset quirks (inherit transform, details...)
@@ -780,14 +780,14 @@ const mpos = {
             rect.ux.i = 1
           }
 
-          if (rect.r_ === 'other') {
+          if (rect.major === 'other') {
             // STATES:
             // 1: to be added, 2: being added, 3: added
             rect.add = 1
           }
 
           // Atlas subBin test 1
-          //if (rect.mat === 'poster' || rect.mat === 'native' /* || rect.mat === 'child' */) {
+          //if (rect.minor === 'poster' || rect.minor === 'native' /* || rect.minor === 'child' */) {
           //  const area = rect.el.offsetWidth * rect.el.offsetHeight
           //  tool.avg(area, atlasWide)
           //}
@@ -844,10 +844,9 @@ const mpos = {
               const block = node.matches(precept.block)
               // Despite reported range, impose upper limit on practical quantity
               const abortEls = grade.elsMin >= 1_024 //|| grade.elsMin > grade.elsMax
-              const abortAtlas = grade.atlas.idx >= 128 // || grade.atlas > grade.elsMin
-              //const abort = abortEls || abortAtlas
-              if (block || abortEls) {
-                console.log('skip', node.nodeName)
+              const abortAtlas = grade.atlas.idx >= 256 // || grade.atlas > grade.elsMin
+              if (block || abortEls || abortAtlas) {
+                console.log('block', node.nodeName)
                 //rect.el = null
               } else {
                 if (rect.inPolar >= 1) {
@@ -855,7 +854,7 @@ const mpos = {
                   const manual = node.matches(precept.manual)
                   const child = node.children.length
 
-                  if (deep >= 1 && allow && !manual && child) {
+                  if (deep >= 1 && allow && !manual && child && !abortAtlas) {
                     // selector structure output depth
                     const D = deep - 1
                     treeSet(node, D, unset)
@@ -863,7 +862,7 @@ const mpos = {
                     let mat = 'child'
                     //
                     // Set Element-Geometry "Final Grade"
-                    mat = abortAtlas ? mat : setMat(node, mat, manual, child)
+                    mat = setMat(node, mat, manual, child)
                     setRect(rect, z, mat, unset)
                   }
                 }
@@ -884,19 +883,19 @@ const mpos = {
       Object.keys(rects).forEach((idx) => {
         const rect = rects[idx]
 
-        if (rect.mat) {
+        if (rect.minor) {
           rect.idx = Number(idx)
           if (rect.inPolar >= grade.inPolar) {
             // Begin Subsets: atlas || other
-            const r_type = grade.r_[rect.r_]
-            r_type.rects[idx] = rect
-            r_type.count++
+            const _major_ = grade.major[rect.major]
+            _major_.rects[idx] = rect
+            _major_.count++
           } else {
             // note: observe off-screen (!inPolar) elements...?
           }
 
           const area = rect.el.offsetWidth * rect.el.offsetHeight
-          if ((rect.mat === 'poster' || rect.mat === 'native') && area > areaAvg && 0 < subBinMax) {
+          if ((rect.minor === 'poster' || rect.minor === 'native') && area > areaAvg && 0 < subBinMax) {
             // note: cumulative average requires async/await (deterministic)
             //console.log('atlasW', rect)
             rect.idxW = atlas.idxW++
@@ -1005,7 +1004,7 @@ const mpos = {
         uvOffset.setUsage(THREE.DynamicDrawUsage)
         instanced.geometry.setAttribute('uvOffset', uvOffset)
 
-        grade.r_.uvOffset = instanced.geometry.getAttribute('uvOffset')
+        grade.major.uvOffset = instanced.geometry.getAttribute('uvOffset')
       }
 
       //
@@ -1093,7 +1092,7 @@ const mpos = {
       let object
       if (rect.obj) {
         object = rect.obj
-      } else if (rect.r_ === 'other') {
+      } else if (rect.major === 'other') {
         const resource = grade.group.getObjectByName(rect.idx)
         if (resource) {
           // prevent duplicate resource from delayed response during loads
@@ -1107,7 +1106,7 @@ const mpos = {
           group.userData.idx = rect.idx
           rect.obj = group
 
-          if (rect.mat === 'native') {
+          if (rect.minor === 'native') {
             // todo: de-dupe all 'other' (loader) via rect.obj = Group && fit/use scene.getObjectByName
             //const loaded = mpos.var.rendererCSS.domElement.querySelector(`[data-batch="${grade.batch}"] [data-idx="${rect.idx}"]`)
 
@@ -1135,7 +1134,7 @@ const mpos = {
             grade.group.add(css3d)
             rect.obj = css3d
             object = css3d
-          } else if (rect.mat === 'wire') {
+          } else if (rect.minor === 'wire') {
             // Mesh unclassified (currently only root node)
             const mesh = new THREE.Mesh(geo, mat_line)
             mpos.set.use(mesh)
@@ -1187,7 +1186,7 @@ const mpos = {
         let z = zSign * zScale * (fov.z * 2)
 
         // extrude bias to cure z-fighting
-        const extrude = rect.mat !== 'self' && rect.mat !== 'wire' ? fov.z / 2 + fov.z / 4 : 0
+        const extrude = rect.minor !== 'self' && rect.minor !== 'wire' ? fov.z / 2 + fov.z / 4 : 0
         z += extrude
 
         if (obj.isCSS3DObject) {
@@ -1240,7 +1239,7 @@ const mpos = {
       if (opts.add) {
         if (rect.add === 1) {
           // Load Additional Resource (async)
-          if (rect.mat === 'loader') {
+          if (rect.minor === 'loader') {
             res = rect.obj
             mpos.set.loader(rect, object)
           } else {
@@ -1296,10 +1295,10 @@ const mpos = {
             break
           }
 
-          const r_ = grade.rects[el.getAttribute('data-idx')]
-          if (r_?.ux.o) {
+          const _rect_ = grade.rects[el.getAttribute('data-idx')]
+          if (_rect_?.ux.o) {
             // accumulate ancestor matrix
-            const style = r_.css.style || css.style // || window.getComputedStyle(el)
+            const style = _rect_.css.style || css.style // || window.getComputedStyle(el)
             if (style && style !== 'none' && rotated /*tool.diffs('matrix', { rect: rect })*/) {
               const transform = style.transform.replace(/(matrix)|[( )]/g, '')
               // transform matrix
@@ -1893,8 +1892,8 @@ const mpos = {
   step: {
     rate: function (grade, type, rFrame, capture, reQueue) {
       const { tool, time, opt } = mpos.var
-      const { r_ } = grade
-      const rects = r_[type].rects
+      const { major } = grade
+      const rects = major[type].rects
 
       // update element rect
       Object.keys(rects).forEach(function (idx) {
@@ -1909,14 +1908,14 @@ const mpos = {
           if (rect.inPolar >= grade.inPolar) {
             if (rect.el.tagName === 'BODY') {
               // no propagate
-              r_.queue.push(idx)
+              major.queue.push(idx)
             } else {
               let pseudo = tool.diffs('pseudo', { rect: rect, el: grade.el, capture: capture }) && (rect.ux.p || time.slice(2))
               if (pseudo || rect.ux.o || rect.ux.u) {
                 // element ux changed or elevated
                 // note: pseudo evaluates first, so atlas unset has consistent off-state
-                if (r_.queue.indexOf(idx) === -1) {
-                  r_.queue.push(idx)
+                if (major.queue.indexOf(idx) === -1) {
+                  major.queue.push(idx)
                 }
 
                 if (rect.ux.p) {
@@ -1936,7 +1935,7 @@ const mpos = {
                       idx = el.getAttribute('data-idx')
                       let rect = rects[idx]
                       //rect.css.pseudo = true
-                      if (rect && rect.mat === 'poster') {
+                      if (rect && rect.minor === 'poster') {
                         rect.ux.u = 'all' // force child on frame, for atlas/transform...?
                         child.push(idx)
                       }
@@ -1944,7 +1943,7 @@ const mpos = {
                     rect.child = child
                   }
 
-                  if (time.slice(2)) r_.queue.push(...rect.child)
+                  if (time.slice(2)) major.queue.push(...rect.child)
                 }
               }
             }
@@ -1958,13 +1957,13 @@ const mpos = {
       })
     },
     sync: async function (grade, rType) {
-      if (document.hidden || !grade || !!grade?.wait || !grade?.atlas.canvas || (rType && !grade?.r_.queue.length)) {
+      if (document.hidden || !grade || !!grade?.wait || !grade?.atlas.canvas || (rType && !grade?.major.queue.length)) {
         // skip frame
         return
       }
 
       const { opt, time } = mpos.var
-      const { atlas, r_ } = grade
+      const { atlas, major } = grade
 
       //
       // Emulate Page Flow: reduce and detect changes
@@ -1985,25 +1984,25 @@ const mpos = {
       if (rType) {
         // SOFT-update: Observer or frame
         let reflow = false
-        for (let i = r_.queue.length - 1; i >= 0; i--) {
-          const idx = r_.queue[i]
+        for (let i = major.queue.length - 1; i >= 0; i--) {
+          const idx = major.queue[i]
           if (isFinite(idx)) {
             // new Observer
             const rect = grade.rects[idx]
             if (rect) {
-              const r_type = grade.r_[rect.r_]
+              const _major_ = grade.major[rect.major]
 
-              if (!r_type.rects[idx]) {
-                if (rect.mat === 'poster' || (rect.mat === 'native' && rect.r_ === 'atlas')) {
+              if (!_major_.rects[idx]) {
+                if (rect.minor === 'poster' || (rect.minor === 'native' && rect.major === 'atlas')) {
                   // Instanced
                   rect.atlas = atlas.idx++
-                } else if (rect.r_ === 'other') {
+                } else if (rect.major === 'other') {
                   // CSS3D or Loader
                   //rect.add = 1
                 }
                 // add key
-                r_type.rects[idx] = rect
-                r_type.count++
+                _major_.rects[idx] = rect
+                _major_.count++
                 grade.elsMin++
               }
             }
@@ -2045,12 +2044,12 @@ const mpos = {
         // HARD-update: viewport
         const root = document.body
         const idx = root.getAttribute('data-idx') || 9999
-        const rect = { el: root, mat: 'wire', z: -idx, fix: true, ux: { i: 1, o: 0 }, idx: idx, css: {}, bound: {} }
+        const rect = { el: root, minor: 'wire', z: -idx, fix: true, ux: { i: 1, o: 0 }, idx: idx, css: {}, bound: {} }
 
-        r_.other.rects[idx] = rect
+        major.other.rects[idx] = rect
       }
 
-      //console.log('queue', r_.queue.length)
+      //console.log('queue', major.queue.length)
 
       //
       // Pass state to recursive loops
@@ -2068,7 +2067,7 @@ const mpos = {
     },
     atlas: function (grade, step = {}) {
       const { tool, fov, reset } = mpos.var
-      const { atlas, r_ } = grade
+      const { atlas, major } = grade
       const { rType, rFrame, syncFPS, quality } = step
 
       //
@@ -2094,12 +2093,12 @@ const mpos = {
         // context reset when loop interrupted
         //ctxC.reset()
         ctxC.fillStyle = atlas.keyTest.alpha
-        ctxC.fillRect(0, atlas.size - wSub, wSub, wSub)
+        ctxC.fillRect(atlas.keyTest.x, atlas.keyTest.y - atlas.size - wSub, wSub, wSub)
       }
 
       if (step.queue === undefined) {
         // update queue, SOFT or HARD
-        step.queue = rType ? r_.queue : Object.keys(r_.atlas.rects)
+        step.queue = rType ? major.queue : Object.keys(major.atlas.rects)
         step.idx = step.queue.length
         // paint breakpoints [0,50%], unless frame
         // ...via transforms, which also calls loaders!
@@ -2133,7 +2132,7 @@ const mpos = {
         return ux.i !== 1 && ux.u === 'css'
       }
       // queue indexes from end, but in reverse
-      const rect = r_.atlas.rects[step.queue[step.queue.length - step.idx]]
+      const rect = major.atlas.rects[step.queue[step.queue.length - step.idx]]
 
       if (rect && rect.hasOwnProperty('atlas') && !shallow(rect.ux)) {
         // Unset or override element box style
@@ -2253,7 +2252,7 @@ const mpos = {
       }
     },
     transforms: function (grade, step, paint) {
-      const { atlas, r_ } = grade
+      const { atlas, major } = grade
       const { rType, rFrame, syncFPS } = step
       const instanced = atlas.instanced
       //
@@ -2276,7 +2275,7 @@ const mpos = {
         //
         // Meshes other (matches Loader) update on tail
         //grade.scroll = { x: window.scrollX, y: window.scrollY }
-        Object.values(r_.other.rects).forEach(function (rect) {
+        Object.values(major.other.rects).forEach(function (rect) {
           let newGeo = !rect.hasOwnProperty('obj') && rect.add === 1
 
           let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
@@ -2311,7 +2310,7 @@ const mpos = {
 
       const color = new THREE.Color()
 
-      for (const [idx, rect] of Object.entries(r_.atlas.rects)) {
+      for (const [idx, rect] of Object.entries(major.atlas.rects)) {
         //let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
         let inPolar = rect.inPolar >= grade.inPolar
 
@@ -2343,7 +2342,7 @@ const mpos = {
         let vis = -1
         let x, y, z
         if (rType === undefined || dummy) {
-          if (rect.hasOwnProperty('atlas') || rect.mat === 'self') {
+          if (rect.hasOwnProperty('atlas') || rect.minor === 'self') {
             // top-tier bracket
             if (inPolar) {
               x = rect.wX || atlas.keyTest.x
@@ -2357,12 +2356,12 @@ const mpos = {
           }
 
           // bug frame: force inPolar/css, update instance.count, update render/texture, 3rd condition
-          r_.uvOffset.setXY(count, x || vis, y || vis)
-          r_.uvOffset.setZ(count, z || 1)
+          major.uvOffset.setXY(count, x || vis, y || vis)
+          major.uvOffset.setZ(count, z || 1)
         }
 
         // Ray whitelist instanceId
-        if (rect.hasOwnProperty('atlas') && inPolar /*&& rect.mat !== 'self'*/) {
+        if (rect.hasOwnProperty('atlas') && inPolar /*&& rect.minor !== 'self'*/) {
           // note: event/raycast is strongly bound (like capture/bubble)
           // propagation quirks are thrown further by curating hierarchy (mat.self)
           targets.push(Number(count))
@@ -2378,7 +2377,7 @@ const mpos = {
       //instanced.computeBoundingSphere() // cull and raycast
       //instanced.instanceMatrix.needsUpdate = true
       if (newMap) instanced.instanceColor.needsUpdate = true
-      r_.uvOffset.needsUpdate = true // if buffer has new atlas positions (for example, hover works despite)
+      major.uvOffset.needsUpdate = true // if buffer has new atlas positions (for example, hover works despite)
       // Atlas Postprocessing...?
       //ctxC.drawImage(OffscreenCanvas, 0, 0)
       mpos.set.use(instanced, true)
@@ -2423,7 +2422,7 @@ const mpos = {
       if (!grade) {
         return
       }
-      const queue = grade.r_.queue
+      const queue = grade.major.queue
 
       function enqueue(rType) {
         if (queue.indexOf(rType) === -1) {
@@ -2650,7 +2649,7 @@ const mpos = {
           //
           //if (hit.object) {
           // Synthetic Dispatch Event
-          const rect = useId ? Object.values(grade.r_.atlas.rects)[hit.instanceId] : grade.r_.other.rects[hit.object.userData.idx]
+          const rect = useId ? Object.values(grade.major.atlas.rects)[hit.instanceId] : grade.major.other.rects[hit.object.userData.idx]
           synthetic = { rect: rect, uv: hit.uv }
 
           //
@@ -2696,7 +2695,7 @@ const mpos = {
       const { rect, uv } = mpos.ux.raycast(e)
       if (!rect || !uv) return
 
-      if (rect.mat === 'native') {
+      if (rect.minor === 'native') {
         // form, video, draggable ( || rect.ux.o || THREE.STATE.PAN )
         controls.enablePan = false
       }
