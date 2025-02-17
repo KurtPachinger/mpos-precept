@@ -4,7 +4,7 @@
     <title>mpos-precept</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="styles.css" />
-    <link rel="modulepreload" href="mpos.js" />
+    <link href="mpos.js" />
     <script type="importmap">
       {
         "imports": {
@@ -339,10 +339,10 @@
                   const idxJSON = Object3D.getAttribute('data-idx')
                   mpos.fnVar('find', idxJSON, {}).then((res) => {
                     // ObjectLoader status..?
-                    console.log('find res.obj:', res)
+                    console.log('Object3D...?:', res.obj)
                     // Meanwhile flip-y (scale(-1, 0) flickers visibly)
-                    Object3D.style.transform = 'rotateZ(180deg)'
-                    Object3D.classList.add('blink')
+                    res.el.style.transform = 'rotateZ(180deg)'
+                    res.el.classList.add('blink')
                   })
 
                   //
@@ -352,7 +352,7 @@
                   document.querySelector('#live').prepend(element)
 
                   mpos.mod.add(element, { grade: mpos.var.grade }).then((res) => {
-                    console.log('add new grade:', res)
+                    console.log('add element:', res)
                   })
 
                   // mpos.fnVar('add', element, {}).then((res) => {
