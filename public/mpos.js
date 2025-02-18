@@ -13,31 +13,38 @@ import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 
 const mpos = {
   fnVar: function (tool, value, opts = {}) {
+    //
     // Syntactic Suger: allow keys and map variable scope
-    const vars = this.var
+
+    if (value === null || value === undefined) {
+      console.log(tool + ': bad value')
+      return
+    }
+
+    // filter user variables from core
+    opts.var = this.var
+    opts.value = value
     switch (tool) {
-      //case 'find':
-      //  opts.grade = vars.grade
-      //  break
       case 'march':
-        opts.selector ||= vars.opt.selector
-        opts.depth ||= vars.opt.depth
         opts.precept = this.mod.precept
         break
       default:
-        opts.var = vars
+      // opts.grade = ?
     }
-    const promise = new Promise((resolve, reject) => {
-      //
-      const fnvar = vars.tool[tool]
-      const response = fnvar ? fnvar(value, opts) : 'no fnVar'
-      console.log(`tool ${tool} ${value}:`, response)
-      resolve(response)
-      reject('err' + tool)
-    })
 
-    //console.log('fnVar:', promise)
-    return promise
+    // Tool use
+    // note: find Object3D ...but... march/chain query DOM
+    if (['march', 'chain'].includes(tool) && typeof value === 'string') {
+      // permit element or selector
+      value = document.querySelector(value)
+    }
+
+    //
+    // use tool
+    const fnvar = this.var.tool[tool]
+    const response = fnvar ? fnvar(value, opts) : 'no fnVar'
+    console.log('tool ' + tool, opts.value, response)
+    return response
   },
   var: {
     batch: 0,
@@ -167,13 +174,13 @@ const mpos = {
         acc.count++
       },
 
-      chain: function (selector, opts = {}) {
-        // chain of elements
+      chain: function (element, opts = {}) {
+        // chain of elements to count
         let nodeName = opts.nodeName || 'mp'
         let chains = document.createElement(nodeName)
         chains.classList.add('mp-allow', 'march')
         let last = chains
-        while (--opts.count) {
+        while (--opts.count > 0) {
           let chain = document.createElement(nodeName)
           chain.classList.add('mp-allow', 'p')
           if (opts.count % 2 === 0) {
@@ -185,9 +192,10 @@ const mpos = {
           last.append(chain)
           last = chain
         }
+
         last.classList.add('last')
         last.innerHTML += opts.symbol
-        document.querySelector(selector)?.prepend(chains)
+        element.prepend(chains)
 
         return chains
       },
@@ -207,22 +215,23 @@ const mpos = {
 
         return rect
       },
-      march: function (selector, opts = {}) {
-        // chain to depth under cutoff
-        let outer = document.querySelector(opts.selector)
-        let inner = document.querySelector(selector)
-        let depth = 0
-        while (inner) {
-          if (inner.isSameNode(outer) || !inner.parentElement || ++depth > 32) {
-            break
-          }
-          inner = inner.closest(opts.precept.allow)
+      march: function (element, opts = {}) {
+        const { grade, opt } = opts.var
+        const depth = grade?.depth || opts.depth || opt.depth
+
+        //
+        // z relative to root(s) and slot depth(s)
+        let inner = element
+        const outer = grade?.el || document.querySelector(opt.selector) || document.body
+        const m = { root: 0, slot: 0 }
+        while (m.root < 32 && inner.parentElement && !inner.isSameNode(outer)) {
+          m.root++
+          inner = inner.parentElement.closest(opts.precept.allow)
         }
 
-        // (-2): extend (child) to depth -1, and head (poster) -1
-        depth += (opts.depth || mpos.var.opt.depth) - depth - 2
+        m.slot = depth - m.root
 
-        return depth
+        return m
       },
       diffs: function (type, opts = {}) {
         let differ = false
@@ -356,7 +365,7 @@ const mpos = {
             // Canvas
             //const ctxC = grade.atlas.ctx
             //ctxC.clearRect(0, 0, ctxC.width, ctxC.height)
-            grade.atlas.ctx.reset()
+            //grade.atlas.ctx.reset()
             canvas.remove()
             canvas = null
             // note: more grades would destroy canvases
@@ -572,7 +581,7 @@ const mpos = {
 
       const gui = new GUI()
       gui.domElement.classList.add('mp-native')
-      Object.keys(opt).forEach(function (key) {
+      for (const key in opt) {
         const params = {
           selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
           depth: [0, 32, 1],
@@ -588,7 +597,7 @@ const mpos = {
             ux.reflow({ type: 'delay', value: v })
           })
         }
-      })
+      }
 
       resolve(opts)
       reject('err')
@@ -631,6 +640,9 @@ const mpos = {
     },
     rect: class {
       constructor(node, opts = {}) {
+        for (var k in opts) {
+          this[k] = opts[k]
+        }
         this.el = node
       }
       el = {}
@@ -698,8 +710,19 @@ const mpos = {
       }
 
       constructor(opts) {
+        this.depth = opts.depth
         this.group.name = opts.selector
-        this.atlas.fontEmbedCSS = /*await getFontEmbedCSS(grade.el)*/ ''
+
+        const atlas = this.atlas
+        atlas.fontEmbedCSS = /*await getFontEmbedCSS(grade.el)*/ ''
+        //
+        // Offscreen Canvas
+        //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
+        atlas.canvas = document.createElement('canvas')
+        // note: offscreen, transfercontrols, multiple readback
+        //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
+        atlas.ctx = atlas.canvas.getContext('2d', { willReadFrequently: true, alpha: true })
+        atlas.ctx.imageSmoothingEnabled = false
       }
     },
     treeFlat: function (grade, opts = {}) {
@@ -759,16 +782,19 @@ const mpos = {
         node = ni.nextNode()
       }
     },
-    treeDeep: function (grade, opts) {
+    treeDeep: function (grade, opts = {}) {
       const precept = this.precept
-      const depth = opts.depth
+
+      const zSlot = opts.zSlot || 0
+      const depth = opts.depth - zSlot
+      console.log('zSlot', opts.zSlot)
 
       function setRect(rect, z, mat, unset) {
         //
         // Qualify Geometry Usage
         if (rect) {
           rect.minor = mat
-          rect.z = z
+          rect.z = zSlot + z
 
           //
           // Assign Archetype
@@ -883,7 +909,8 @@ const mpos = {
           }
         }
       }
-      return treeSet(grade.el, depth)
+
+      return treeSet(opts.selector, depth)
     },
     treeSort: function (grade) {
       const { atlas, rects } = grade
@@ -892,7 +919,7 @@ const mpos = {
 
       //
       // Complete Preparation
-      Object.keys(rects).forEach((idx) => {
+      for (const idx in rects) {
         const rect = rects[idx]
 
         if (rect.minor) {
@@ -912,7 +939,7 @@ const mpos = {
           rects[idx] = null
           delete rects[idx]
         }
-      })
+      }
       return
     },
     add: async function (selector, opts = {}) {
@@ -932,6 +959,8 @@ const mpos = {
       //
       // Document Element NodeIterator for Typed Geometry
       if (opts.grade) {
+        const m = mpos.fnVar('march', opts.selector, {})
+        opts.zSlot = m.root
         //
         // Lightweight addition using existing resources
         // no: wait, dispose, or new instanced
@@ -963,7 +992,7 @@ const mpos = {
         }
 
         // Dispose Memory: last batch is old
-        grade.el = element
+        grade.el = opts.selector = element
         grade.wait = Infinity
         await tool.old()
 
@@ -975,20 +1004,26 @@ const mpos = {
         //
         // Texture Atlas: relative to grade
         const atlas = grade.atlas
-        const canvas = document.createElement('canvas')
-        document.querySelector('#mp #atlas').appendChild(canvas)
-        atlas.canvas = canvas
+        document.querySelector('#mp #atlas').appendChild(atlas.canvas)
         // note: if dynamic (atlas size, cellMip), update between treeDeep (elsMax++, areaAvg++) and treeSort (cellMip2, idxMip2)
-        canvas.width = canvas.height = atlas.size
-        canvas.title = `${grade.group.name}#${grade.batch} ${atlas.size}px/${atlas.cellMip}`
+        atlas.canvas.width = atlas.canvas.height = atlas.size
+        atlas.canvas.title = `${grade.group.name}#${grade.batch} ${atlas.size}px/${atlas.cellMip}`
         // ... cellMip2 from average area ( & size & cellMip )
         atlas.cMap = atlas.size / atlas.cellMip
         atlas.cMap2 = atlas.cMap * 2
-        atlas.keyTest = { x: 0, y: 0.0001, alpha: 'rgba( 0, 255, 255, 0.125 )' } // empty structure (cyan)
+        //
+        //
+        // Atlas Key structure
+        // note: high/low values disappear in THREE shader alphaTest: 'rgba( 0/64, 255, 255, 0.25/0.5 )'
+        atlas.keyTest = { x: 0, y: 0.0001, alpha: 'rgba( 0, 128, 128, 0.125 )' } // empty structure (cyan)
+        // context reset when loop interrupted
+        atlas.ctx.fillStyle = atlas.keyTest.alpha
+        console.log(atlas.keyTest)
+        atlas.ctx.fillRect(atlas.keyTest.x, atlas.keyTest.y, atlas.cMap, atlas.cMap)
 
         //
         // Instanced Mesh and
-        const shader = mpos.set.shader(canvas, atlas.cellMip, mat_shader)
+        const shader = mpos.set.shader(atlas.canvas, atlas.cellMip, mat_shader)
         const instanced = new THREE.InstancedMesh(geo, [mat, mat, mat, mat, shader, mat_line], grade.elsMax)
         instanced.layers.set(2)
         mpos.set.use(instanced)
@@ -1089,7 +1124,6 @@ const mpos = {
 
         // add key
         _major_.add(rect.idx)
-        //_major_.count++
       }
     },
     box: function (rect, opts = {}) {
@@ -1714,7 +1748,7 @@ const mpos = {
             // inrange
             const lo = new cv.Mat(size, cv.CV_8UC4)
             const hi = new cv.Mat(size, cv.CV_8UC4)
-            Object.keys(kmeans).forEach(function (key) {
+            for (const key in kmeans) {
               const label = kmeans[key]
               const rgba = label.rgba
               // skip transparent
@@ -1729,14 +1763,14 @@ const mpos = {
                 const bands = {}
                 const factor = range < 0 ? 0.66 : 1.33
 
-                Object.keys(rgba).forEach(function (channel) {
+                for (const channel in rgba) {
                   if (channel !== 'a') {
                     let band = rgba[channel] + range
                     band *= factor
                     band = band < 128 ? Math.max(band, 0) : Math.min(band, 255)
                     bands[channel] = band
                   }
-                })
+                }
 
                 return [bands.r, bands.g, bands.b, target]
               }
@@ -1799,7 +1833,7 @@ const mpos = {
               if (!Object.keys(label.retr).length) {
                 delete kmeans[key]
               }
-            })
+            }
             release(src)
             release(lo)
             release(hi)
@@ -1912,54 +1946,66 @@ const mpos = {
       //const rects = major[type].rects
 
       // update element rect
-      Object.keys(grade.rects).forEach(function (idx) {
+      for (const idx in grade.rects) {
         const rect = grade.rects[idx]
-        // update visibility
-        if (time.slice(2)) mpos.set.inPolar(rect)
         //
         // Traverse: style transforms (set/unset), view settings, and qualify ux
-        if (time.slice(1, true)) mpos.set.css(rect, rFrame)
+
+        if (time.slice(2, true)) mpos.set.inPolar(rect)
+        const inPolar = rect.inPolar >= grade.inPolar
+        if (time.slice(1, true) && inPolar) mpos.set.css(rect, rFrame)
 
         if (rect.major === 'atlas' && reQueue) {
-          if (rect.inPolar >= grade.inPolar) {
-            if (rect.el.tagName === 'BODY') {
-              // no propagate
-              major.queue.push(idx)
-            } else {
-              let pseudo = tool.diffs('pseudo', { rect: rect, el: grade.el, capture: capture }) && (rect.ux.p || time.slice(2))
-              if (pseudo || rect.ux.o || rect.ux.u) {
-                // element ux changed or elevated
-                // note: pseudo evaluates first, so atlas unset has consistent off-state
-                if (major.queue.indexOf(idx) === -1) {
-                  major.queue.push(idx)
+          if (rect.el.tagName === 'BODY') {
+            // no propagate
+            major.queue.push(idx)
+          } else {
+            let pseudo = tool.diffs('pseudo', { rect: rect, el: grade.el, capture: capture }) && (rect.ux.p || time.slice(2))
+            if (pseudo || rect.ux.o || rect.ux.u) {
+              // element ux changed or elevated
+              // note: pseudo evaluates first, so atlas unset has consistent off-state
+              if (major.queue.indexOf(idx) === -1) {
+                major.queue.push(idx)
+              }
+
+              if (rect.ux.p) {
+                // note: pseudo is (active), or was (blur), so enqueue (with children)
+                // ... to update atlas/transform by forcing ux.u="all"
+                // todo: set ux.o++ priority (if ux.p), and use ux.u correctly
+                // ... compare, inherit?
+                rect.ux.u = 'all'
+                rect.ux.p = false
+
+                // children propagate
+                if (!rect.hasOwnProperty('child')) {
+                  let idx,
+                    child = []
+                  // cache a static list
+                  rect.el.querySelectorAll('[data-idx]').forEach((el) => {
+                    idx = el.getAttribute('data-idx')
+                    const rect_cap = grade.rects[idx]
+                    //rect.css.pseudo = true
+                    if (rect_cap /*&& rect_cap.major !== 'other'*/) {
+                      // force child on frame, for atlas/transform
+                      // since top-down, we don't know if we can just do box
+                      //rect_cap.ux.u = 'all'
+                      child.push(idx)
+                    }
+                  })
+                  rect.child = child
                 }
 
-                if (rect.ux.p) {
-                  // note: pseudo is (active), or was (blur), so enqueue (with children)
-                  // ... to update atlas/transform by forcing ux.u="all"
-                  // todo: set ux.o++ priority (if ux.p), and use ux.u correctly
-                  // ... compare, inherit?
-                  rect.ux.u = 'all'
-                  rect.ux.p = false
+                if (time.slice(2)) {
+                  major.queue.push(...rect.child)
 
-                  // children propagate
-                  if (!rect.hasOwnProperty('child')) {
-                    let idx,
-                      child = []
-                    // cache a static list
-                    rect.el.querySelectorAll('[data-idx]').forEach((el) => {
-                      idx = el.getAttribute('data-idx')
-                      let rect = rects[idx]
-                      //rect.css.pseudo = true
-                      if (rect && rect.minor === 'poster') {
-                        rect.ux.u = 'all' // force child on frame, for atlas/transform...?
-                        child.push(idx)
-                      }
-                    })
-                    rect.child = child
-                  }
-
-                  if (time.slice(2)) major.queue.push(...rect.child)
+                  // Frame capture: non-linear, but less brutal than ux.u=all
+                  rect.child.forEach((idx) => {
+                    const rect_cap = grade.rects[idx]
+                    mpos.set.inPolar(rect_cap)
+                    mpos.set.css(rect_cap, rFrame)
+                    // boost priority
+                    if (rect.css.pseudo || rect_cap.ux.i || rect_cap.ux.u) rect_cap.ux.u = 'all'
+                  })
                 }
               }
             }
@@ -1970,7 +2016,7 @@ const mpos = {
           // bug: trigger once like 'move', and update minor.other
           rect.ux.u = !rect.ux.u || rect.ux.u === 'css' ? 'css' : 'all'
         }
-      })
+      }
     },
     sync: async function (grade, rType) {
       if (document.hidden || !grade || !!grade?.wait || !grade?.atlas?.canvas || (rType && !grade?.major.queue.length)) {
@@ -1979,7 +2025,7 @@ const mpos = {
       }
 
       const { opt, time } = mpos.var
-      const { atlas, major } = grade
+      const { major, atlas } = grade
 
       //
       // Emulate Page Flow: reduce and detect changes
@@ -1995,7 +2041,7 @@ const mpos = {
       let sFenceSync = 1 / ((time.sFenceDelta - time.sFenceFPS) / (time.sFenceFPS / 2))
       sFenceSync *= 2
       // Beacon to render
-      let syncFPS = time.slice(1, true)
+      const syncFPS = time.slice(1, true)
 
       if (rType) {
         // SOFT-update: Observer or frame
@@ -2008,7 +2054,6 @@ const mpos = {
             if (rect) mpos.set.key(grade, rect)
           } else if (idx === 'delay' || idx === 'move' || idx === 'trim') {
             reflow = true
-
             if (idx === 'delay') {
               const timers = mpos.ux.timers
               rFrame = timers[idx][timers[idx].length - 1]
@@ -2016,8 +2061,7 @@ const mpos = {
               const now = time.sFence.oldTime
               const elapsed = now - time.sPhaseLast
               time.sPhaseLast = now
-
-              //quality = Math.max(opt[idx] / elapsed, sPhaseSync).toFixed(2)
+              // deviation from nominal
               sPhaseSync = Math.abs(0.5 - opt[idx] / elapsed)
             }
           }
@@ -2026,14 +2070,15 @@ const mpos = {
         //
         // Nominal Time Partition: real deviation
         quality = Math.max(Math.min(sFenceSync + sPhaseSync, 1), 0.5)
-        //console.log('?:', [+sFenceSync.toFixed(3), +sPhaseSync.toFixed(3), +quality.toFixed(3)].join('      __      '))
+        //console.log('?:', [+sFenceSync.toFixed(3), +sPhaseSync.toFixed(3), +quality.toFixed(3)].join('   __   '))
 
-        if (reflow && time.slice(1, true)) {
+        if (reflow) {
+          // && time.slice(1, true)
           const capture = {
             // deepest pseudo match
-            hover: [...grade.el.querySelectorAll(':hover')].pop(),
-            active: [...grade.el.querySelectorAll(':active')].pop(),
-            focus: [...grade.el.querySelectorAll(':focus')].pop()
+            hover: [...grade.el.querySelectorAll('[data-idx]:hover')].pop(),
+            active: [...grade.el.querySelectorAll('[data-idx]:active')].pop(),
+            focus: [...grade.el.querySelectorAll('[data-idx]:focus')].pop()
           }
 
           const reQueue = rFrame > 0
@@ -2043,18 +2088,12 @@ const mpos = {
         // HARD-update: viewport
         const root = document.body
         const idx = root.getAttribute('data-idx') || 9999
-        const rect = new mpos.mod.rect(root, {})
-        rect.idx = idx
-        rect.major = 'other'
-        rect.minor = 'wire'
-        rect.z = -idx
-        rect.fix = true
-        rect.add = 1
+        const rect = new mpos.mod.rect(root, { idx: idx, major: 'other', minor: 'wire', z: -idx, fix: true, add: 1 })
         rect.ux.i = 1
-        mpos.set.key(grade, rect)
-        grade.rects[idx] = rect
 
-        major.other.add(idx)
+        grade.rects[idx] = rect
+        mpos.set.key(grade, rect)
+        //major.other.add(idx)
       }
 
       //console.log('queue', major.queue.length)
@@ -2062,14 +2101,13 @@ const mpos = {
       //
       // Pass state to recursive loops
       let step = { rType: rType, rFrame: rFrame, syncFPS: syncFPS, quality: quality }
-      if (time.slice(1, false)) {
+      if (syncFPS) {
         // Feedback Sample: state boundary value analysis
         // ramp (not gate) early exit
         this.transforms(grade, step)
         // todo: is [...accumulate average] beneficial?
       } else {
         //let extraframes = time.slice(2)
-
         this.atlas(grade, step)
       }
     },
@@ -2084,24 +2122,6 @@ const mpos = {
       const cMap2 = atlas.cMap2
 
       let ctxC = atlas.ctx
-      if (!ctxC) {
-        //
-        // Offscreen Canvas
-        //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
-        //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
-
-        // etc: offscreen, transfercontrols, multiple readback
-        let options = { willReadFrequently: true, alpha: true }
-        ctxC = atlas.ctx = atlas.canvas.getContext('2d', options)
-        ctxC.imageSmoothingEnabled = false
-
-        //
-        // atlas key structure
-        // context reset when loop interrupted
-        //ctxC.reset()
-        ctxC.fillStyle = atlas.keyTest.alpha
-        ctxC.fillRect(atlas.keyTest.x, atlas.size - atlas.keyTest.y - cMap, cMap, cMap)
-      }
 
       if (step.queue === undefined) {
         // update queue, SOFT or HARD
@@ -2201,22 +2221,23 @@ const mpos = {
               // canvas xy, from top (FIFO)
 
               if (rect.x === undefined || rect.y === undefined) {
-                // texture scale
+                // cell mip 2x availability dynamic
                 rect.w = rect.hasOwnProperty('idxMip2') && atlas.idxMip2-- ? 2 : 1
 
-                // edge was padded and reserved
+                // slots for key (or 2x) reserved/offset
+                const _idx_ = rect.w === 1 ? rect.idxMip + 1 : rect.idxMip2
                 let x, y
 
                 if (rect.w === 1) {
                   // cell mip 1x (left)
                   const mSpan = atlas.cellMip - atlas.cellMip2
-                  x = (rect.idxMip % mSpan) * cMap
-                  y = Math.floor(rect.idxMip / mSpan) * cMap
+                  x = (_idx_ % mSpan) * cMap
+                  y = Math.floor(_idx_ / mSpan) * cMap
                 } else {
                   // cell mip 2x (right)
-                  let mSpan = atlas.cellMip / 2
-                  x = atlas.size - cMap2 * ((Math.floor(rect.idxMip2 / mSpan) % mSpan) + 1)
-                  y = cMap2 * (rect.idxMip2 % mSpan)
+                  const mSpan = atlas.cellMip / 2
+                  x = atlas.size - cMap2 * ((Math.floor(_idx_ / mSpan) % mSpan) + 1)
+                  y = cMap2 * (_idx_ % mSpan)
                 }
                 // canvas rounding trick, bitwise or
                 x = (0.5 + x) | 0
@@ -2354,12 +2375,12 @@ const mpos = {
             // top-tier bracket
             if (inPolar) {
               x = rect.wX || atlas.keyTest.x
-              y = 1 - rect.wY || atlas.keyTest.y
+              y = 1 - rect.wY || 1 - atlas.keyTest.y
               z = rect.w
             } else if (grade.inPolar === 4) {
               // partial update from split frame (trim), due to scroll delay
               x = atlas.keyTest.x
-              y = atlas.keyTest.y
+              y = 1 - atlas.keyTest.y
             }
           }
 
@@ -2515,7 +2536,6 @@ const mpos = {
 
       //
       // Sync Boundary: junction of mapcontrols and transform updates
-
       const slice = time.sFenceFPS_slice
       if (gate) {
         // syncFPS complete from updated transforms
@@ -2524,7 +2544,6 @@ const mpos = {
 
       time.sFenceDelta += time.sFence.getDelta()
       const syncFPS = time.sFenceDelta > time.sFenceFPS
-
       if (syncFPS) {
         // syncFPS aligned and ramp reset
         slice.gate = true
@@ -2558,7 +2577,7 @@ const mpos = {
         const quota = Math.floor(time.sFenceDelta / time.sFenceFPS)
         slice.boundary += quota // Math.floor((.6) / .3)
 
-        if (slice.boundary % 1000 == 0) slice.quota.count /= 2
+        if (slice.boundary % 1000 === 0) slice.quota.count /= 2
         mpos.var.tool.avg(quota, slice.quota)
 
         //stackoverflow.com/questions/11285065/#answer-51942991
@@ -2584,7 +2603,7 @@ const mpos = {
       if (time.slice(1, true)) {
         //
         // FPS slice minimum (60fps?)
-        if (grade && time.slice(2, true)) {
+        if (grade) {
           // animation step
           grade.group.traverse((obj) => {
             if (obj.animate) {
