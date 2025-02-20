@@ -300,7 +300,7 @@
       // Await
 
       const mp = setInterval(() => {
-        if (typeof window.mpos !== 'undefined' && document.readyState == 'complete') {
+        if (typeof window.mpos !== 'undefined' && document.readyState == 'complete' && !document.hidden) {
           clearInterval(mp)
 
           //
@@ -334,6 +334,7 @@
 
             //
             // Add DOM selector
+
             mpos.mod.add().then((res) => {
               console.log('mod add:', res)
 
