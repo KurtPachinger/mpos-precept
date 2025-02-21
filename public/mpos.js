@@ -206,11 +206,11 @@ const mpos = {
 
         if (term === 'first' || term === 'last') {
           let position = term === 'first' ? 0 : rects.length - 1
-          rect = Object.values(grade.rects)[position]
+          rect = Array.from(grade.rects)[position]
         } else if (term === 'atlas' || term === 'other') {
           rect = grade.major[term].rects
         } else {
-          rect = grade.rects[term]
+          rect = grade.rects.get(term)
         }
 
         return rect
@@ -407,11 +407,11 @@ const mpos = {
                   //console.log('none:', res.initiatorType, name, res.name)
                 } else {
                   // some use and parent
-                  ;['src', 'data'].forEach(function (attr) {
+                  ;['src', 'data'].forEach((attr) => {
                     let els = document.querySelectorAll(`[${attr}$="${name}"]`)
                     if (els.length) {
                       //console.log('some:', els)
-                      els.forEach(function (el) {
+                      els.forEach((el) => {
                         //console.log('parent:', el.parentNode)
                       })
                       entries.push(els)
@@ -456,6 +456,17 @@ const mpos = {
   init: function (opts = {}) {
     const vars = mpos.var
     const { opt, fov } = vars
+
+    //
+    // WebWorker...
+    vars.worker = new Worker('worker.js')
+
+    vars.worker.onmessage = (e) => {
+      const result = e.data
+      if (e.data.rect) vars.grade.rects.set(rect, idx, rect)
+      console.log('WW result:', result)
+    }
+    //
 
     const promise = new Promise((resolve, reject) => {
       //
@@ -593,7 +604,7 @@ const mpos = {
         const controller = gui.add(opt, key, ...param).listen()
 
         if (key === 'delay') {
-          controller.onFinishChange(function (v) {
+          controller.onFinishChange((v) => {
             ux.reflow({ type: 'delay', value: v })
           })
         }
@@ -657,7 +668,7 @@ const mpos = {
         rotated: false,
         pseudo: false
       }
-      frame = 0
+      frame = -1
       inPolar
       major
       minor
@@ -685,7 +696,7 @@ const mpos = {
       inPolar = mpos.var.opt.inPolar
       // sets and subsets
       txt = new WeakMap()
-      rects = {}
+      rects = new Map()
       major = {
         // live values
         queue: new Set(),
@@ -770,7 +781,7 @@ const mpos = {
               const idx = grade.elsMax++
               rect.idx = idx
               rect.el.setAttribute('data-idx', idx)
-              grade.rects[idx] = rect
+              grade.rects.set(idx.toString(), rect)
               rect.css = {
                 degree: 0,
                 radian: 0,
@@ -839,7 +850,7 @@ const mpos = {
         // Qualify Geometry Type
         if (manual) {
           // priority score
-          precept.manual.every(function (classMat) {
+          precept.manual.every((classMat) => {
             classMat = classMat.replace('.mp-', '')
             if (node.className.includes(classMat)) {
               mat = classMat
@@ -862,7 +873,7 @@ const mpos = {
         const z = depth - deep
 
         // SELF
-        const rect = grade.rects[sel.getAttribute('data-idx')]
+        const rect = grade.rects.get(sel.getAttribute('data-idx'))
 
         let mat = 'self'
         // specify empty or manual
@@ -878,7 +889,7 @@ const mpos = {
           for (let i = 0; i < children.length; i++) {
             const node = children[i]
 
-            const rect = grade.rects[node.getAttribute('data-idx')]
+            const rect = grade.rects.get(node.getAttribute('data-idx'))
             if (rect && rect.inPolar) {
               // CLASSIFY TYPE
               const block = node.matches(precept.block)
@@ -921,9 +932,7 @@ const mpos = {
 
       //
       // Complete Preparation
-      for (const idx in rects) {
-        const rect = rects[idx]
-
+      for (const [idx, rect] of rects) {
         if (rect.minor) {
           //rect.idx = Number(idx)
 
@@ -938,8 +947,7 @@ const mpos = {
           // free memory
           const node = document.querySelector('[data-idx="' + idx + '"]')
           node && node.removeAttribute('data-idx')
-          rects[idx] = null
-          delete rects[idx]
+          rects.delete(idx)
         }
       }
       return
@@ -980,7 +988,7 @@ const mpos = {
         if (opts.custom) {
           await tool
             .src(element, opts.custom, 'data')
-            .then(function (res) {
+            .then((res) => {
               console.log('res', res)
               // use document contentDocument.body instead of CSS3D
               if (element.contentDocument) {
@@ -1071,7 +1079,7 @@ const mpos = {
       if (vis) {
         if (node.nodeName === '#text' && typeof control === 'object') {
           // Node relative in control plot
-          vis = Object.values(control).some(function (tag) {
+          vis = Object.values(control).some((tag) => {
             const parent = node.parentElement
             const unlist = parent && parent.offsetWidth && parent.offsetHeight
             return unlist && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
@@ -1124,7 +1132,7 @@ const mpos = {
         }
 
         // add key
-        _major_.add(rect.idx)
+        _major_.add(rect.idx.toString())
       }
     },
     box: function (rect, opts = {}) {
@@ -1208,6 +1216,7 @@ const mpos = {
       function transform(obj) {
         //
         // TRANSFORMS: apply accumulate for natural box model
+        // note: boxes are positioned from center, so delay in update queue may seem stretched/misaligned
 
         // scale
         const w = unset.width
@@ -1311,7 +1320,6 @@ const mpos = {
     },
     css: function (rect, frame) {
       const { grade, tool } = mpos.var
-      const tick = 0.001
 
       //
       // CSS Style Transforms: accumulate a natural box model
@@ -1350,7 +1358,7 @@ const mpos = {
             break
           }
 
-          const _rect_ = grade.rects[el.getAttribute('data-idx')]
+          const _rect_ = grade.rects.get(el.getAttribute('data-idx'))
           if (_rect_?.ux.o) {
             // accumulate ancestor matrix
             style = _rect_.css.style || css.style // || window.getComputedStyle(el)
@@ -1401,6 +1409,8 @@ const mpos = {
         rect.frame = frame
       } else {
         // mouseevents (0) provide some increments
+        // note: rect/init values of -Infinity, -1, 0, 0.001 null may be interesting...
+        const tick = 0.001
         rect.frame += tick
       }
 
@@ -1512,6 +1522,7 @@ const mpos = {
         // ux
         rect.obj = mesh
         mesh.name = mesh.userData.idx = rect.idx
+        mesh.userData.el = rect.el
         mesh.layers.set(2)
         //mpos.set.use(mesh)
         rect.add++
@@ -1534,12 +1545,12 @@ const mpos = {
           const [width, height] = tool.pyr(source.naturalWidth, source.naturalHeight, 128)
 
           toCanvas(source, { style: { ...reset }, width: width, height: height, pixelRatio: 1 })
-            .then(function (clone) {
+            .then((clone) => {
               rect.add++
               mpos.set.opencv(clone, group, dummy)
               clone = null
             })
-            .catch(function (error) {
+            .catch((error) => {
               console.log('src problem', error)
             })
 
@@ -1574,10 +1585,10 @@ const mpos = {
             const res = loader.load(
               params,
               callback,
-              function (xhr) {
+              (xhr) => {
                 console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`)
               },
-              function (error) {
+              (error) => {
                 console.log('error', error)
               }
             )
@@ -1869,10 +1880,10 @@ const mpos = {
 
               //
               // Shape from label contours
-              Object.values(kmeans).forEach(function (label) {
+              Object.values(kmeans).forEach((label) => {
                 let mergedGeoms = []
                 if (label.retr) {
-                  Object.values(label.retr).forEach(function (retr) {
+                  Object.values(label.retr).forEach((retr) => {
                     // hierarchy shape
                     const shape = new THREE.Shape()
                     path(shape, retr.shape)
@@ -1939,18 +1950,20 @@ const mpos = {
       const { major } = grade
       const { frame, queue } = step
 
-      const reQueue = step.frame > 0
       //
       // Traverse: style transforms (set/unset), view settings, and qualify ux
 
-      for (const idx in grade.rects) {
-        const rect = grade.rects[idx]
+      const gate = time.slice(1, true) || step.syncFPS === 0
+      const isFrame = step.frame > 0
 
-        mpos.set.inPolar(rect)
+      for (const [idx, rect] of grade.rects) {
+        //const rect = grade.rects.get(idx)
+
+        if (gate) mpos.set.inPolar(rect)
         const inPolar = rect.inPolar >= grade.inPolar
-        mpos.set.css(rect, step.frame)
+        if (gate) mpos.set.css(rect, step.frame)
 
-        if (rect.major === 'atlas' && reQueue && inPolar) {
+        if (rect.major === 'atlas' && isFrame && inPolar) {
           if (rect.el.tagName === 'BODY') {
             // no propagate
             step.queue.add(idx)
@@ -1977,7 +1990,7 @@ const mpos = {
                     let idx
                     rect.el.querySelectorAll('[data-idx]').forEach((el) => {
                       idx = el.getAttribute('data-idx')
-                      const rect_cap = grade.rects[idx]
+                      const rect_cap = grade.rects.get(idx)
                       //rect.css.pseudo = true
                       if (rect_cap /*&& rect_cap.major !== 'other'*/) {
                         // force child on frame, for atlas/transform
@@ -1991,7 +2004,7 @@ const mpos = {
                   // child evaluate
                   for (const idx of rect.child) {
                     // Frame capture: non-linear, but less brutal than ux.u=all
-                    const rect_cap = grade.rects[idx]
+                    const rect_cap = grade.rects.get(idx)
                     mpos.set.inPolar(rect_cap)
                     mpos.set.css(rect_cap, step.frame)
 
@@ -2030,19 +2043,19 @@ const mpos = {
       sFenceSync *= 2
       let sPhaseSync = 0.5
 
-      const step = { frame: 0.001, queue: pointer, syncFPS: syncFPS, quality: 1 }
+      const step = { frame: 0, queue: pointer, syncFPS: syncFPS, quality: 1 }
 
       //
       // HARD-update: viewport
       if (!step.queue) {
         // new helper for document
         const root = document.body
-        const idx = root.getAttribute('data-idx') || 9999
+        const idx = root.getAttribute('data-idx') || '9999'
         const rect = new mpos.mod.rect(root, { idx: idx, major: 'other', minor: 'wire', z: -idx, fix: true, add: 1 })
         rect.ux.i = 1
 
         // output
-        grade.rects[idx] = rect
+        grade.rects.set(idx, rect)
         mpos.set.key(grade, rect)
         //major.other.add(idx)
       }
@@ -2055,7 +2068,7 @@ const mpos = {
       for (const idx of step.queue) {
         if (isFinite(idx)) {
           // new from Observer
-          const rect = grade.rects[idx]
+          const rect = grade.rects.get(idx)
           if (rect) mpos.set.key(grade, rect)
         } else if (idx === 'delay' || idx === 'move' || idx === 'trim') {
           reflow = true
@@ -2104,6 +2117,17 @@ const mpos = {
         //this.transforms(grade, step)
         // todo: is [...accumulate average] beneficial?
       }
+
+      //
+      // test
+      mpos.var.worker.postMessage(
+        {
+          msg: 'atlas',
+          origin: 'worker.js',
+          opts: { rect: false }
+        },
+        []
+      )
     },
     atlas: function (grade, step = {}) {
       const { tool, fov, reset } = mpos.var
@@ -2134,10 +2158,10 @@ const mpos = {
       step.paint = step.syncFPS === 0 && index >= 24 ? [index, Math.floor(index * 0.5)] : []
 
       for (const idx of step.queue) {
-        const rect = grade.rects[idx]
+        const rect = grade.rects.get(idx)
         //
         // Bottleneck: limit... or FPS will drop and skew artefacts will appear
-        if (rect && rect.hasOwnProperty('idxMip') && !shallow(rect)) {
+        if (rect && rect.hasOwnProperty('idxMip') && meta(rect)) {
           //
           //
           // Clone Options
@@ -2180,7 +2204,7 @@ const mpos = {
           // *dpr (dpr on pixelratio causes font subpixel jitter)
 
           toSvg(rect.el, options)
-            .then(function (clone) {
+            .then((clone) => {
               //
               let img = new Image()
               let load = img.addEventListener('load', (e) => {
@@ -2240,15 +2264,15 @@ const mpos = {
               console.log(error)
             })
             .finally(() => {
-              proceed()
+              next()
             })
         } else {
           // trim, move...
-          proceed()
+          next()
         }
       }
 
-      function proceed() {
+      function next() {
         // breakpoints
         const paint = step.paint.indexOf(index) > -1
         index--
@@ -2257,12 +2281,13 @@ const mpos = {
         }
       }
 
-      function shallow(rect) {
+      function meta(rect) {
         // was this from pseudo...?
         let pseudo = rect.ux.p || rect.css.pseudo
+        let ux = rect.ux.i || rect.ux.o
         let shallow = rect.ux.i === 0 && rect.ux.u === 'css'
 
-        return shallow && !pseudo
+        return pseudo || (ux && !shallow)
       }
     },
     transforms: function (grade, step, paint) {
@@ -2291,7 +2316,7 @@ const mpos = {
         // Meshes other (matches Loader) update on tail
         //grade.scroll = { x: window.scrollX, y: window.scrollY }
         for (const idx of major.other) {
-          const rect = grade.rects[idx]
+          const rect = grade.rects.get(idx)
 
           let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
           const dummy = mpos.set.box(rect, { scroll: scroll, frame: frame })
@@ -2327,7 +2352,7 @@ const mpos = {
       let count = 0
 
       for (const idx of major.atlas) {
-        const rect = grade.rects[idx]
+        const rect = grade.rects.get(idx)
         //let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
         let inPolar = rect.inPolar >= grade.inPolar
 
@@ -2458,7 +2483,7 @@ const mpos = {
         } else {
           // debounce concurrent
           requestIdleCallback(
-            function () {
+            () => {
               if (queue.length) {
                 mpos.step.sync(grade, pointer)
               }
@@ -2483,7 +2508,7 @@ const mpos = {
         }
 
         mpos.ux.timers[timer].push(
-          setTimeout(function () {
+          setTimeout(() => {
             const { opt, fov, camera, renderer, rendererCSS } = mpos.var
             // setTimeout is global scope, so strictly re-declare vars
 
@@ -2639,7 +2664,7 @@ const mpos = {
 
         events.raycaster.setFromCamera(events.pointer, camera)
         let intersects = events.raycaster.intersectObjects(grade.group.children, false)
-        intersects = intersects.filter(function (hit) {
+        intersects = intersects.filter((hit) => {
           const useId = hit.object.isInstancedMesh
           const target = useId ? hit.instanceId : 'r_idx_' + hit.object.userData.idx
 
@@ -2663,7 +2688,7 @@ const mpos = {
           //
           //if (hit.object) {
           // Synthetic Dispatch Event
-          const rect = useId ? Object.values(grade.rects)[hit.instanceId] : grade.rects[hit.object.userData.idx]
+          const rect = useId ? Array.from(grade.rects)[hit.instanceId][1] : grade.rects.get(hit.object.userData.idx)
           synthetic = { rect: rect, uv: hit.uv }
 
           //
@@ -2744,7 +2769,7 @@ const mpos = {
       // Event Candidate(s) to emit
       let emit
       const blacklist = '[data-engine^=three], section#mp, body, html'
-      const emits = document.elementsFromPoint(x, y).filter(function (el) {
+      const emits = document.elementsFromPoint(x, y).filter((el) => {
         return !el.matches(blacklist)
       })
 
