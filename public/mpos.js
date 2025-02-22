@@ -205,8 +205,9 @@ const mpos = {
         const grade = opts.var.grade
 
         if (term === 'first' || term === 'last') {
-          let position = term === 'first' ? 0 : rects.length - 1
-          rect = Array.from(grade.rects)[position]
+          const rects = Array.from(grade.rects)
+          const position = term === 'first' ? 0 : rects.length - 1
+          rect = rects[position]
         } else if (term === 'atlas' || term === 'other') {
           rect = grade.major[term].rects
         } else {
@@ -246,8 +247,8 @@ const mpos = {
           // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
         } else if (type === 'matrix') {
           // note: style may be version from css frame accumulating
-          rect.css.rotated = rect.bound.width / rect.bound.height !== rect.el.offsetWidth / rect.el.offsetHeight
-          differ = rect.css.rotated || style.transform?.startsWith('matrix')
+          const newBound = rect.bound.width / rect.bound.height !== rect.el.offsetWidth / rect.el.offsetHeight
+          differ = newBound || style.transform?.startsWith('matrix')
         } else if (type === 'tween') {
           // note: loose definition
           // ...transform, filter, overlay, allow-discrete
@@ -463,10 +464,8 @@ const mpos = {
 
     vars.worker.onmessage = (e) => {
       const result = e.data
-      if (e.data.rect) vars.grade.rects.set(rect, idx, rect)
       console.log('WW result:', result)
     }
-    //
 
     const promise = new Promise((resolve, reject) => {
       //
@@ -695,13 +694,14 @@ const mpos = {
       elsMax = 0 // data-idx
       inPolar = mpos.var.opt.inPolar
       // sets and subsets
-      txt = new WeakMap()
+
       rects = new Map()
       major = {
         // live values
         queue: new Set(),
         atlas: new Set(),
-        other: new Set()
+        other: new Set(),
+        text: new WeakMap()
       }
 
       //scroll: { x: window.scrollX, y: -window.scrollY }
@@ -763,7 +763,13 @@ const mpos = {
           if (mpos.set.inPolar(rect)) {
             // not empty
             if (node.nodeName === '#text') {
-              if (mpos.set.inPolar(rect, grade.rects) && sibling(node.parentNode)) {
+              const control = []
+              Array.from(grade.rects)
+                .flat()
+                .forEach((rect) => {
+                  if (rect.el) control.push(rect.el)
+                })
+              if (mpos.set.inPolar(rect, control) && sibling(node.parentNode)) {
                 // sanitize #text orphan (semantic or list) with parent visible
                 const wrap = document.createElement('span')
                 wrap.classList.add('mp-poster')
@@ -772,7 +778,7 @@ const mpos = {
 
                 rect.el = wrap
                 mpos.set.inPolar(rect)
-                grade.txt.set(node, wrap)
+                grade.major.text.set(node, wrap)
               }
             }
 
@@ -1082,7 +1088,7 @@ const mpos = {
           vis = Object.values(control).some((tag) => {
             const parent = node.parentElement
             const unlist = parent && parent.offsetWidth && parent.offsetHeight
-            return unlist && node.compareDocumentPosition(tag.el) & Node.DOCUMENT_POSITION_CONTAINS
+            return unlist && node.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_CONTAINS
           })
         } else {
           // 1: Node not empty
@@ -1341,10 +1347,10 @@ const mpos = {
 
         //
         // ux priority may escalate (declarative)
-        const rotated = tool.diffs('matrix', { rect: rect })
-        if (!css.style && (rect.ux.i || rotated)) css.style = window.getComputedStyle(rect.el)
+        let newBound = tool.diffs('matrix', { rect: rect })
+        if (!css.style && (rect.ux.i || newBound)) css.style = window.getComputedStyle(rect.el)
         // style computed for feature lazily / progressively
-        const priority = rect.css.pseudo || rotated || tool.diffs('tween', { rect: rect })
+        const priority = rect.css.pseudo || newBound || tool.diffs('tween', { rect: rect })
         rect.ux.o = priority ? rect.ux.i + 1 : rect.ux.i
 
         if (!css.style && rect.ux.o) css.style = window.getComputedStyle(rect.el)
@@ -1352,6 +1358,7 @@ const mpos = {
         let el = rect.el
         let max = 8 // deep tree?
         let style, transform, scale, degree, radian
+        const precept_allow = mpos.mod.precept.allow
 
         while (el && max--) {
           if (el.isSameNode(document.body) || el.isSameNode(document.documentElement) || !el.parentElement) {
@@ -1362,7 +1369,7 @@ const mpos = {
           if (_rect_?.ux.o) {
             // accumulate ancestor matrix
             style = _rect_.css.style || css.style // || window.getComputedStyle(el)
-            if (style && style !== 'none' && rotated /*tool.diffs('matrix', { rect: rect })*/) {
+            if (style && style !== 'none' && newBound /*tool.diffs('matrix', { rect: rect })*/) {
               transform = style.transform.replace(/(matrix)|[( )]/g, '')
               // transform matrix
               const [a, b] = transform.split(',')
@@ -1379,7 +1386,7 @@ const mpos = {
             }
           }
 
-          el = el.parentElement.closest('[data-idx]')
+          el = el.parentElement.closest(precept_allow) // or [data-idx]
         }
 
         // update rect properties from frame
@@ -1389,7 +1396,7 @@ const mpos = {
         rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
 
         // compare frame result to detect change
-        let newBound = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
+        newBound ||= JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
         let newMatrix = differ.scale !== rect.css.scale || differ.degree !== rect.css.degree
         if (newBound || newMatrix || rect.ux.o) {
           // feature testing
@@ -2049,9 +2056,8 @@ const mpos = {
       // HARD-update: viewport
       if (!step.queue) {
         // new helper for document
-        const root = document.body
-        const idx = root.getAttribute('data-idx') || '9999'
-        const rect = new mpos.mod.rect(root, { idx: idx, major: 'other', minor: 'wire', z: -idx, fix: true, add: 1 })
+        const idx = '9999'
+        const rect = new mpos.mod.rect(document.body, { idx: idx, major: 'other', minor: 'wire', z: -9, fix: true, add: 1 })
         rect.ux.i = 1
 
         // output
@@ -2152,7 +2158,7 @@ const mpos = {
 
       //
       // Queue settings
-      if (step.queue.size === 0) step.queue = major.atlas
+      if (step.syncFPS === 0) step.queue = major.atlas
       let index = step.queue.size
       // breakpoints to paint
       step.paint = step.syncFPS === 0 && index >= 24 ? [index, Math.floor(index * 0.5)] : []
@@ -2283,11 +2289,12 @@ const mpos = {
 
       function meta(rect) {
         // was this from pseudo...?
-        let pseudo = rect.ux.p || rect.css.pseudo
-        let ux = rect.ux.i || rect.ux.o
-        let shallow = rect.ux.i === 0 && rect.ux.u === 'css'
+        const pseudo = rect.ux.p || rect.css.pseudo
+        const ux = rect.ux.i || rect.ux.o
+        const shallow = rect.ux.i === 0 && rect.ux.u === 'css'
+        const init_add = step.syncFPS === 0 && rect.inPolar > grade.inPolar
 
-        return pseudo || (ux && !shallow)
+        return pseudo || (ux && !shallow) //|| init_add
       }
     },
     transforms: function (grade, step, paint) {
@@ -2483,7 +2490,7 @@ const mpos = {
         } else {
           // debounce concurrent
           requestIdleCallback(
-            () => {
+            function () {
               if (queue.length) {
                 mpos.step.sync(grade, pointer)
               }
