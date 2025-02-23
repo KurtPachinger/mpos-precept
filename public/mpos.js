@@ -202,6 +202,7 @@ const mpos = {
       find: function (term, opts = {}) {
         // find rects by key
         let rect
+        console.log(term, opts)
         const grade = opts.var.grade
 
         if (term === 'first' || term === 'last') {
@@ -1678,10 +1679,11 @@ const mpos = {
               grade.group.add(mesh)
               rect.obj = mesh
               mesh.name = mesh.userData.idx = rect.idx
+              //material.userData.SuperGif = loader
               // prioritize play state
               rect.ux.i = 1
               mesh.animate = { gif: loader }
-              mesh.animate.gif.play()
+              mesh.animate.gif.pause()
               //mpos.set.use(mesh)
               //mesh.layers.set(2)
 
@@ -2385,8 +2387,22 @@ const mpos = {
             targets.push('r_idx_' + rect.idx)
           }
 
-          if (rect.obj && rect.obj.animate && rect.obj.animate.gif) {
+          const SuperGif = rect?.obj?.animate?.gif
+          if (SuperGif && rect.frame >= frame) {
             // refresh SuperGif
+            const frames = SuperGif.get_frames()
+            const relative = mpos.var.time.sFence.oldTime % SuperGif.get_duration_ms()
+            let elapsed = 0
+            for (let i = 0; i < frames.length; i++) {
+              let delay = frames[i].delay
+              if (elapsed + delay < relative) {
+                elapsed += delay
+              } else {
+                SuperGif.move_to(i)
+                break
+              }
+            }
+
             rect.obj.material[4].map.needsUpdate = true
           }
         }
