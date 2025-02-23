@@ -243,10 +243,14 @@ const mpos = {
         // Different from Baseline Generic Primitive
 
         if (type === 'rect') {
+          // WARNING: bipolar feature test... not to be passed to ux.u?
+          // force flush, similar to syncFPS===0 (but saved rect)
+          // - NO ATLAS CELL (UX.CHANGE/PRIOR) AND MUST SET: frame:-1 :
+          // - NO SIZE ELEMENT AND MUST SET: ATLAS?
           differ = !rect.el.clientWidth || !rect.el.clientHeight
           // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
         } else if (type === 'matrix') {
-          // note: style may be version from css frame accumulating
+          // note: style source may re-prioritize by accumulating frames
           const newBound = rect.bound.width / rect.bound.height !== rect.el.offsetWidth / rect.el.offsetHeight
           differ = newBound || style.transform?.startsWith('matrix')
         } else if (type === 'tween') {
@@ -299,6 +303,17 @@ const mpos = {
 
         const eDPI = dprPractical / ((sample + distanceZ) / 2)
         fov.dpr = Math.max(Math.min(eDPI, 1), 0.5)
+      },
+      resort(object) {
+        //
+        // Structure of Map requires coercion: for access by index, reverse-order, or other query set
+        const array = []
+        Array.from(object)
+          .flat()
+          .forEach((rect) => {
+            if (rect.el) array.push(rect.el)
+          })
+        return array
       },
       old: function () {
         const { scene, grade } = mpos.var
@@ -763,12 +778,8 @@ const mpos = {
           if (mpos.set.inPolar(rect)) {
             // not empty
             if (node.nodeName === '#text') {
-              const control = []
-              Array.from(grade.rects)
-                .flat()
-                .forEach((rect) => {
-                  if (rect.el) control.push(rect.el)
-                })
+              const control = mpos.var.tool.resort(grade.rects)
+
               if (mpos.set.inPolar(rect, control) && sibling(node.parentNode)) {
                 // sanitize #text orphan (semantic or list) with parent visible
                 const wrap = document.createElement('span')
@@ -1347,7 +1358,7 @@ const mpos = {
 
         //
         // ux priority may escalate (declarative)
-        let newBound = tool.diffs('matrix', { rect: rect })
+        let newBound = tool.diffs('matrix', { rect: rect }) || rect.frame === -1
         if (!css.style && (rect.ux.i || newBound)) css.style = window.getComputedStyle(rect.el)
         // style computed for feature lazily / progressively
         const priority = rect.css.pseudo || newBound || tool.diffs('tween', { rect: rect })
@@ -1358,7 +1369,6 @@ const mpos = {
         let el = rect.el
         let max = 8 // deep tree?
         let style, transform, scale, degree, radian
-        const precept_allow = mpos.mod.precept.allow
 
         while (el && max--) {
           if (el.isSameNode(document.body) || el.isSameNode(document.documentElement) || !el.parentElement) {
@@ -1386,7 +1396,7 @@ const mpos = {
             }
           }
 
-          el = el.parentElement.closest(precept_allow) // or [data-idx]
+          el = el.parentElement.closest(mpos.mod.precept.allow) // or [data-idx]
         }
 
         // update rect properties from frame
@@ -1989,28 +1999,28 @@ const mpos = {
                 rect.ux.u = 'all'
                 rect.ux.p = false
 
-                if (rect.minor !== 'poster') {
-                  // child add
+                if (rect.major !== 'other' && rect.minor !== 'poster' && rect.minor !== 'native') {
+                  // enqueue children (ignore types which terminate)
                   if (!rect.hasOwnProperty('child')) {
-                    rect.child = new Set()
                     // cache a static list
-                    let idx
-                    rect.el.querySelectorAll('[data-idx]').forEach((el) => {
-                      idx = el.getAttribute('data-idx')
-                      const rect_cap = grade.rects.get(idx)
+                    rect.child = new Set()
+
+                    for (const [idx, child] of grade.rects) {
+                      // add children from full list (ignore major.other, which propagation lacks support)
+                      if (child.major === 'other') continue
+
                       //rect.css.pseudo = true
-                      if (rect_cap /*&& rect_cap.major !== 'other'*/) {
-                        // force child on frame, for atlas/transform
-                        // since top-down, we don't know if we can just do box
-                        //rect_cap.ux.u = 'all'
-                        rect.child.add(idx)
-                      }
-                    })
+                      // force child on frame, for atlas/transform
+                      // since top-down, we don't know if we can just do box
+                      //rect_cap.ux.u = 'all'
+                      if (rect.el.contains(child.el)) rect.child.add(idx)
+                    }
                   }
 
                   // child evaluate
                   for (const idx of rect.child) {
                     // Frame capture: non-linear, but less brutal than ux.u=all
+                    // may accrue frame ticks from multiple parents :)
                     const rect_cap = grade.rects.get(idx)
                     mpos.set.inPolar(rect_cap)
                     mpos.set.css(rect_cap, step.frame)
@@ -2038,7 +2048,7 @@ const mpos = {
         return
       }
 
-      const { opt, time } = mpos.var
+      const { opt, time, tool } = mpos.var
       const { major, atlas } = grade
 
       grade.wait = true
@@ -2099,7 +2109,7 @@ const mpos = {
 
       if (reflow || !pointer) {
         // && time.slice(1, true)
-        let capture = {
+        const capture = {
           // deepest pseudo match
           hover: [...grade.el.querySelectorAll('[data-idx]:hover')].pop(),
           active: [...grade.el.querySelectorAll('[data-idx]:active')].pop(),
@@ -2125,7 +2135,7 @@ const mpos = {
       }
 
       //
-      // test
+      // WebWorker
       mpos.var.worker.postMessage(
         {
           msg: 'atlas',
