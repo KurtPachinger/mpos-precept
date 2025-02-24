@@ -1,5 +1,7 @@
 import './mpos.css'
 import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
+import { parseGIF, decompressFrames } from 'gifuct-js'
+
 // ...OpenCV, SuperGif
 
 import * as THREE from 'three'
@@ -364,8 +366,8 @@ const mpos = {
                   if (obj.animate?.gif) {
                     // Cache loader SuperGif case study:
                     // hogs memory, frames backwards reused, strange loader signature...?
-                    obj.animate.gif.pause()
-                    obj.animate.gif = null
+                    //obj.animate.gif.pause()
+                    obj.animate.gif = obj.animate.context = obj.animate.patch = null
                   }
                   //
                   cache = obj.userData.cache
@@ -1562,6 +1564,46 @@ const mpos = {
         mesh.layers.set(2)
         //mpos.set.use(mesh)
         rect.add++
+      } else if (mime.match('.GIF')) {
+        const material = mat_shape.clone()
+        const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
+
+        const promisedGif = fetch(uri)
+          .then((resp) => resp.arrayBuffer())
+          .then((buff) => {
+            const gif = parseGIF(buff)
+            const frames = decompressFrames(gif, true)
+
+            // 0. parse meta
+            let duration = 0
+            frames.forEach((frame) => {
+              duration += frame.delay
+            })
+
+            // 1. full gif canvas
+            let gifCanvas = document.createElement('canvas')
+            let gifCtx = gifCanvas.getContext('2d')
+            gifCanvas.width = gif.lsd.width
+            gifCanvas.height = gif.lsd.height
+            // 2. patch gif canvas
+            let tempCanvas = document.createElement('canvas')
+            let tempCtx = tempCanvas.getContext('2d')
+
+            // 3. THREE Texture
+            material.map = new THREE.CanvasTexture(gifCanvas)
+            mesh.animate = { gif: frames, gifCtx: gifCtx, tempCtx: tempCtx, duration: duration, frameImageData: false }
+            // Output: mesh (...but added to group it fits to a box)
+            grade.group.add(mesh)
+            rect.obj = mesh
+            mesh.name = mesh.userData.idx = rect.idx
+            // prioritize play state
+            rect.ux.i = 1
+
+            return gif
+          })
+        console.log('promisedGif', promisedGif)
+
+        //
       } else {
         let gc
 
@@ -1605,15 +1647,17 @@ const mpos = {
             //
             // LOAD Custom: stage specific or generic
             if (mime.match('.GIF')) {
-              gc = source.cloneNode()
-              document.querySelector('#custom').appendChild(gc)
+              //gc = source.cloneNode()
+              //document.querySelector('#custom').appendChild(gc)
+              //
+              //
             }
 
             loader = mime.match('.SVG')
               ? new SVGLoader()
-              : mime.match('.GIF')
-              ? new SuperGif({ gif: gc, max_width: 64, auto_play: false })``
-              : mime.match('.JSON')
+              : //: mime.match('.GIF')
+              //? new SuperGif({ gif: gc, max_width: 64, auto_play: false })
+              mime.match('.JSON')
               ? new THREE.ObjectLoader()
               : new THREE.FileLoader()
 
@@ -1666,7 +1710,7 @@ const mpos = {
               // Output
               mpos.set.fit(dummy, group)
               if (!asset.data) mpos.set.cache(asset, uri, data)
-            } else if (mime.match('.GIF')) {
+            } /* else if (mime.match('.GIF')) {
               // File Extension: Graphics Interchange Format
               const canvas = loader.get_canvas()
               // SuperGif aka LibGif aka JsGif
@@ -1703,7 +1747,7 @@ const mpos = {
               // Cache TBD
               //asset.flag.loader = loader
               //asset.flag.material = material
-            }
+            }*/
 
             // set.use
           }
@@ -2373,37 +2417,61 @@ const mpos = {
 
           if (rect.obj) {
             if (dummy) mpos.set.use(rect.obj, true)
+            // Ray whitelist data-idx
+            targets.push('r_idx_' + rect.idx)
+
             // update visibility if loaded
             // off-screen boxes may "seem" more visible than instancedMesh because they don't have a third state
             let vis = rect.fix ? true : rect.inPolar >= grade.inPolar
             rect.obj.visible = vis
-            //if (rect.add === 3) {
+            //if ( rect.add === 3 ) {
             //  rect.add = 4
-            //  // todo: once loaded (like expose children) would not apply to other CSS3D
+            // ( while rect.obj.children.length-- ) show/hide nested groups }
+
             //
-            //}
+            // Update Animated Gif
+            const FRAMES = rect.obj?.animate?.gif
+            if (FRAMES && rect.frame >= frame) {
+              let { gif, gifCtx, tempCtx, duration, frameImageData } = rect.obj.animate
 
-            // Ray whitelist data-idx
-            targets.push('r_idx_' + rect.idx)
-          }
-
-          const SuperGif = rect?.obj?.animate?.gif
-          if (SuperGif && rect.frame >= frame) {
-            // refresh SuperGif
-            const frames = SuperGif.get_frames()
-            const relative = (mpos.var.time.sFence.oldTime % SuperGif.get_duration_ms()) / 10
-            let delay,
-              elapsed = 0
-            for (let i = 0; i < frames.length; i++) {
-              delay = frames[i].delay
-              elapsed += delay
-              if (elapsed >= relative) {
-                SuperGif.move_to(i)
-                break
+              // Offset time and frame
+              const relative = mpos.var.time.sFence.oldTime % duration
+              let index,
+                elapsed = 0
+              for (let i = 0; i < gif.length; i++) {
+                elapsed += gif[i].delay
+                if (elapsed >= relative) {
+                  index = i
+                  break
+                }
               }
-            }
 
-            rect.obj.material[4].map.needsUpdate = true
+              const frame = gif[index]
+              const dims = frame.dims
+
+              // Render gif: update patch
+              if (frame.disposalType === 2) {
+                gifCtx.clearRect(0, 0, gifCtx.canvas.width, gifCtx.canvas.height)
+              }
+
+              if (!frameImageData || dims.width != frameImageData.width || dims.height != frameImageData.height) {
+                tempCtx.canvas.width = dims.width
+                tempCtx.canvas.height = dims.height
+                frameImageData = tempCtx.createImageData(dims.width, dims.height)
+              }
+
+              // set the patch data as an override
+              frameImageData.data.set(frame.patch)
+              // draw the patch back over the canvas
+              tempCtx.putImageData(frameImageData, 0, 0)
+              gifCtx.drawImage(tempCtx.canvas, dims.left, dims.top)
+
+              // Perform Manipulation..?
+              //https://matt-way.github.io/gifuct-js/javascripts/main.js
+
+              // Update THREE
+              rect.obj.material[4].map.needsUpdate = true
+            }
           }
         }
       }
@@ -2691,7 +2759,7 @@ const mpos = {
                 obj.position.z = -9
               } else if (obj.animate.gif) {
                 // refresh SuperGif
-                obj.material.map.needsUpdate = true
+                //obj.material.map.needsUpdate = true
               }
             }
           })
