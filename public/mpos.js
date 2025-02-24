@@ -705,8 +705,8 @@ const mpos = {
         idxMip: this.#lock, // implies poster++ (from depth/type) and not other
         idxMip2: 0,
         // configure
-        size: 2_048,
-        cellMip: 14,
+        size: 512,
+        cellMip: 12,
         cellMip2: 4
       }
       elsMin = 0 // inPolar or Observer
@@ -949,7 +949,7 @@ const mpos = {
     treeSort: function (grade) {
       const { atlas, rects } = grade
       let cellMip2Max = (atlas.cellMip / 2) * (atlas.cellMip2 / 2)
-      const areaAvg = (atlas.size / atlas.cellMip) ** 2
+      const areaAvg = 256 * 48
 
       //
       // Complete Preparation
@@ -1612,7 +1612,7 @@ const mpos = {
             loader = mime.match('.SVG')
               ? new SVGLoader()
               : mime.match('.GIF')
-              ? new SuperGif({ gif: gc, max_width: 128 })
+              ? new SuperGif({ gif: gc, max_width: 64, auto_play: false })``
               : mime.match('.JSON')
               ? new THREE.ObjectLoader()
               : new THREE.FileLoader()
@@ -2391,13 +2391,13 @@ const mpos = {
           if (SuperGif && rect.frame >= frame) {
             // refresh SuperGif
             const frames = SuperGif.get_frames()
-            const relative = mpos.var.time.sFence.oldTime % SuperGif.get_duration_ms()
-            let elapsed = 0
+            const relative = (mpos.var.time.sFence.oldTime % SuperGif.get_duration_ms()) / 10
+            let delay,
+              elapsed = 0
             for (let i = 0; i < frames.length; i++) {
-              let delay = frames[i].delay
-              if (elapsed + delay < relative) {
-                elapsed += delay
-              } else {
+              delay = frames[i].delay
+              elapsed += delay
+              if (elapsed >= relative) {
                 SuperGif.move_to(i)
                 break
               }
