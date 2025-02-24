@@ -481,12 +481,16 @@ const mpos = {
 
     //
     // WebWorker...
+
     vars.worker = new Worker('worker.js')
 
     vars.worker.onmessage = (e) => {
       const result = e.data
       console.log('WW result:', result)
     }
+
+    //
+    //
 
     const promise = new Promise((resolve, reject) => {
       //
@@ -495,9 +499,13 @@ const mpos = {
 
       vars.scene = opts.scene || new THREE.Scene()
       vars.scene.autoUpdate = vars.scene.matrixAutoUpdate = vars.scene.matrixWorldAutoUpdate = false
+
+      //const canvas = document.createElement('canvas')
+
       vars.renderer =
         opts.renderer ||
         new THREE.WebGLRenderer({
+          //canvas: canvas
           //antialias: false,
           //precision: 'lowp',
           //powerPreference: 'low-power',
@@ -1283,20 +1291,17 @@ const mpos = {
             const degree = 'rotate(' + rect.css.degree + 'deg)'
             obj.userData.el.style.transform = [scale, degree].join(' ')
           }
-        } else if (obj.isGroup) {
+        } else {
+          //Generic
           // group implies loader, with arbitrary scale
-          const dummy = new THREE.Object3D()
+          const dummy = obj.isGroup ? new THREE.Object3D() : obj
+
           dummy.position.set(x, y, z)
           dummy.scale.set(w * rect.css.scale, h * rect.css.scale, d)
           obj.rotation.z = -rect.css.radian
 
           // note: group affects raycast events and click-targets
-          mpos.set.fit(dummy, obj)
-        } else {
-          // generic dummy, i.e. atlas
-          obj.position.set(x, y, z)
-          obj.scale.set(w * rect.css.scale, h * rect.css.scale, d)
-          obj.rotation.z = -rect.css.radian
+          if (obj.isGroup) mpos.set.fit(dummy, obj)
         }
 
         if (opt.arc) {
@@ -1438,7 +1443,9 @@ const mpos = {
         const newRectShallow = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
         const newRectDeep = differ.scale !== css.scale || differ.degree !== css.degree
 
-        if (newRectShallow || newRectDeep) ux.u.add('matrix')
+        if (newRectShallow || newRectDeep) {
+          ux.u.add('matrix')
+        }
 
         if (ux.o)
           // ...
@@ -1571,8 +1578,8 @@ const mpos = {
         const promisedGif = fetch(uri)
           .then((resp) => resp.arrayBuffer())
           .then((buff) => {
-            const gif = parseGIF(buff)
-            const frames = decompressFrames(gif, true)
+            let gif = parseGIF(buff)
+            let frames = decompressFrames(gif, true)
 
             // 0. parse meta
             let duration = 0
@@ -1583,15 +1590,62 @@ const mpos = {
             // 1. full gif canvas
             let gifCanvas = document.createElement('canvas')
             let gifCtx = gifCanvas.getContext('2d')
+
             gifCanvas.width = gif.lsd.width
             gifCanvas.height = gif.lsd.height
             // 2. patch gif canvas
             let tempCanvas = document.createElement('canvas')
             let tempCtx = tempCanvas.getContext('2d')
 
+            //
+            //
+            // Draw Gif Frames to cache: for update in step>transforms
+            // step>transformsmemory?
+            const [width, height] = tool.pyr(gif.lsd.width, gif.lsd.height, 64)
+            let frameImageData
+            frames.forEach((frame) => {
+              //
+              //
+              let dims = frame.dims
+
+              // Render gif: update patch
+              if (frame.disposalType === 2) {
+                gifCtx.clearRect(0, 0, gifCtx.canvas.width, gifCtx.canvas.height)
+              }
+
+              if (!frameImageData || dims.width != frameImageData.width || dims.height != frameImageData.height) {
+                tempCtx.canvas.width = dims.width
+                tempCtx.canvas.height = dims.height
+                frameImageData = tempCtx.createImageData(dims.width, dims.height)
+              }
+
+              // set the patch data as an override
+              frameImageData.data.set(frame.patch)
+              // draw the patch back over the canvas
+              tempCtx.putImageData(frameImageData, 0, 0)
+              gifCtx.drawImage(tempCtx.canvas, dims.left, dims.top)
+
+              //
+              // Thumbnail
+              const cached = document.createElement('canvas')
+              const ctx = cached.getContext('2d')
+              cached.width = width
+              cached.height = height
+              // cache
+              ctx.drawImage(gifCanvas, 0, 0, width, height)
+              frame.cache = cached
+
+              // release memory
+              frame.pixels = frame.colorTable = frame.patch = frame.dims = frame.disposalType = null
+            })
+
+            gif = gif.lsd = tempCtx = null
+
             // 3. THREE Texture
+            gifCanvas.width = width
+            gifCanvas.height = height
             material.map = new THREE.CanvasTexture(gifCanvas)
-            mesh.animate = { gif: frames, gifCtx: gifCtx, tempCtx: tempCtx, duration: duration, frameImageData: false }
+            mesh.animate = { gif: frames, duration: duration, gifCtx: gifCtx /*, tempCtx: tempCtx,frameImageData: false*/ }
             // Output: mesh (...but added to group it fits to a box)
             grade.group.add(mesh)
             rect.obj = mesh
@@ -2059,7 +2113,7 @@ const mpos = {
         const inPolar = rect.inPolar >= grade.inPolar
         if (gate && inPolar) mpos.set.css(rect, step.frame)
 
-        if (stateOld || (inPolar && rect.major === 'atlas')) {
+        if (inPolar && (stateOld || rect.major === 'atlas')) {
           // && inPolar && isFrame
           if (rect.el.tagName === 'BODY') {
             // no propagate
@@ -2143,11 +2197,11 @@ const mpos = {
       sFenceSync *= 2
       let sPhaseSync = 0.5
 
-      const step = { frame: 0, queue: pointer, syncFPS: syncFPS, quality: 1 }
+      const step = { frame: 0, queue: new Set(major.queue), syncFPS: syncFPS, quality: 1 }
 
       //
       // HARD-update: viewport
-      if (!step.queue) {
+      if (!pointer) {
         // new helper for document
         const idx = '9999'
         const rect = new mpos.mod.rect(document.body, { idx: idx, major: 'other', minor: 'wire', z: -9, fix: true, add: 1 })
@@ -2162,7 +2216,8 @@ const mpos = {
       //
       // SOFT-update: Observer or frame
       let reflow = false
-      step.queue = new Set(major.queue)
+      //step.queue = new Set(major.queue)
+      console.log('sync queue IN', step.queue.size)
       major.queue.clear()
       for (const idx of step.queue) {
         if (isFinite(idx)) {
@@ -2190,13 +2245,13 @@ const mpos = {
       step.quality = Math.max(Math.min(sFenceSync + sPhaseSync, 1), 0.5)
       //console.log('?:', [+sFenceSync.toFixed(3), +sPhaseSync.toFixed(3), +quality.toFixed(3)].join('   __   '))
 
-      if (reflow || !pointer) {
-        // && time.slice(1, true)
-
+      if (!pointer || reflow) {
         //
         // Emulate page flow: reduce and detect changes
-        this.rate(grade, step)
+        this.rate(grade, step) // reflow && time.slice(1, true)
       }
+
+      console.log('sync queue', step.queue.size)
 
       //
       // Pass state to recursive loops
@@ -2250,9 +2305,12 @@ const mpos = {
       // breakpoints to paint
       step.paint = step.syncFPS === 0 && index >= 24 ? [index, Math.floor(index * 0.5)] : []
 
+      console.log('atlas queue', step.queue.size)
+
       //
       function meta(rect) {
         const { ux } = rect
+        console.log(rect.el, ux)
         //
         // Composition of features: is change explicit, inherited, or unset?
         const shallow = ux.i === 0 && ux.u.size === 1 && ux.u.has('matrix')
@@ -2262,7 +2320,7 @@ const mpos = {
       }
 
       for (const idx of step.queue) {
-        const rect = grade.rects.get(idx)
+        let rect = grade.rects.get(idx)
         //
         // Bottleneck: limit... or FPS will drop and skew artefacts will appear
         if (rect && rect.hasOwnProperty('idxMip') && meta(rect)) {
@@ -2289,7 +2347,8 @@ const mpos = {
             }
           }
 
-          if (tool.diffs('rect', { rect: rect })) {
+          //if (tool.diffs('rect', { rect: rect })) {
+          if (!rect.el.clientWidth || !rect.el.clientHeight) {
             //options.style.display = 'inline-block' // tame pop-in
             options.width = rect.el.offsetWidth // force size
             options.height = rect.el.offsetHeight // force size
@@ -2359,7 +2418,7 @@ const mpos = {
                 img = null
               })
               img.src = clone
-              clone = null
+              options = clone = null
             })
             .catch((error) => {
               // image source bad or unsupported type
@@ -2432,7 +2491,7 @@ const mpos = {
             // Update Animated Gif
             const FRAMES = rect.obj?.animate?.gif
             if (FRAMES && rect.frame >= frame) {
-              let { gif, gifCtx, tempCtx, duration, frameImageData } = rect.obj.animate
+              let { gif, duration, gifCtx /*, tempCtx, frameImageData*/ } = rect.obj.animate
 
               // Offset time and frame
               const relative = mpos.var.time.sFence.oldTime % duration
@@ -2446,25 +2505,10 @@ const mpos = {
                 }
               }
 
-              const frame = gif[index]
-              const dims = frame.dims
-
-              // Render gif: update patch
-              if (frame.disposalType === 2) {
-                gifCtx.clearRect(0, 0, gifCtx.canvas.width, gifCtx.canvas.height)
-              }
-
-              if (!frameImageData || dims.width != frameImageData.width || dims.height != frameImageData.height) {
-                tempCtx.canvas.width = dims.width
-                tempCtx.canvas.height = dims.height
-                frameImageData = tempCtx.createImageData(dims.width, dims.height)
-              }
-
-              // set the patch data as an override
-              frameImageData.data.set(frame.patch)
-              // draw the patch back over the canvas
-              tempCtx.putImageData(frameImageData, 0, 0)
-              gifCtx.drawImage(tempCtx.canvas, dims.left, dims.top)
+              // Draw cache
+              // todo: or from atlas index
+              const cache = gif[index].cache
+              gifCtx.drawImage(cache, 0, 0, gifCtx.canvas.width, gifCtx.canvas.height)
 
               // Perform Manipulation..?
               //https://matt-way.github.io/gifuct-js/javascripts/main.js
