@@ -706,7 +706,7 @@ const mpos = {
     treeGrade: class {
       //
       // Build DOM Tree Structure
-      #lock = 1 // atlas key(s) reserved space
+      #lock = 0 // atlas key(s) reserved space
 
       // Template Isolate
       group = new THREE.Group()
@@ -958,8 +958,8 @@ const mpos = {
     },
     treeSort: function (grade) {
       const { atlas, rects } = grade
-      let cellMip2Max = (atlas.cellMip / 2) * (atlas.cellMip2 / 2)
-      const areaAvg = 256 * 48
+
+      const areaAvg = 128 * 64
 
       //
       // Complete Preparation
@@ -968,11 +968,9 @@ const mpos = {
           //rect.idx = Number(idx)
 
           const area = rect.el.offsetWidth * rect.el.offsetHeight
-          if ((rect.minor === 'poster' || (rect.major === 'atlas' && rect.minor === 'native')) && area > areaAvg && 0 < cellMip2Max) {
+          if ((rect.minor === 'poster' || (rect.major === 'atlas' && rect.minor === 'native')) && area > areaAvg) {
             // note: cumulative average requires async/await (deterministic)
-            //console.log('atlasW', rect)
-            rect.idxMip2 = atlas.idxMip2++
-            cellMip2Max--
+            rect.idxMip2 = true
           }
         } else {
           // free memory
@@ -1052,11 +1050,11 @@ const mpos = {
         // ... cellMip2 from average area ( & size & cellMip )
         atlas.cMap = atlas.size / atlas.cellMip
         atlas.cMap2 = atlas.cMap * 2
-        //
+
         //
         // Atlas Key structure
         // note: high/low values disappear in THREE shader alphaTest: 'rgba( 0/64, 255, 255, 0.25/0.5 )'
-        atlas.keyTest = { x: 0, y: 0.0001, alpha: 'rgba( 0, 128, 128, 0.125 )' } // empty structure (cyan)
+        atlas.keyTest = { x: atlas.size - atlas.cMap, y: atlas.size - (atlas.cMap + 0.0001), alpha: 'rgba( 0, 128, 128, 0.125 )' } // empty structure (cyan)
         // context reset when loop interrupted
         atlas.ctx.fillStyle = atlas.keyTest.alpha
         atlas.ctx.fillRect(atlas.keyTest.x, atlas.keyTest.y, atlas.cMap, atlas.cMap)
@@ -1639,7 +1637,9 @@ const mpos = {
               frame.pixels = frame.colorTable = frame.patch = frame.dims = frame.disposalType = null
             })
 
-            gif = gif.lsd = tempCtx = null
+            console.log('load .GIF', frames)
+            // release memory
+            gif = gif.frames = gif.gct = gif.lsd = tempCtx = null
 
             // 3. THREE Texture
             gifCanvas.width = width
@@ -1655,7 +1655,6 @@ const mpos = {
 
             return gif
           })
-        console.log('promisedGif', promisedGif)
 
         //
       } else {
@@ -2217,7 +2216,7 @@ const mpos = {
       // SOFT-update: Observer or frame
       let reflow = false
       //step.queue = new Set(major.queue)
-      console.log('sync queue IN', step.queue.size)
+      console.log('sync queue I:', step.queue.size)
       major.queue.clear()
       for (const idx of step.queue) {
         if (isFinite(idx)) {
@@ -2251,7 +2250,7 @@ const mpos = {
         this.rate(grade, step) // reflow && time.slice(1, true)
       }
 
-      console.log('sync queue', step.queue.size)
+      console.log('sync queue O:', step.queue.size)
 
       //
       // Pass state to recursive loops
@@ -2282,11 +2281,8 @@ const mpos = {
       const { atlas, major } = grade
       let { frame, queue, syncFPS, quality } = step
 
-      //
-      // Atlas constants
-      const ctxC = atlas.ctx
-      const cMap = atlas.cMap
-      const cMap2 = atlas.cMap2
+      // Constants for element/cell
+      const { ctx, cMap, cMap2, cellMip, cellMip2 } = atlas
       const inline = {
         style: { ...reset },
         canvasWidth: cMap,
@@ -2310,7 +2306,7 @@ const mpos = {
       //
       function meta(rect) {
         const { ux } = rect
-        console.log(rect.el, ux)
+        //console.log(rect.el, ux)
         //
         // Composition of features: is change explicit, inherited, or unset?
         const shallow = ux.i === 0 && ux.u.size === 1 && ux.u.has('matrix')
@@ -2324,10 +2320,7 @@ const mpos = {
         //
         // Bottleneck: limit... or FPS will drop and skew artefacts will appear
         if (rect && rect.hasOwnProperty('idxMip') && meta(rect)) {
-          //
-          //
-          // Clone Options
-          // Unset or override element box style
+          // Clone Options: unset or override element box style
           let options = structuredClone(inline)
           // tile scale
           const wSize = rect.hasOwnProperty('idxMip2') ? cMap2 : cMap
@@ -2366,19 +2359,26 @@ const mpos = {
 
           toSvg(rect.el, options)
             .then((clone) => {
-              //
+              // svg preserves detail and is smaller file (but are canvas clones released from memory?)
               let img = new Image()
               let load = img.addEventListener('load', (e) => {
                 removeEventListener('load', load)
 
-                // if (clone.width === 0 || clone.height === 0) {
                 // no box
-                // } else {
-                // canvas xy, from top (FIFO)
+                // if (clone.width === 0 || clone.height === 0) {}
 
+                // canvas xy, from top (FIFO)
                 if (rect.x === undefined || rect.y === undefined) {
-                  // cell mip 2x availability dynamic
-                  rect.w = rect.hasOwnProperty('idxMip2') && atlas.idxMip2-- ? 2 : 1
+                  // assign scale
+                  const cellMip2Max = (atlas.cellMip / 2) * (atlas.cellMip2 / 2) - 1 // minus 1 slot for keyTest
+                  if (rect.hasOwnProperty('idxMip2') && cellMip2Max > atlas.idxMip2) {
+                    // cell mip 2x: quota is async/indeterminate
+                    rect.idxMip2 = atlas.idxMip2++
+                    rect.w = 2
+                  } else {
+                    // cell mip 1x
+                    rect.w = 1
+                  }
 
                   // slots for key (or 2x) reserved/offset
                   const _idx_ = rect.w === 1 ? rect.idxMip : rect.idxMip2
@@ -2391,9 +2391,16 @@ const mpos = {
                     y = Math.floor(_idx_ / mSpan) * cMap
                   } else {
                     // cell mip 2x (right)
-                    const mSpan = atlas.cellMip / 2
-                    x = atlas.size - cMap2 * ((Math.floor(_idx_ / mSpan) % mSpan) + 1)
-                    y = cMap2 * (_idx_ % mSpan)
+                    //
+                    //const mSpan = atlas.cellMip / 2 // at half-count, the 2x size will reach limit appropriately
+                    //x = atlas.size - cMap2 * ((Math.floor(_idx_ / mSpan) % mSpan) + 1)
+                    //y = cMap2 * (_idx_ % mSpan)
+                    //
+                    // alternate:
+                    // start at x-offset: -"gutter:
+                    const xOrigin = atlas.size - cMap * cellMip2
+                    x = xOrigin + (_idx_ % (cellMip2 / 2)) * cMap2
+                    y = Math.floor(_idx_ / (cellMip2 / 2)) * cMap2
                   }
                   // canvas rounding trick, bitwise or
                   x = (0.5 + x) | 0
@@ -2410,8 +2417,8 @@ const mpos = {
                 }
 
                 const wSize = rect.w > 1 ? cMap2 : cMap
-                ctxC.clearRect(rect.x, rect.y, wSize, wSize)
-                ctxC.drawImage(e.target, rect.x, rect.y, wSize, wSize)
+                ctx.clearRect(rect.x, rect.y, wSize, wSize)
+                ctx.drawImage(e.target, rect.x, rect.y, wSize, wSize)
                 //}
 
                 img.remove()
