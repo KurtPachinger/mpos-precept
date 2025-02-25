@@ -480,16 +480,11 @@ const mpos = {
 
     //
     // WebWorker...
-
     vars.worker = new Worker('worker.js')
-
     vars.worker.onmessage = (e) => {
       const result = e.data
       console.log('WW result:', result)
-    }
-
-    //
-    //
+    } // -->
 
     const promise = new Promise((resolve, reject) => {
       //
@@ -727,8 +722,8 @@ const mpos = {
       major = {
         // live values
         queue: new Set(),
-        atlas: [],
-        other: [],
+        atlas: new Map(),
+        other: new Map(),
         text: new WeakMap()
       }
 
@@ -809,7 +804,7 @@ const mpos = {
             if (rect.inPolar >= 2) {
               // Element in Document
               const idx = grade.elsMax++
-              rect.idx = idx
+              rect.idx = idx.toString()
               rect.el.setAttribute('data-idx', idx)
               grade.rects.set(idx.toString(), rect)
               rect.css = {
@@ -1148,7 +1143,7 @@ const mpos = {
     key: function (grade, rect) {
       const _major_ = grade.major[rect.major]
 
-      if (_major_.indexOf(rect.idx) === -1) {
+      if (!_major_.has(rect.idx)) {
         grade.elsMin++
         if (rect.minor === 'poster' || (rect.major === 'atlas' && rect.minor === 'native')) {
           // Instanced
@@ -1160,7 +1155,7 @@ const mpos = {
         }
 
         // add key
-        _major_.push(rect.idx.toString())
+        _major_.set(_major_.size, rect.idx.toString())
       }
     },
     box: function (rect, opts = {}) {
@@ -1565,6 +1560,7 @@ const mpos = {
         rect.obj = mesh
         mesh.name = mesh.userData.idx = rect.idx
         mesh.userData.el = rect.el
+
         mesh.layers.set(2)
         //mpos.set.use(mesh)
         rect.add++
@@ -2295,7 +2291,7 @@ const mpos = {
 
       //
       // Queue settings
-      if (step.syncFPS === 0) step.queue = new Set(major.atlas)
+      if (step.syncFPS === 0) step.queue = new Set(major.atlas.values())
       let index = step.queue.size
       // breakpoints to paint
       step.paint = step.syncFPS === 0 && index >= 24 ? [index, Math.floor(index * 0.5)] : []
@@ -2476,8 +2472,7 @@ const mpos = {
         // Meshes other (matches Loader) update on tail
         //grade.scroll = { x: window.scrollX, y: window.scrollY }
 
-        for (let count = 0; count < major.other.length; count++) {
-          const idx = major.other[count]
+        for (const [count, idx] of major.other) {
           const rect = grade.rects.get(idx)
 
           let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
@@ -2535,8 +2530,7 @@ const mpos = {
 
       const color = new THREE.Color()
 
-      for (let count = 0; count < major.atlas.length; count++) {
-        const idx = major.atlas[count]
+      for (const [count, idx] of major.atlas) {
         const rect = grade.rects.get(idx)
 
         //let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
@@ -2599,7 +2593,7 @@ const mpos = {
       }
 
       // Apply Updates
-      instanced.count = major.atlas.length
+      instanced.count = major.atlas.size
 
       //instanced.computeBoundingSphere() // cull and raycast
       //instanced.instanceMatrix.needsUpdate = true
@@ -2875,7 +2869,7 @@ const mpos = {
           //if (hit.object) {
           // Synthetic Dispatch Event
           // Set lacks array index:idx for atlas instanced element... map keeps an extra reference... array can be fine (if slower?)
-          const rect = useId ? grade.rects.get(grade.major.atlas[hit.instanceId]) : grade.rects.get(hit.object.userData.idx)
+          const rect = useId ? grade.rects.get(grade.major.atlas.get(hit.instanceId)) : grade.rects.get(hit.object.userData.idx)
           synthetic = { rect: rect, uv: hit.uv }
 
           //
