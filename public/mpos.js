@@ -1,7 +1,6 @@
 import './mpos.css'
 import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
 import { parseGIF, decompressFrames } from 'gifuct-js'
-
 // ...OpenCV, SuperGif
 
 import * as THREE from 'three'
@@ -204,7 +203,7 @@ const mpos = {
       find: function (term, opts = {}) {
         // find rects by key
         let rect
-        console.log(term, opts)
+
         const grade = opts.var.grade
 
         if (term === 'first' || term === 'last') {
@@ -728,8 +727,8 @@ const mpos = {
       major = {
         // live values
         queue: new Set(),
-        atlas: new Set(),
-        other: new Set(),
+        atlas: [],
+        other: [],
         text: new WeakMap()
       }
 
@@ -1149,7 +1148,7 @@ const mpos = {
     key: function (grade, rect) {
       const _major_ = grade.major[rect.major]
 
-      if (!_major_.has(rect.idx)) {
+      if (_major_.indexOf(rect.idx) === -1) {
         grade.elsMin++
         if (rect.minor === 'poster' || (rect.major === 'atlas' && rect.minor === 'native')) {
           // Instanced
@@ -1161,7 +1160,7 @@ const mpos = {
         }
 
         // add key
-        _major_.add(rect.idx.toString())
+        _major_.push(rect.idx.toString())
       }
     },
     box: function (rect, opts = {}) {
@@ -2216,7 +2215,7 @@ const mpos = {
       // SOFT-update: Observer or frame
       let reflow = false
       //step.queue = new Set(major.queue)
-      console.log('sync queue I:', step.queue.size)
+      //console.log('sync queue I:', step.queue.size)
       major.queue.clear()
       for (const idx of step.queue) {
         if (isFinite(idx)) {
@@ -2250,7 +2249,7 @@ const mpos = {
         this.rate(grade, step) // reflow && time.slice(1, true)
       }
 
-      console.log('sync queue O:', step.queue.size)
+      //console.log('sync queue O:', step.queue.size)
 
       //
       // Pass state to recursive loops
@@ -2296,12 +2295,12 @@ const mpos = {
 
       //
       // Queue settings
-      if (step.syncFPS === 0) step.queue = major.atlas
+      if (step.syncFPS === 0) step.queue = new Set(major.atlas)
       let index = step.queue.size
       // breakpoints to paint
       step.paint = step.syncFPS === 0 && index >= 24 ? [index, Math.floor(index * 0.5)] : []
 
-      console.log('atlas queue', step.queue.size)
+      //console.log('atlas queue', step.queue.size)
 
       //
       function meta(rect) {
@@ -2317,6 +2316,7 @@ const mpos = {
 
       for (const idx of step.queue) {
         let rect = grade.rects.get(idx)
+
         //
         // Bottleneck: limit... or FPS will drop and skew artefacts will appear
         if (rect && rect.hasOwnProperty('idxMip') && meta(rect)) {
@@ -2453,6 +2453,7 @@ const mpos = {
       const { atlas, major } = grade
       const { frame, queue, syncFPS } = step
       const instanced = atlas.instanced
+
       //
       // Update Meshes from queue
       // note: queue.size===0 is from mod>add, versus a reflow>pointer
@@ -2474,7 +2475,9 @@ const mpos = {
         //
         // Meshes other (matches Loader) update on tail
         //grade.scroll = { x: window.scrollX, y: window.scrollY }
-        for (const idx of major.other) {
+
+        for (let count = 0; count < major.other.length; count++) {
+          const idx = major.other[count]
           const rect = grade.rects.get(idx)
 
           let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
@@ -2531,10 +2534,11 @@ const mpos = {
       // Meshes atlas (general Instance) update priority and raycast
 
       const color = new THREE.Color()
-      let count = 0
 
-      for (const idx of major.atlas) {
+      for (let count = 0; count < major.atlas.length; count++) {
+        const idx = major.atlas[count]
         const rect = grade.rects.get(idx)
+
         //let uxForce = rect.ux.i || rect.ux.o || rect.ux.u
         const inPolar = rect.inPolar >= grade.inPolar
 
@@ -2592,12 +2596,10 @@ const mpos = {
           targets.push(Number(count))
           //targets: { instanceId:0, dataIdx: 0, rect: rect ... uv }
         }
-
-        count++
       }
 
       // Apply Updates
-      instanced.count = count
+      instanced.count = major.atlas.length
 
       //instanced.computeBoundingSphere() // cull and raycast
       //instanced.instanceMatrix.needsUpdate = true
@@ -2863,6 +2865,7 @@ const mpos = {
         // Synthetic Event: bottom phase (Native and Three)
         if (intersects.length) {
           const hit = intersects[0]
+
           //console.log('hit', hit)
           const useId = hit.object.isInstancedMesh
 
@@ -2871,7 +2874,8 @@ const mpos = {
           //
           //if (hit.object) {
           // Synthetic Dispatch Event
-          const rect = useId ? Array.from(grade.rects)[hit.instanceId][1] : grade.rects.get(hit.object.userData.idx)
+          // Set lacks array index:idx for atlas instanced element... map keeps an extra reference... array can be fine (if slower?)
+          const rect = useId ? grade.rects.get(grade.major.atlas[hit.instanceId]) : grade.rects.get(hit.object.userData.idx)
           synthetic = { rect: rect, uv: hit.uv }
 
           //

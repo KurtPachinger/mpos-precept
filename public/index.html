@@ -343,7 +343,7 @@
               const idxJSON = Object3D.getAttribute('data-idx')
               const rect = mpos.fnVar('find', idxJSON, {})
               // Loader status...?
-              console.log('Loaded obj callback...?:', rect.obj)
+              console.log('Load status add/obj...?:', rect)
               // Meanwhile flip-y (scale(-1, 0) flickers visibly)
               rect.el.style.transform = 'rotateZ(180deg)'
               rect.el.classList.add('blink')
