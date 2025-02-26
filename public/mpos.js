@@ -489,7 +489,7 @@ const mpos = {
     vars.worker = new Worker('worker.js')
     vars.worker.onmessage = (e) => {
       const result = e.data
-      console.log('WW result:', result)
+      console.log('WW message:', result)
     } // -->
 
     const promise = new Promise((resolve, reject) => {
@@ -1118,7 +1118,7 @@ const mpos = {
           if (node.tagName) {
             // 2: Node is tag
             vis++
-            rect.bound = node.getBoundingClientRect()
+
             const bound = rect.bound
 
             const style = rect.css?.style || node.style
@@ -1360,6 +1360,7 @@ const mpos = {
         // Reset diffs feature
         css.scale = 1
         css.transform = css.degree = css.radian = 0
+        const stateOld = ux.u.has('pseudo')
         ux.u.clear()
 
         // => rate()
@@ -1382,15 +1383,19 @@ const mpos = {
         if (!css.style && (ux.i || matrix)) css.style = window.getComputedStyle(rect.el)
         // Priority ux: escalate
         if (rect.major === 'atlas') tool.diffs('pseudo', { rect: rect, capture: grade.capture })
-        const priority = tool.diffs('tween', { rect: rect }) || rect.ux.u.has('pseudo') || differ.pseudo || matrix
+        const priority = tool.diffs('tween', { rect: rect }) || ux.u.has('pseudo') || differ.pseudo || matrix
         ux.o = priority ? ux.i + 1 : ux.i
         ux.o += ux.u.size
-
+        // compute qualified stylesheet (not inline)
         if (!css.style && ux.o) css.style = window.getComputedStyle(rect.el)
 
+        //
+        // Constants
         let el = rect.el
         let max = 8 // deep tree?
         let style, transform, scale, degree, radian
+
+        const hover = stateOld || (rect.el.matches(':hover') && ux.o > 1 && ux.u.has('pseudo'))
 
         while (el && max--) {
           if (el.isSameNode(document.body) || el.isSameNode(document.documentElement) || !el.parentElement) {
@@ -1401,30 +1406,31 @@ const mpos = {
           // DOM traverse
           const _rect_ = grade.rects.get(el.getAttribute('data-idx'))
           if (_rect_?.ux.o) {
-            if (_rect_.ux.u.has('matrix')) {
-              // accumulate ancestor matrix
-              style = _rect_.css.style || css.style // || window.getComputedStyle(el)
+            // output (rect.o) was escalated, but matrix (rect.u) may be removed in post if no differ (to reduce atlas queue)
+            // if (_rect_.ux.u.has('matrix')) { // matrix was removed if unchanged, but output was escalated
+            // accumulate ancestor matrix
+            style = _rect_.css.style || css.style // || window.getComputedStyle(el)
 
-              if (style && style !== 'none' /*tool.diffs('matrix', { rect: rect })*/) {
-                transform = style.transform.replace(/(matrix)|[( )]/g, '')
-                // transform matrix
-                const [a, b] = transform.split(',')
-                if (a && b) {
-                  scale = Math.sqrt(a * a + b * b)
-                  degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
-                  radian = degree * (Math.PI / 180)
-                  // accrue transforms
-                  css.scale *= scale
-                  css.radian += radian
-                  css.degree += degree
-                  css.transform++
-                }
+            if (style && style !== 'none' /*tool.diffs('matrix', { rect: rect })*/) {
+              transform = style.transform.replace(/(matrix)|[( )]/g, '')
+              // transform matrix
+              const [a, b] = transform.split(',')
+              if (a && b) {
+                scale = Math.sqrt(a * a + b * b)
+                degree = Math.round(Math.atan2(b, a) * (180 / Math.PI))
+                radian = degree * (Math.PI / 180)
+                // accrue transforms
+                css.scale *= scale
+                css.radian += radian
+                css.degree += degree
+                css.transform++
               }
             }
-            if (ux.u.has('pseudo') && rect.el.matches(':hover')) {
+            //}
+            if (hover) {
               // hover bubbles, but not focus/active
               // new experiment, maybe redundant with pseudo but not other contageous effects
-              _rect_.ux.u.add('pseudo')
+              _rect_.ux.o++
             }
           }
 
@@ -1434,15 +1440,25 @@ const mpos = {
         // update rect properties from frame
         // to reduce queue of atlas/transforms
         rect.css = css
+        // bound belongs in inPolar, but pre/post is more "live" here
         rect.bound = rect.el.getBoundingClientRect()
         rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
 
-        // Implicit: compare frame result to detect change... i.e. parent had transform matrix?
-        const newRectShallow = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
-        const newRectDeep = differ.scale !== css.scale || differ.degree !== css.degree
+        //rect.bound = rect.el.getBoundingClientRect()
 
-        if (newRectShallow || newRectDeep) {
+        // Implicit: compare frame result to detect change... i.e. parent had transform matrix?
+        // shallow (but could be square rotated 90-degrees)
+        const newBounding = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
+        // deep
+        const newTransform = differ.scale !== css.scale || differ.degree !== css.degree
+
+        if (newBounding || newTransform) {
           ux.u.add('matrix')
+        }
+        if (!newBounding && !newTransform) {
+          // probably rotated, but no need to re-enqueue atlas draw
+          // but it needs to keep rotated for
+          ux.u.delete('matrix')
         }
 
         if (ux.o)
@@ -2106,14 +2122,15 @@ const mpos = {
         const { ux } = rect
         // probably "batch" features inexhaustively comprehension shiv
         const stateOld = ux.u.has('pseudo')
+
         // pseudo: check parent/child (like matrix) primarily for cascade style, but also bubble transforms
         // ...
 
+        if (gate) mpos.set.css(rect, step.frame)
         if (gate) mpos.set.inPolar(rect)
         const inPolar = rect.inPolar >= grade.inPolar
-        if (gate && inPolar) mpos.set.css(rect, step.frame)
 
-        if (inPolar && (stateOld || rect.major === 'atlas')) {
+        if (stateOld || (inPolar && rect.major === 'atlas')) {
           // && inPolar && isFrame
           if (rect.el.tagName === 'BODY') {
             // no propagate
@@ -2122,7 +2139,7 @@ const mpos = {
             // note: css should do this, but it is tied to rate pre/post and not a major feature (UNLESS PSEUDO IS THE WRONG TERM ~~ OTHER)???
             // should diffs apply the prop directly?
 
-            if (stateOld || ux.o || ux.u.size) {
+            if (stateOld || ux.u.size) {
               // time.slice(2)
               // element ux changed or elevated
               // note: pseudo evaluates first, so atlas unset has consistent off-state
@@ -2163,8 +2180,11 @@ const mpos = {
                     mpos.set.css(rect_cap, step.frame)
 
                     // boost priority
-                    //if (stateOld || rect_cap.ux.i || rect_cap.ux.u.size) rect_cap.ux.u.add('all')
-                    step.queue.add(idx)
+                    //rect_cap.ux.u.add('pseudo')
+                    // stateOld/pseudo effect (hover or otherwise) should attempt to curate children
+                    // by tween, or inPolar, or stylesheet pre/post... what is contageous in the bubble?
+                    // users COULD be FORCED to add an EMPTY ANIMATION to trigger TWEEN
+                    if (rect_cap.ux.u.has('pseudo') && rect_cap.ux.o > 1) step.queue.add(idx)
                   }
                 }
               }
@@ -2175,7 +2195,7 @@ const mpos = {
         if (opt.arc) {
           // mokeypatch a update
           // bug: trigger once like 'move', and update minor.other
-          rect.ux.u.add('all')
+          rect.ux.u.add('matrix')
         }
       }
     },
@@ -2217,7 +2237,7 @@ const mpos = {
       // SOFT-update: Observer or frame
       let reflow = false
       //step.queue = new Set(major.queue)
-      //console.log('sync queue I:', step.queue.size)
+
       major.queue.clear()
       for (const idx of step.queue) {
         if (isFinite(idx)) {
@@ -2251,8 +2271,6 @@ const mpos = {
         this.rate(grade, step) // reflow && time.slice(1, true)
       }
 
-      //console.log('sync queue O:', step.queue.size)
-
       //
       // Pass state to recursive loops
       this.atlas(grade, step)
@@ -2268,6 +2286,7 @@ const mpos = {
 
       //
       // WebWorker
+      /*
       mpos.var.worker.postMessage(
         {
           msg: 'atlas',
@@ -2276,6 +2295,7 @@ const mpos = {
         },
         []
       )
+      */
     },
     atlas: function (grade, step = {}) {
       const { tool, fov, reset } = mpos.var
@@ -2310,10 +2330,10 @@ const mpos = {
         //console.log(rect.el, ux)
         //
         // Composition of features: is change explicit, inherited, or unset?
-        const shallow = ux.i === 0 && ux.u.size === 1 && ux.u.has('matrix')
-        // const init_add = step.syncFPS === 0 && rect.inPolar > grade.inPolar
+        const shallow = ux.o === 0 && ux.u.size === 1 && ux.u.has('matrix')
+        const vis = step.syncFPS === 0 || rect.inPolar >= grade.inPolar
 
-        return ux.o || ux.u.has('pseudo') //|| init_add
+        return vis && ux.o > 1
       }
 
       for (const idx of step.queue) {
@@ -2447,6 +2467,7 @@ const mpos = {
         // breakpoints
         const paint = step.paint.indexOf(index) > -1
         index--
+
         if (paint || index === 0) {
           mpos.step.transforms(grade, step, paint)
         }
