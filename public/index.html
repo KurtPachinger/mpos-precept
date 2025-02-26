@@ -3,6 +3,8 @@
   <head>
     <title>mpos-precept</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Imposter DOM Rects in THREE." />
+    <link rel="preconnect" href="wikimedia.org" />
     <link rel="stylesheet" href="styles.css" />
     <link href="mpos.js" />
     <script type="importmap">
@@ -184,7 +186,7 @@
                     });
                   -->
                   <script>
-                    noscript
+                    let noscript
                   </script>
                 </td>
               </tr>
@@ -240,18 +242,24 @@
             <p>Media slides with content-aware policy.</p>
             <figure class="slides">
               <div class="track">
-                <img style="background-color: rgba(128, 0, 0, 0.5)" alt="" srcset="data:, 1920w" sizes="(min-width: 1920px)" src="data:," />
+                <img
+                  style="background-color: rgba(128, 0, 0, 0.5)"
+                  alt=""
+                  srcset="blank.gif, 1920w"
+                  sizes="(min-width: 1920px)"
+                  src="blank.gif"
+                />
                 <figcaption>srcset</figcaption>
               </div>
               <div class="track">
                 <picture style="background-color: rgba(128, 32, 32, 0.5)">
-                  <source srcset="data:," media="(orientation: portrait)" />
-                  <img alt="" src="data:," />
+                  <source srcset="blank.gif" media="(orientation: portrait)" />
+                  <img alt="" src="blank.gif" />
                   <figcaption>picture</figcaption>
                 </picture>
               </div>
               <div class="track">
-                <img style="background-color: rgba(128, 64, 64, 0.5)" alt="" src="data:," />
+                <img style="background-color: rgba(128, 64, 64, 0.5)" alt="" src="blank.gif" />
                 <figcaption>source</figcaption>
               </div>
               <div class="track">
@@ -284,7 +292,7 @@
           <article>
             <h2>Article 03: Indeterminate</h2>
             <p>Mutation and polymorphism and garbage.</p>
-            <img alt="" class="w50" src="data:," style="height: 8em; background-color: rgb(0, 0, 128)" />
+            <img alt="" class="w50" src="blank.gif" style="height: 8em; background-color: rgb(0, 0, 128)" />
             <ul>
               Proposal...
               <li>alert: !!can or !!is in a coalmine</li>

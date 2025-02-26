@@ -1,16 +1,17 @@
 import './mpos.css'
-import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
-import { parseGIF, decompressFrames } from 'gifuct-js'
 // ...OpenCV, SuperGif
 
 import * as THREE from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
+import Stats from 'three/examples/jsm/libs/stats.module.js'
+
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
-import Stats from 'three/examples/jsm/libs/stats.module.js'
-import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
+import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
+import { parseGIF, decompressFrames } from 'gifuct-js'
 
 const mpos = {
   fnVar: function (tool, value, opts = {}) {
@@ -245,10 +246,15 @@ const mpos = {
         // Different from Baseline Generic Primitive
 
         if (type === 'rect') {
+          // should TRUE indicate need for action, like other diffs, despire FALSE being the problem?
+          //rect.el.naturalWidth, rect.el.naturalHeight
+
           // WARNING: bipolar feature test... not to be passed to ux.u?
           // force flush, similar to syncFPS===0 (but saved rect)
           // - NO ATLAS CELL (UX.CHANGE/PRIOR) AND MUST SET: frame:-1 :
           // - NO SIZE ELEMENT AND MUST SET: ATLAS?
+          //
+
           differ = !rect.el.clientWidth || !rect.el.clientHeight
           // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
         } else if (type === 'matrix') {
@@ -2338,6 +2344,7 @@ const mpos = {
 
           //if (tool.diffs('rect', { rect: rect })) {
           if (!rect.el.clientWidth || !rect.el.clientHeight) {
+            // naturalWidth, naturalHeight
             //options.style.display = 'inline-block' // tame pop-in
             options.width = rect.el.offsetWidth // force size
             options.height = rect.el.offsetHeight // force size
