@@ -265,9 +265,10 @@ const mpos = {
         } else if (type === 'tween') {
           // note: loose definition
           // ...transform, filter, overlay, allow-discrete
-          differ =
+          const keyframes =
             (style.transitionProperty !== '' && parseFloat(style.transitionDuration) > 0) ||
             (style.animationName !== 'none' && style.animationPlayState === 'running')
+          differ = keyframes
         } else if (type === 'flow') {
           // note: if position overflows scrollOffset, canvas may not draw
           differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
@@ -662,7 +663,11 @@ const mpos = {
       native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
       cors: `iframe,object,.yt`.split(','),
       unset: `.mp-offscreen`.split(','),
-
+      //
+      tween:
+        `width,height,border,margin,padding,top,right,bottom,left,position,flex,display,visibility,opacity,mask,filter,mix-blend-mode,background-blend-mode,color,background,font,text-align,float,border-radius,box-shadow,animation,transition`.split(
+          ','
+        ),
       //
       // Code Comment
       parse: function (node) {
@@ -1344,7 +1349,7 @@ const mpos = {
       return res
     },
     css: function (rect, frame) {
-      const { grade, tool } = mpos.var
+      const { grade, tool, time } = mpos.var
 
       //
       // CSS Style Transforms: accumulate a natural box model
@@ -1356,10 +1361,11 @@ const mpos = {
 
         //
         // Implicit: diffs reference
-        const differ = { bound: rect.bound, scale: css.scale, degree: css.degree, pseudo: ux.u.has('pseudo') }
+        const differ = { bound: rect.bound, degree: css.degree, scale: css.scale, pseudo: ux.u.has('pseudo'), tween: css.tween }
         // Reset diffs feature
         css.scale = 1
         css.transform = css.degree = css.radian = 0
+        css.tween = {}
         const stateOld = ux.u.has('pseudo')
         ux.u.clear()
 
@@ -1394,6 +1400,7 @@ const mpos = {
         let el = rect.el
         let max = 8 // deep tree?
         let style, transform, scale, degree, radian
+        const allow = mpos.mod.precept.allow
 
         const hover = stateOld || (rect.el.matches(':hover') && ux.o > 1 && ux.u.has('pseudo'))
 
@@ -1434,12 +1441,17 @@ const mpos = {
             }
           }
 
-          el = el.parentElement.closest(mpos.mod.precept.allow) // or [data-idx]
+          el = el.parentElement.closest(allow) // or [data-idx]
         }
 
         // update rect properties from frame
         // to reduce queue of atlas/transforms
         rect.css = css
+        // curated shortlist of discrete style properties related to presentation
+        mpos.mod.precept.tween.forEach((prop) => {
+          if (css.style.hasOwnProperty(prop)) css.tween[prop] = css.style[prop]
+        })
+
         // bound belongs in inPolar, but pre/post is more "live" here
         rect.bound = rect.el.getBoundingClientRect()
         rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join('_')
@@ -1447,18 +1459,46 @@ const mpos = {
         //rect.bound = rect.el.getBoundingClientRect()
 
         // Implicit: compare frame result to detect change... i.e. parent had transform matrix?
+        // deep
+        const newTransform = differ.degree !== css.degree || differ.scale !== css.scale
         // shallow (but could be square rotated 90-degrees)
         const newBounding = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
-        // deep
-        const newTransform = differ.scale !== css.scale || differ.degree !== css.degree
+        //
+        const newTween = JSON.stringify(differ.tween) !== JSON.stringify(rect.css.tween)
 
-        if (newBounding || newTransform) {
+        if (newTransform || newBounding) {
           ux.u.add('matrix')
         }
-        if (!newBounding && !newTransform) {
-          // probably rotated, but no need to re-enqueue atlas draw
-          // but it needs to keep rotated for
-          ux.u.delete('matrix')
+        if (ux.u.has('matrix')) {
+          // Revoke explicit key for subjective sync (rate, atlas...)
+          if (!newTransform) {
+            // transformed, but not transforming (on frame)
+            if (!newBounding) {
+              // implies reference is unchanged (yet ux.o remains elevated by differs)
+              ux.u.delete('matrix')
+            } else if (differ.bound.width === rect.bound.width && differ.bound.height === rect.bound.height) {
+              // only position change (on page scroll), which invalidates extension of priority (toSvg)
+              ux.u.delete('matrix')
+            }
+          } else {
+            // transform does not require style update, or user qualification may intervene
+            // if no tweens and no i, we can reduce a lot of purely rotational redraws
+            // users could easily specify i=1 (native) or add a animation name
+            if (ux.o < 3 && ux.u.size < 2) {
+              // ux.i === 0 && !ux.u.has('tweens')
+              // ux.o < 3 && ux.u.size < 2
+              ux.u.delete('matrix')
+            }
+          }
+        }
+
+        if (ux.u.has('tween') && !newTween) {
+          // discard keyframes without change, unless a child of the element is tagged active
+          const actors = rect.el.querySelector(allow)
+          if (!actors && time.slice(4)) ux.u.delete('tween')
+        } else if (newTween && !ux.u.has('tween')) {
+          // detect incidental changes...?
+          ux.u.add('tween')
         }
 
         if (ux.o)
@@ -2103,11 +2143,13 @@ const mpos = {
 
       //deepest pseudo match (frame cache)
       const root = grade.el.parentElement
-      grade.capture = {
-        hover: [...root.querySelectorAll('[data-idx]:hover')].pop(),
-        active: [...root.querySelectorAll('[data-idx]:active')].pop(),
-        focus: [...root.querySelectorAll('[data-idx]:focus')].pop()
-      }
+
+      if (time.slice(2))
+        grade.capture = {
+          hover: [...root.querySelectorAll('[data-idx]:hover')].pop(),
+          active: [...root.querySelectorAll('[data-idx]:active')].pop(),
+          focus: [...root.querySelectorAll('[data-idx]:focus')].pop()
+        }
 
       //
       // Traverse: style transforms (set/unset), view settings, and qualify ux
@@ -2330,10 +2372,11 @@ const mpos = {
         //console.log(rect.el, ux)
         //
         // Composition of features: is change explicit, inherited, or unset?
-        const shallow = ux.o === 0 && ux.u.size === 1 && ux.u.has('matrix')
+        //const shallow = ux.o === 0 && ux.u.size === 1 && ux.u.has('matrix')
         const vis = step.syncFPS === 0 || rect.inPolar >= grade.inPolar
+        const lowpass = ux.o > 2 || ux.u.size > 0 || step.syncFPS === 0
 
-        return vis && ux.o > 1
+        return vis && ux.o > 1 && lowpass
       }
 
       for (const idx of step.queue) {
@@ -2342,6 +2385,7 @@ const mpos = {
         //
         // Bottleneck: limit... or FPS will drop and skew artefacts will appear
         if (rect && rect.hasOwnProperty('idxMip') && meta(rect)) {
+          //console.log('rect', rect.frame, rect.el, rect.ux)
           // Clone Options: unset or override element box style
           let options = structuredClone(inline)
           // tile scale
