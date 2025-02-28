@@ -9,13 +9,14 @@ mpos.init( /*proxy*/ )
 
 // Add element (and children) to scene
 const opts = {
-  grade: null,
   depth: 32,
   parse: function( comment ){ /*data*/ }
+  /* grade: inject */
 }
 mpos.mod.add( 'main', opts )
 ```
 
+### Markup
 ```html
 <!-- Loads mime as OpenCV to create Paths -->
 <img class="mp-loader" src="./Lena.jpg" />
@@ -28,8 +29,8 @@ mpos.mod.add( 'main', opts )
 
 <!-- Precept allows terminal form and terminates allowed div -->
 <form class="mp-allow">
-  <div class="mp-poster particle"><a>A1</a><a>A2</a></div>
-  <div class="mp-poster"><a>B2</a></div>
+  <div class="mp-poster"><a>sprite</a></div>
+  <div class="mp-poster"><a>sprite</a><a>sprite</a></div>
 </form>
 
 <!-- Node is parsed -->
@@ -39,10 +40,10 @@ mpos.mod.add( 'main', opts )
 ### Tools
 ```js
 // Element rect, with current meta
-const rect = mpos.fnVar( 'find', '123', {} )
+const rect = mpos.fnVar( 'find', '123' )
 
 // Element depth, to root and from slot
-const deep = mpos.fnVar( 'march', '#host', {} )
+const deep = mpos.fnVar( 'march', '#host' )
 
 // Element helper, to cast hierarchy
 const link = mpos.fnVar( 'chain', '#host', { count: 8, symbol: 'last' } )
