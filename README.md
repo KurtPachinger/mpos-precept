@@ -1,21 +1,16 @@
 # mpos-precept
 Imposter DOM rects in THREE
 ```js
-// use in standalone mode
-mpos.init()
+// Initialize containers and EventListeners
+const proxy = { scene: scene, camera: camera, renderer: renderer }
+mpos.init( /*proxy*/ )
 
-// use with existing scene
-mpos.init( { scene: scene, camera: camera, renderer: renderer } )
-```
-
-```js
-
+// Add element (and children) to scene
 const opts = {
+  grade: null,
   depth: 32,
   parse: function( comment ){ /*data*/ }
 }
-
-// add element to scene, and listen for updates
 mpos.mod.add( 'main', opts )
 ```
 ### grade
