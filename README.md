@@ -24,11 +24,11 @@ const link = mpos.fnVar( 'chain', '#host', { count: 8, symbol: 'last' } )
 ```
 
 ### Features
-- DOM tree structure is graded for media types:
+- [Precept Grade](https://github.com/KurtPachinger/mpos-precept/wiki/Process-Flow#precept-grade):
   - Tags allow user to specify node usage. Elements may be ignored, loaded as paths, or updated every frame.
-  - Loader supports/converts media: OpenCV, GIF, MP4, JSON, CSS3D.
+  - Loader supports/converts media types: OpenCV, GIF, MP4, JSON, CSS3D.
   - Texture atlas sets tiered cell area. Interface shows element visibility.
-- Sync queue frame:
+- [Sync Frame](https://github.com/KurtPachinger/mpos-precept/wiki/Process-Flow#sync-frame):
   - inPolar: Limit visible to user viewport
   - css: Styles propagate (matrix, pseudo) for event synthesis
   - time: FPS cues optimize performance
