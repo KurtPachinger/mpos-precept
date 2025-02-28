@@ -1,7 +1,7 @@
 # mpos-precept
-Imposter DOM rects in THREE.
+Imposter DOM rects in THREE. Synthetic event dispatch.
 
-### usage
+### Usage
 ```js
 // Initialize containers and EventListeners
 const proxy = { scene: scene, camera: camera, renderer: renderer }
@@ -16,14 +16,14 @@ const opts = {
 mpos.mod.add( 'main', opts )
 ```
 
-### tools
+### Tools
 ```js
 const rect = mpos.fnVar( 'find', '123', {} )
 const deep = mpos.fnVar( 'march', '#host', {} )
-const nest = mpos.fnVar( 'chain', '#host', { count: 8, symbol: 'last' } )
+const link = mpos.fnVar( 'chain', '#host', { count: 8, symbol: 'last' } )
 ```
 
-### features
+### Features
 - DOM tree structure is graded for media types:
   - Tags allow user to specify node usage. Elements may be ignored, loaded as paths, or updated every frame.
   - Loader supports/converts media: OpenCV, GIF, MP4, JSON, CSS3D.
@@ -34,10 +34,8 @@ const nest = mpos.fnVar( 'chain', '#host', { count: 8, symbol: 'last' } )
   - time: FPS cues optimize performance
   - differ: Detect active features and reduce frame updates
   - toSVG: Options qualify diverse metadata
-- Cache objects 
 
-
-## grade
+## Grade
 ```mermaid
 flowchart TB
 
@@ -66,9 +64,3 @@ c--no--->html-to-image
 poster-->html-to-image
 a-->loader
 ```
-### applications
-- menus: runtime, dynamic, translate, filesize, outsource, mixed-media
-- sentiment analysis: simulate, augment, local
-- advertise: immersive, context-aware
-- game: environment, prototype
-- test suite: comps, spec sheet
