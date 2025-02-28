@@ -13,6 +13,14 @@ const opts = {
 }
 mpos.mod.add( 'main', opts )
 ```
+
+### tools
+```js
+const rect = mpos.fnVar('find', '123', {})
+const deep = mpos.fnVar('march', '#host', {})
+const nest = mpos.fnVar('chain', '#host', { count: 8, symbol: 'last' })
+```
+
 ### grade
 ```mermaid
 flowchart TB
