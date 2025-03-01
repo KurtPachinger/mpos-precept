@@ -25,7 +25,7 @@ mpos.mod.add( 'main', opts )
 <object class="mp-loader" data="./Model.json"></object>
 
 <!-- Precept match CORS sets CSS3D -->
-<div class="yt mp-native"><iframe src="//youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media;"></iframe></div>
+<div class="yt mp-native"><iframe src="//youtube.com/embed/joOIBteSo1w"></iframe></div>
 
 <!-- Precept allows terminal form and terminates allowed div -->
 <form class="mp-allow">
