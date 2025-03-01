@@ -4,7 +4,7 @@ Imposter DOM rects in THREE. Synthetic event dispatch.
 ### Usage
 ```js
 // Initialize containers and EventListeners
-const proxy = { scene: scene, camera: camera, renderer: renderer }
+const proxy = { scene: s, camera: c, renderer: r }
 mpos.init( /*proxy*/ )
 
 // Add element (and children) to scene
