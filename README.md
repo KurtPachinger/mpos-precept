@@ -28,7 +28,7 @@ mpos.mod.add( 'main', opts )
 <object class="mp-loader" data="./Model.json"></object>
 
 <!-- Precept matches CORS and sets CSS3D -->
-<div class="yt mp-native">
+<div class="mp-native yt">
   <iframe src="//youtube.com/embed/CoerceTaint"></iframe>
 </div>
 
