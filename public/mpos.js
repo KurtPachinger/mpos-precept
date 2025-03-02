@@ -1093,6 +1093,7 @@ const mpos = {
 
       //
       // NOTE: await tree recursion is not complete (constants race)
+
       mpos.step.sync(grade)
       return opts || grade
     }
@@ -1125,7 +1126,6 @@ const mpos = {
             vis++
 
             const bound = rect.bound
-
             const style = rect.css?.style || node.style
 
             const alphaTest =
@@ -1600,7 +1600,7 @@ const mpos = {
       // source is image
       let mime = uri && uri.match(/\.(json|svg|gif|jpg|jpeg|png|webp|webm|mp4|ogv)(\?|$)/gi)
       mime = mime ? mime[0].toUpperCase() : 'File'
-      let loader = !!((mime === 'File' && uri) || mime.match(/(JSON|SVG|GIF)/g))
+      let loader = !!((mime === 'File' && uri) || mime.match(/(JSON|SVG|GIF)/g)) // remove GIF since SuperGif was removed
 
       //
       // Cache: models (or whatever...?)
