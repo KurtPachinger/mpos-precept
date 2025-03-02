@@ -16,21 +16,25 @@ const opts = {
 mpos.mod.add( 'main', opts )
 ```
 
-### Markup
+### Markup Examples
 ```html
+<!-- Precept defaults -->
+<p>atlas cell</p>
+
 <!-- Loads mime as OpenCV to create Paths -->
 <img class="mp-loader" src="./Lena.jpg" />
 
 <!-- Loads mime as JSONLoader -->
 <object class="mp-loader" data="./Model.json"></object>
 
-<!-- Precept match CORS sets CSS3D -->
+<!-- Precept matches CORS and sets CSS3D -->
 <div class="yt mp-native"><iframe src="//youtube.com/embed/CoerceTaint"></iframe></div>
 
 <!-- Precept allows terminal form and terminates allowed div -->
 <form class="mp-allow">
-  <div class="mp-poster"><a>sprite</a></div>
-  <div class="mp-poster"><a>sprite</a><a>sprite</a></div>
+  <div class="mp-poster"><a>bake</a></div>
+  <div class="mp-poster"><a>bake</a><a>composite</a></div>
+  <a>atlas cell</a>
 </form>
 
 <!-- Node is parsed -->
