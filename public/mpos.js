@@ -8,6 +8,7 @@ import Stats from 'three/examples/jsm/libs/stats.module.js'
 
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
 import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
@@ -81,7 +82,7 @@ const mpos = {
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 8,
-      inPolar: 3,
+      inPolar: 4,
       arc: 0,
       delay: 0,
       update: function () {
@@ -702,7 +703,7 @@ const mpos = {
       }
       ux = { i: 0, o: 0, u: new Set() /*p:*/ }
       frame = -1
-      inPolar
+      inPolar = 2
       major
       minor
 
@@ -726,7 +727,7 @@ const mpos = {
       }
       elsMin = 0 // inPolar or Observer
       elsMax = 0 // data-idx
-      inPolar = mpos.var.opt.inPolar
+      inPolar = 0
       // sets and subsets
 
       rects = new Map()
@@ -1598,9 +1599,9 @@ const mpos = {
       // source is location or contains one
       let uri = typeof source === 'string' ? source : source.data || source.src || source.currentSrc || source.href
       // source is image
-      let mime = uri && uri.match(/\.(json|svg|gif|jpg|jpeg|png|webp|webm|mp4|ogv)(\?|$)/gi)
+      let mime = uri && uri.match(/\.(json|gltf|glb|svg|gif|jpg|jpeg|png|avif|heif|hevc|heic|avc|webp|webm|mp4|mov|ogv)(\?|$)/gi)
       mime = mime ? mime[0].toUpperCase() : 'File'
-      let loader = !!((mime === 'File' && uri) || mime.match(/(JSON|SVG|GIF)/g)) // remove GIF since SuperGif was removed
+      let loader = !!((mime === 'File' && uri) || mime.match(/^(.JSON|.GLTF|.GLB|.SVG|.GIF)$/gi)) // supported THREE.Loader standard and callback
 
       //
       // Cache: models (or whatever...?)
@@ -1609,7 +1610,7 @@ const mpos = {
       //console.log(source, uri, mime, loader, dummy )
       let group = rect.obj
 
-      if (mime.match(/(WEBM|MP4|OGV)/g)) {
+      if (mime.match(/^(.WEBM|.MP4|.OGV)$/gi)) {
         // HANDLER: such as VideoTexture, AudioLoader...
         const material = mat_shape.clone()
         const texture = new THREE.VideoTexture(source)
@@ -1763,12 +1764,18 @@ const mpos = {
               //
             }
 
+            //mime.match(/^(GLTF|GLB)$/gi)
+            //cdn.jsdelivr.net/npm/three-gltf-loader@1.111.0/index.min.js
+            //import data from "//cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/loaders/GLTFLoader.js" with { type: "json" };
+
             loader = mime.match('.SVG')
               ? new SVGLoader()
               : //: mime.match('.GIF')
               //? new SuperGif({ gif: gc, max_width: 64, auto_play: false })
               mime.match('.JSON')
               ? new THREE.ObjectLoader()
+              : mime.match(/^(GLTF|GLB)$/gi)
+              ? new THREE.GLTFLoader()
               : new THREE.FileLoader()
 
             const params = loader instanceof THREE.Loader ? uri : callback
@@ -1798,6 +1805,8 @@ const mpos = {
 
               mpos.set.fit(dummy, group, { add: data })
               if (!asset.data) mpos.set.cache(asset, uri, data)
+            } else if (mime.match(/^(.GLTF|.GLB)$/gi)) {
+              console.log('setPath, decompress, and parse', data)
             } else if (mime.match('.SVG')) {
               // Object.data Extension: Scalable Vector Graphics Format
               const paths = data.paths || []
@@ -2574,9 +2583,10 @@ const mpos = {
 
             //
             // Update Animated Gif
-            const FRAMES = rect.obj?.animate?.gif
-            if (FRAMES && rect.frame >= frame && time.slice(8)) {
-              let { gif, duration, gifCtx /*, tempCtx, frameImageData*/ } = rect.obj.animate
+            const keyframes = rect.obj.animate
+            if (keyframes?.gif && time.slice(8)) {
+              //7.5fps
+              let { gif, duration, gifCtx /*, tempCtx, frameImageData*/ } = keyframes
 
               // Offset time and frame
               const relative = time.sFence.oldTime % duration
