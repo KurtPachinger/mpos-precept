@@ -666,7 +666,7 @@ const mpos = {
       unset: `.mp-offscreen`.split(','),
       //
       tween:
-        `width,height,border,margin,padding,top,right,bottom,left,position,flex,display,visibility,opacity,mask,filter,mix-blend-mode,background-blend-mode,color,background,font,text-align,float,border-radius,box-shadow,animation,transition`.split(
+        `width,height,border,margin,padding,top,right,bottom,left,position,flex,display,visibility,opacity,mask,filter,mix-blend-mode,background-blend-mode,color,background,font,align-content,stretch,float,border-radius,box-shadow,animation,transition`.split(
           ','
         ),
       //
@@ -703,7 +703,7 @@ const mpos = {
       }
       ux = { i: 0, o: 0, u: new Set() /*p:*/ }
       frame = -1
-      inPolar = 2
+      inPolar = 3
       major
       minor
 
@@ -718,16 +718,23 @@ const mpos = {
       group = new THREE.Group()
       batch = ++mpos.var.batch // unique group identifier
       atlas = {
-        idxMip: this.#lock, // implies poster++ (from depth/type) and not other
-        idxMip2: 0,
+        //idxMip: this.#lock, // implies poster++ (from depth/type) and not other
+        //idxMip2: 0,
         // configure
         size: 512,
-        cellMip: 12,
-        cellMip2: 4
+        cells: 11,
+        uv: {
+          // idx (count), maximum, map(pixels)
+          0.5: { idx: 0, span: 1, area: 48 * 48 },
+          '1.0': { idx: 0, span: 6 }, //this.#lock
+          '2.0': { idx: 0, span: 4, area: 96 * 128 }
+        }
+        //cellMip: 12,
+        //cellMip2: 4
       }
       elsMin = 0 // inPolar or Observer
       elsMax = 0 // data-idx
-      inPolar = 0
+      inPolar = 3
       // sets and subsets
 
       rects = new Map()
@@ -965,19 +972,11 @@ const mpos = {
     treeSort: function (grade) {
       const { atlas, rects } = grade
 
-      const areaAvg = 128 * 64
-
       //
       // Complete Preparation
       for (const [idx, rect] of rects) {
         if (rect.minor) {
           //rect.idx = Number(idx)
-
-          const area = rect.el.offsetWidth * rect.el.offsetHeight
-          if ((rect.minor === 'poster' || (rect.major === 'atlas' && rect.minor === 'native')) && area > areaAvg) {
-            // note: cumulative average requires async/await (deterministic)
-            rect.idxMip2 = true
-          }
         } else {
           // free memory
           const node = document.querySelector('[data-idx="' + idx + '"]')
@@ -1052,22 +1051,32 @@ const mpos = {
         document.querySelector('#mp #atlas').appendChild(atlas.canvas)
         // note: if dynamic (atlas size, cellMip), update between treeDeep (elsMax++, areaAvg++) and treeSort (cellMip2, idxMip2)
         atlas.canvas.width = atlas.canvas.height = atlas.size
-        atlas.canvas.title = `${grade.group.name}#${grade.batch} ${atlas.size}px/${atlas.cellMip}`
+        atlas.canvas.title = `${grade.group.name}#${grade.batch} ${atlas.size}px/${atlas.cells}`
         // ... cellMip2 from average area ( & size & cellMip )
-        atlas.cMap = atlas.size / atlas.cellMip
-        atlas.cMap2 = atlas.cMap * 2
+
+        const cellMap = atlas.size / atlas.cells
+        // set MipMap pixel references
+        let xColumn = atlas.uv['1.0'].span
+        for (const [mip, uv] of Object.entries(atlas.uv)) {
+          // resolution
+          atlas.uv[mip].map = cellMap * mip
+          // offset x column
+          if (mip == '1.0') continue
+          uv.xColumn = xColumn
+          xColumn += uv.span
+        }
 
         //
         // Atlas Key structure
         // note: high/low values disappear in THREE shader alphaTest: 'rgba( 0/64, 255, 255, 0.25/0.5 )'
-        atlas.keyTest = { x: atlas.size - atlas.cMap, y: atlas.size - (atlas.cMap + 0.0001), alpha: 'rgba( 0, 128, 128, 0.125 )' } // empty structure (cyan)
+        atlas.keyTest = { x: atlas.size - cellMap, y: atlas.size - (cellMap + 0.0001), alpha: 'rgba( 0, 128, 128, 0.125 )' } // empty structure (cyan)
         // context reset when loop interrupted
         atlas.ctx.fillStyle = atlas.keyTest.alpha
-        atlas.ctx.fillRect(atlas.keyTest.x, atlas.keyTest.y, atlas.cMap, atlas.cMap)
+        atlas.ctx.fillRect(atlas.keyTest.x, atlas.keyTest.y, cellMap, cellMap)
 
         //
         // Instanced Mesh and
-        const shader = mpos.set.shader(atlas.canvas, atlas.cellMip, mat_shader)
+        const shader = mpos.set.shader(atlas.canvas, atlas.cells, mat_shader)
         const instanced = new THREE.InstancedMesh(geo, [mat, mat, mat, mat, shader, mat_line], grade.elsMax)
         instanced.layers.set(2)
         mpos.set.use(instanced)
@@ -1157,9 +1166,24 @@ const mpos = {
 
       if (!_major_.has(rect.idx)) {
         grade.elsMin++
-        if (rect.minor === 'poster' || (rect.major === 'atlas' && rect.minor === 'native')) {
-          // Instanced
-          rect.idxMip = grade.atlas.idxMip++
+
+        if (rect.major === 'atlas' && (rect.minor === 'poster' || rect.minor === 'native')) {
+          const atlas = grade.atlas
+          const area = rect.el.offsetWidth * rect.el.offsetHeight
+          let mip = '1.0'
+
+          if (area > atlas.uv['2.0'].area) {
+            // note: cumulative average requires async/await (deterministic)
+            mip = '2.0' // or last?
+          } else if (area < atlas.uv['0.5'].area) {
+            mip = '0.5' // or first?
+          }
+
+          // note: structural elements (self, child) will not have a unique cell...?
+          rect.uv = { mip: mip /*idx: atlas.uv['1.0'].idx++*/ } //idxMip:
+
+          // for dynamic(?) sizes we're keeping an extra idx
+          //if (mip !== '1.0') rect.uv.idxMip = atlas.uv[mip].idx++
         } else if (rect.major === 'other') {
           // STATES:
           // 1: to be added, 2: being added, 3: added
@@ -1463,9 +1487,9 @@ const mpos = {
         // deep
         const newTransform = differ.degree !== css.degree || differ.scale !== css.scale
         // shallow (but could be square rotated 90-degrees)
-        const newBounding = JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
-        //
-        const newTween = JSON.stringify(differ.tween) !== JSON.stringify(rect.css.tween)
+        const newBounding = differ.bound && JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
+        // tween doesn't initialize with values
+        const newTween = differ.tween && JSON.stringify(differ.tween) !== JSON.stringify(rect.css.tween)
 
         if (newTransform || newBounding) {
           ux.u.add('matrix')
@@ -1601,7 +1625,8 @@ const mpos = {
       // source is image
       let mime = uri && uri.match(/\.(json|gltf|glb|svg|gif|jpg|jpeg|png|avif|heif|hevc|heic|avc|webp|webm|mp4|mov|ogv)(\?|$)/gi)
       mime = mime ? mime[0].toUpperCase() : 'File'
-      let loader = !!((mime === 'File' && uri) || mime.match(/^(.JSON|.GLTF|.GLB|.SVG|.GIF)$/gi)) // supported THREE.Loader standard and callback
+      // tier: tags and extensions, supported THREE.Loader standard and callback
+      let loader = !!((mime === 'File' && uri) || mime.match(/(JSON|GLTF|GLB|SVG|GIF)/gi))
 
       //
       // Cache: models (or whatever...?)
@@ -2360,11 +2385,11 @@ const mpos = {
       let { frame, queue, syncFPS, quality } = step
 
       // Constants for element/cell
-      const { ctx, cMap, cMap2, cellMip, cellMip2 } = atlas
+
       const inline = {
         style: { ...reset },
-        canvasWidth: cMap,
-        canvasHeight: cMap,
+        canvasWidth: atlas.uv['1.0'].map,
+        canvasHeight: atlas.uv['1.0'].map,
         pixelRatio: 1,
         preferredFontFormat: 'woff2',
         fontEmbedCSS: atlas.fontEmbedCSS,
@@ -2399,13 +2424,16 @@ const mpos = {
 
         //
         // Bottleneck: limit... or FPS will drop and skew artefacts will appear
-        if (rect && rect.hasOwnProperty('idxMip') && meta(rect)) {
+
+        if (rect && rect.hasOwnProperty('uv') && meta(rect)) {
+          const uv = rect.uv
+
           //console.log('rect', rect.frame, rect.el, rect.ux)
           // Clone Options: unset or override element box style
           let options = structuredClone(inline)
           // tile scale
-          const wSize = rect.hasOwnProperty('idxMip2') ? cMap2 : cMap
-          options.canvasWidth = options.canvasHeight = wSize
+          //const wSize = uv.hasOwnProperty('idxMip') ? atlas.uv[uv.mip].map : atlas.uv['1.0'].map
+          options.canvasWidth = options.canvasHeight = atlas.uv[uv.mip].map // a little speculative presumption that our mip will be honored by inventory space?
           // distance * performance
           const pixelRatio = rect.ux.o || rect.ux.u.size ? quality : 0.8
           options.pixelRatio = fov.dpr * pixelRatio
@@ -2450,27 +2478,35 @@ const mpos = {
                 // if (clone.width === 0 || clone.height === 0) {}
 
                 // canvas xy, from top (FIFO)
-                if (rect.x === undefined || rect.y === undefined) {
+                let mm = atlas.uv[uv.mip]
+
+                if (uv.w === undefined) {
                   // assign scale
-                  const cellMip2Max = (atlas.cellMip / 2) * (atlas.cellMip2 / 2) - 1 // minus 1 slot for keyTest
-                  if (rect.hasOwnProperty('idxMip2') && cellMip2Max > atlas.idxMip2) {
+                  const cellsMipMax = ((mm.span / uv.mip) * atlas.cells) / uv.mip // minus 1 slot for keyTest
+
+                  // 1. w == mip, but it's a number (shader) not a string (key)
+                  // 2. mip is suggested scale, but space must be available
+                  if (uv.mip != '1.0' && cellsMipMax > atlas.uv[uv.mip].idx) {
                     // cell mip 2x: quota is async/indeterminate
-                    rect.idxMip2 = atlas.idxMip2++
-                    rect.w = 2
+                    uv.w = uv.mip * 1
+                    uv.idxMip = atlas.uv[uv.mip].idx++
                   } else {
                     // cell mip 1x
-                    rect.w = 1
+                    uv.w = 1
+                    uv.mip = '1.0'
+                    uv.idx = atlas.uv[uv.mip].idx++
                   }
 
-                  // slots for key (or 2x) reserved/offset
-                  const _idx_ = rect.w === 1 ? rect.idxMip : rect.idxMip2
+                  // slots for key (or 2x) reserved/offset (also note idx==0 is falsy)
+                  // all mips may use idx, but idxMip (!==1) may be less confusing (multiple 0's) and support layering or swapping
+                  const _idx_ = uv.w === 1 ? uv.idx : uv.idxMip
                   let x, y
 
-                  if (rect.w === 1) {
+                  mm = atlas.uv[uv.mip]
+                  if (uv.w === 1) {
                     // cell mip 1x (left)
-                    const mSpan = atlas.cellMip - atlas.cellMip2
-                    x = (_idx_ % mSpan) * cMap
-                    y = Math.floor(_idx_ / mSpan) * cMap
+                    x = (_idx_ % mm.span) * mm.map
+                    y = Math.floor(_idx_ / mm.span) * mm.map
                   } else {
                     // cell mip 2x (right)
                     //
@@ -2480,27 +2516,26 @@ const mpos = {
                     //
                     // alternate:
                     // start at x-offset: -"gutter:
-                    const xOrigin = atlas.size - cMap * cellMip2
-                    x = xOrigin + (_idx_ % (cellMip2 / 2)) * cMap2
-                    y = Math.floor(_idx_ / (cellMip2 / 2)) * cMap2
+
+                    const xColumn = atlas.uv['1.0'].map * mm.xColumn
+                    x = xColumn + (_idx_ % (mm.span / uv.mip)) * mm.map
+                    y = Math.floor(_idx_ / (mm.span / uv.mip)) * mm.map
                   }
                   // canvas rounding trick, bitwise or
                   x = (0.5 + x) | 0
                   y = (0.5 + y) | 0
 
-                  rect.x = x
-                  rect.y = y
+                  uv.x = x
+                  uv.y = y
 
                   // shader xy, from bottom
                   // avoid 0 edge, so add 0.0001
-                  const wSize = rect.w > 1 ? cMap2 : cMap
-                  rect.wX = (0.0001 + x) / atlas.size
-                  rect.wY = (0.0001 + y + wSize) / atlas.size
+                  uv.wX = (0.0001 + x) / atlas.size
+                  uv.wY = (0.0001 + y + mm.map) / atlas.size
                 }
 
-                const wSize = rect.w > 1 ? cMap2 : cMap
-                ctx.clearRect(rect.x, rect.y, wSize, wSize)
-                ctx.drawImage(e.target, rect.x, rect.y, wSize, wSize)
+                atlas.ctx.clearRect(uv.x, uv.y, mm.map, mm.map)
+                atlas.ctx.drawImage(e.target, uv.x, uv.y, mm.map, mm.map)
                 //}
 
                 img.remove()
@@ -2654,14 +2689,15 @@ const mpos = {
           // Update atlas uv and visibility
           let vis = -1
           let x, y, z
+          const uv = rect.uv
           if (meta || dummy || rect.ux.u.has('matrix')) {
-            if (rect.hasOwnProperty('idxMip') || rect.minor === 'self') {
+            if (uv || rect.minor === 'self') {
               // top-tier bracket
-              if (inPolar) {
-                x = rect.wX || atlas.keyTest.x
-                y = 1 - rect.wY || 1 - atlas.keyTest.y
-                z = rect.w
-              } else if (grade.inPolar === 4) {
+              if (uv && inPolar) {
+                x = uv.wX
+                y = 1 - uv.wY
+                z = uv.w
+              } else if (inPolar || grade.inPolar === 4) {
                 // partial update from split frame (trim), due to scroll delay
                 x = atlas.keyTest.x
                 y = 1 - atlas.keyTest.y
@@ -2674,7 +2710,7 @@ const mpos = {
           }
 
           // Ray whitelist instanceId
-          if (rect.hasOwnProperty('idxMip') && inPolar /*&& rect.minor !== 'self'*/) {
+          if (uv && inPolar /*&& rect.minor !== 'self'*/) {
             // note: event/raycast is strongly bound (like capture/bubble)
             // propagation quirks are thrown further by curating hierarchy (mat.self)
             targets.push(Number(count))
@@ -2972,12 +3008,12 @@ const mpos = {
           const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
           caretROI.backgroundColor = color
           // location
-          const cell = 100 * (1 / grade.atlas.cellMip) * rect.w
+          const cell = 100 * (1 / grade.atlas.cells) * rect.uv.w
           caretROI.width = caretROI.height = cell + '%'
-          caretROI.left = 100 * rect.wX + '%'
-          caretROI.bottom = 100 * (1 - rect.wY) + '%'
+          caretROI.left = 100 * rect.uv.wX + '%'
+          caretROI.bottom = 100 * (1 - rect.uv.wY) + '%'
           caretROI.right = 'inherit'
-          if (!rect.hasOwnProperty('idxMip')) {
+          if (!rect.uv.hasOwnProperty('w')) {
             // child container
             //caretROI.width = '100%'
             caretROI.backgroundColor = 'transparent'
