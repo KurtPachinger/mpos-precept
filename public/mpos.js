@@ -11,7 +11,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
-import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
+import { toSvg, toCanvas, toPng, getFontEmbedCSS } from 'html-to-image'
 import { parseGIF, decompressFrames } from 'gifuct-js'
 
 const mpos = {
@@ -1758,11 +1758,48 @@ const mpos = {
 
           const [width, height] = tool.pyr(source.naturalWidth, source.naturalHeight, 128)
 
-          toCanvas(source, { style: { ...reset }, width: width, height: height, pixelRatio: 1 })
+          // bug: Firefox stretches the output since html-to-canvas v1.6+ set SVG viewbox (non-square, even destination toCanvas)
+          // ...so must unset viewBox and provide some font options
+          toSvg(source, {
+            style: { ...reset },
+            width: width,
+            height: height,
+            pixelRatio: 1,
+            preferredFontFormat: 'woff2',
+            fontEmbedCSS: ''
+          })
             .then((clone) => {
-              rect.add++
-              mpos.set.opencv(clone, group, dummy)
-              clone = null
+              //
+              //
+              let img = new Image()
+              let load = img.addEventListener('load', (e) => {
+                //console.log(clone, img.src)
+
+                removeEventListener('load', load)
+
+                //
+                //
+
+                rect.add++
+                mpos.set.opencv(e.target, group, dummy)
+                //clone = null
+
+                img.remove()
+                img = null
+              })
+
+              // https://github.com/bubkoo/html-to-image/pull/146
+              // v1.7.0 viewBox breaks non-square proportion
+              clone = decodeURI(clone)
+              clone = clone.replace(/(viewBox)/, 'trusk8r')
+              //clone.replace(/viewBox="(\d+\s\d+\s\d+\s\d+)"/, 'viewBox="0 0 100% 100%"')
+              clone - encodeURI(clone)
+
+              img.src = clone
+              options = clone = null
+
+              //
+              //
             })
             .catch((error) => {
               console.log('src problem', error)
@@ -2472,6 +2509,8 @@ const mpos = {
               // svg preserves detail and is smaller file (but are canvas clones released from memory?)
               let img = new Image()
               let load = img.addEventListener('load', (e) => {
+                //console.log(clone, img.src)
+
                 removeEventListener('load', load)
 
                 // no box
@@ -2541,6 +2580,14 @@ const mpos = {
                 img.remove()
                 img = null
               })
+
+              // https://github.com/bubkoo/html-to-image/pull/146
+              // v1.7.0 viewBox breaks non-square proportion
+              clone = decodeURI(clone)
+              clone = clone.replace(/(viewBox)/, 'trusk8r')
+              //clone.replace(/viewBox="(\d+\s\d+\s\d+\s\d+)"/, 'viewBox="0 0 100% 100%"')
+              clone - encodeURI(clone)
+
               img.src = clone
               options = clone = null
             })
