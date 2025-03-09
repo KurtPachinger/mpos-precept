@@ -11,7 +11,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 
-import { toSvg, toCanvas, toPng, getFontEmbedCSS } from 'html-to-image'
+import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
 import { parseGIF, decompressFrames } from 'gifuct-js'
 
 const mpos = {
@@ -1758,8 +1758,6 @@ const mpos = {
 
           const [width, height] = tool.pyr(source.naturalWidth, source.naturalHeight, 128)
 
-          // bug: Firefox stretches the output since html-to-canvas v1.6+ set SVG viewbox (non-square, even destination toCanvas)
-          // ...so must unset viewBox and provide some font options
           toSvg(source, {
             style: { ...reset },
             width: width,
@@ -1769,37 +1767,21 @@ const mpos = {
             fontEmbedCSS: ''
           })
             .then((clone) => {
-              //
-              //
               let img = new Image()
               let load = img.addEventListener('load', (e) => {
-                //console.log(clone, img.src)
-
                 removeEventListener('load', load)
-
-                //
-                //
-
+                // update progress and run module
                 rect.add++
                 mpos.set.opencv(e.target, group, dummy)
-                //clone = null
-
+                // cleanup
                 img.remove()
                 img = null
               })
 
               // https://github.com/bubkoo/html-to-image/pull/146
-              // v1.7.0 viewBox breaks non-square proportion
-              clone = decodeURI(clone)
-              clone = clone.replace(/(viewBox)/, 'trusk8r')
-              //clone.replace(/viewBox="(\d+\s\d+\s\d+\s\d+)"/, 'viewBox="0 0 100% 100%"')
-              clone - encodeURI(clone)
-
-              img.src = clone
-              options = clone = null
-
-              //
-              //
+              // v1.7.0 viewBox breaks SVG on Firefox (...output encode/decode replace is brittle)
+              img.src = clone // clone.replace('viewBox%3D', 'preserveAspectRatio%3D%22none%22%20viewBox%3D')
+              clone = null
             })
             .catch((error) => {
               console.log('src problem', error)
@@ -2582,13 +2564,8 @@ const mpos = {
               })
 
               // https://github.com/bubkoo/html-to-image/pull/146
-              // v1.7.0 viewBox breaks non-square proportion
-              clone = decodeURI(clone)
-              clone = clone.replace(/(viewBox)/, 'trusk8r')
-              //clone.replace(/viewBox="(\d+\s\d+\s\d+\s\d+)"/, 'viewBox="0 0 100% 100%"')
-              clone - encodeURI(clone)
-
-              img.src = clone
+              // v1.7.0 viewBox breaks SVG on Firefox (...output encode/decode replace is brittle)
+              img.src = clone.replace('viewBox%3D', 'preserveAspectRatio%3D%22none%22%20viewBox%3D')
               options = clone = null
             })
             .catch((error) => {
@@ -3055,12 +3032,13 @@ const mpos = {
           const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
           caretROI.backgroundColor = color
           // location
-          const cell = 100 * (1 / grade.atlas.cells) * rect.uv.w
-          caretROI.width = caretROI.height = cell + '%'
-          caretROI.left = 100 * rect.uv.wX + '%'
-          caretROI.bottom = 100 * (1 - rect.uv.wY) + '%'
-          caretROI.right = 'inherit'
-          if (!rect.uv.hasOwnProperty('w')) {
+          if (rect.uv?.hasOwnProperty('w')) {
+            const cell = 100 * (1 / grade.atlas.cells) * rect.uv.w
+            caretROI.width = caretROI.height = cell + '%'
+            caretROI.left = 100 * rect.uv.wX + '%'
+            caretROI.bottom = 100 * (1 - rect.uv.wY) + '%'
+            caretROI.right = 'inherit'
+          } else {
             // child container
             //caretROI.width = '100%'
             caretROI.backgroundColor = 'transparent'
