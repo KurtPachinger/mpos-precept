@@ -46,7 +46,7 @@ mpos.mod.add( 'main', opts )
 ### Tools
 ```js
 // Element rect, with current meta
-const rect = mpos.fnVar( 'find', '0' )
+const rect = mpos.fnVar( 'find', '0' ) // [data-idx|first|last|atlas|other]
 
 // Element depth, to root and from slot
 const deep = mpos.fnVar( 'march', '#host' )
