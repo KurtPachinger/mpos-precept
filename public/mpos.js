@@ -211,9 +211,9 @@ const mpos = {
         if (term === 'first' || term === 'last') {
           const rects = Array.from(grade.rects)
           const position = term === 'first' ? 0 : rects.length - 1
-          rect = rects[position]
+          rect = rects[position][1]
         } else if (term === 'atlas' || term === 'other') {
-          rect = grade.major[term].rects
+          rect = grade.major[term]
         } else {
           rect = grade.rects.get(term)
         }
@@ -2433,9 +2433,9 @@ const mpos = {
         // Composition of features: is change explicit, inherited, or unset?
         //const shallow = ux.o === 0 && ux.u.size === 1 && ux.u.has('matrix')
         const vis = step.syncFPS === 0 || rect.inPolar >= grade.inPolar
-        const lowpass = ux.o > 2 || ux.u.size > 0 || step.syncFPS === 0
+        const lowpass = ux.o > 0 && (ux.o > 1 || ux.u.size > 0 || step.syncFPS === 0)
 
-        return vis && ux.o > 1 && lowpass
+        return vis && lowpass
       }
 
       for (const idx of step.queue) {
