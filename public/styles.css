@@ -297,6 +297,11 @@ EFFECTS, ANIMATION */
   }
 }
 
+.bg {
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
+  background-size: auto 0.5em;
+  image-rendering: pixelated;
+}
 .slides {
   margin: 0;
   align-items: center;

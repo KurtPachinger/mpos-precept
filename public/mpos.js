@@ -722,10 +722,10 @@ const mpos = {
         //idxMip2: 0,
         // configure
         size: 512,
-        cells: 11,
+        cells: 12,
         uv: {
           // idx (count), maximum, map(pixels)
-          0.5: { idx: 0, span: 1, area: 48 * 48 },
+          0.5: { idx: 0, span: 2, area: 48 * 48 },
           '1.0': { idx: 0, span: 6 }, //this.#lock
           '2.0': { idx: 0, span: 4, area: 96 * 128 }
         }
@@ -1167,23 +1167,34 @@ const mpos = {
       if (!_major_.has(rect.idx)) {
         grade.elsMin++
 
-        if (rect.major === 'atlas' && (rect.minor === 'poster' || rect.minor === 'native')) {
-          const atlas = grade.atlas
-          const area = rect.el.offsetWidth * rect.el.offsetHeight
-          let mip = '1.0'
+        if (rect.major === 'atlas') {
+          if (rect.minor === 'poster' || rect.minor === 'native') {
+            const atlas = grade.atlas
+            const area = rect.el.offsetWidth * rect.el.offsetHeight
+            let mip = '1.0'
 
-          if (area > atlas.uv['2.0'].area) {
-            // note: cumulative average requires async/await (deterministic)
-            mip = '2.0' // or last?
-          } else if (area < atlas.uv['0.5'].area) {
-            mip = '0.5' // or first?
+            // FIFO, not sorted by area
+            if (area > atlas.uv['2.0'].area) {
+              // note: cumulative average requires async/await (deterministic)
+              mip = '2.0' // or last?
+            } else if (area < atlas.uv['0.5'].area) {
+              mip = '0.5' // or first?
+            }
+
+            // note: structural elements (self, child) will not have a unique cell...?
+            rect.uv = { mip: mip /*idx: atlas.uv['1.0'].idx++*/ } //idxMip:
+
+            // for dynamic(?) sizes we're keeping an extra idx
+            //if (mip !== '1.0') rect.uv.idxMip = atlas.uv[mip].idx++
+          } else if (rect.minor === 'self') {
+            //
+            // support background images, with minimal mip (for performance and quantity)
+            // ...but filter limit could be lifted to support bullets, or re-draw children elements (composite or registration?)
+            const style = rect.css.style || window.getComputedStyle(rect.el) // ideally shared or saved, but no deep usage info yet
+            const isStyled = style.backgroundImage !== 'none' || style.backgroundColor !== 'rgba(0, 0, 0, 0)'
+
+            if (isStyled) rect.uv = { mip: '0.5' }
           }
-
-          // note: structural elements (self, child) will not have a unique cell...?
-          rect.uv = { mip: mip /*idx: atlas.uv['1.0'].idx++*/ } //idxMip:
-
-          // for dynamic(?) sizes we're keeping an extra idx
-          //if (mip !== '1.0') rect.uv.idxMip = atlas.uv[mip].idx++
         } else if (rect.major === 'other') {
           // STATES:
           // 1: to be added, 2: being added, 3: added
@@ -2485,6 +2496,19 @@ const mpos = {
           // 1. step size even (atlas cells %0 no sub-pixels i.e. odd ~11)
           // canvas width/height pyr/step
           // *dpr (dpr on pixelratio causes font subpixel jitter)
+
+          if (rect.minor === 'self') {
+            //
+            // draw background of container, but exclude child elements
+            // may be tweaked for sizes, media sliders, bullets, etc...
+            //
+            // route 1: hide children and preserve whitespace
+            //options.style['*'] = { visibility: 'hidden', opacity: '0' }
+            // route 2: filter children and rely on width/height
+            options.filter = function (clone) {
+              return clone.isSameNode(rect.el)
+            }
+          }
 
           toSvg(rect.el, options)
             .then((clone) => {
