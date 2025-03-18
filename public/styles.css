@@ -297,10 +297,9 @@ EFFECTS, ANIMATION */
   }
 }
 
-.bg {
-  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
-  background-size: auto 0.5em;
-  image-rendering: pixelated;
+.bgnormal {
+  background-image: linear-gradient(to right, rgba(255, 0, 0, 0), rgba(255, 0, 0, 0.5)),
+    linear-gradient(to bottom, rgba(0, 255, 0, 0), rgba(0, 255, 0, 0.5)), linear-gradient(rgb(128, 128, 255), rgb(128, 128, 255));
 }
 .slides {
   margin: 0;
