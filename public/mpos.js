@@ -1389,9 +1389,8 @@ const mpos = {
 
       //
       // CSS Style Transforms: accumulate a natural box model
-      // frame or Mouseevent
-
-      if (frame > rect.frame) {
+      // frame or ScrollEvent
+      if (frame > rect.frame || frame === 0) {
         // css style: transform, transformOrigin, backgroundColor, zIndex, position
         const { css, ux } = rect
 
@@ -1542,11 +1541,13 @@ const mpos = {
 
           // frame update
           rect.frame = frame
-      } else {
-        // mouseevents (0) provide some increments
-        // note: rect/init values of -Infinity, -1, 0, 0.001 null may be interesting...
-        const tick = 0.001
-        rect.frame += tick
+
+        if (frame === 0) {
+          // mouseevents (0) provide some increments
+          // note: rect/init values of -Infinity, -1, 0, 0.001 null may be interesting...
+          const tick = 0.001
+          rect.frame += tick
+        }
       }
 
       return { width: rect.el.offsetWidth, height: rect.el.offsetHeight }
@@ -2839,7 +2840,7 @@ const mpos = {
           // debounce concurrent
           requestIdleCallback(
             function () {
-              if (queue.length) {
+              if (queue.size) {
                 mpos.step.sync(grade, pointer)
               }
             },
