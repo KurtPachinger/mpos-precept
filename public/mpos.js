@@ -79,6 +79,7 @@ const mpos = {
       z: 8
     },
     opt: {
+      fragment: 'frag_suite.html',
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 8,
@@ -198,7 +199,7 @@ const mpos = {
 
         last.classList.add('last')
         last.innerHTML += opts.symbol
-        element.prepend(chains)
+        if (element) element.prepend(chains)
 
         return chains
       },
@@ -229,7 +230,7 @@ const mpos = {
         let inner = element
         const outer = grade?.el || document.querySelector(opt.selector) || document.body
         const m = { root: 0, slot: 0 }
-        while (m.root < 32 && inner.parentElement && !inner.isSameNode(outer)) {
+        while (m.root < 32 && inner && inner.parentElement && !inner.isSameNode(outer)) {
           m.root++
           inner = inner.parentElement.closest(opts.precept.allow)
         }
@@ -279,7 +280,7 @@ const mpos = {
           let css = rect.css
           if (css) {
             // deepest pseudo match: pass an object (to avoid per-element / per-frame)
-            const root = rect.el.parentElement
+            const root = rect.el.parentElement || document.body // note: document.body is excessive, but may prevent error in a loop
             let capture = opts.capture || {
               hover: [...root.querySelectorAll(':hover')].pop(),
               active: [...root.querySelectorAll(':active')].pop(),
@@ -478,6 +479,16 @@ const mpos = {
           element.onerror = (e) => reject(e)
           element.setAttribute(attribute, uri)
         })
+      },
+      xml: function (url, opts = {}) {
+        return fetch(url)
+          .then((response) => response.text())
+          .then((html) => {
+            document.querySelector(opts.selector).innerHTML = html
+          })
+          .catch((error) => {
+            console.error('Error fetching HTML:', error)
+          })
       }
     }
   },
@@ -624,6 +635,7 @@ const mpos = {
       gui.domElement.classList.add('mp-native')
       for (const key in opt) {
         const params = {
+          fragment: [['frag_suite.html', 'frag_track.html']],
           selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
           depth: [0, 32, 1],
           inPolar: [1, 4, 1],
@@ -636,6 +648,10 @@ const mpos = {
         if (key === 'delay') {
           controller.onFinishChange((v) => {
             ux.reflow({ type: 'delay', value: v })
+          })
+        } else if (key === 'fragment') {
+          controller.onFinishChange((v) => {
+            vars.tool.xml(v, { selector: 'main' })
           })
         }
       }
@@ -2444,10 +2460,12 @@ const mpos = {
         //
         // Composition of features: is change explicit, inherited, or unset?
         //const shallow = ux.o === 0 && ux.u.size === 1 && ux.u.has('matrix')
-        const vis = step.syncFPS === 0 || rect.inPolar >= grade.inPolar
+        //const vis = step.syncFPS === 0 || rect.inPolar >= grade.inPolar
         const lowpass = ux.o > 0 && (ux.o > 1 || ux.u.size > 0 || step.syncFPS === 0)
 
-        return vis && lowpass
+        return step.syncFPS === 0 || (rect.inPolar >= grade.inPolar && (step.syncFPS === 0 || lowpass))
+
+        //return vis || lowpass
       }
 
       for (const idx of step.queue) {
