@@ -341,24 +341,136 @@ EFFECTS, ANIMATION */
 }
 
 .world {
-  &,
-  & div {
-    position: absolute;
+  position: absolute;
+  font-size: 4rem;
+  width: 2em;
+  height: 2em;
+  image-rendering: pixelated;
+  z-index: -999;
+
+  /* center width for arc */
+  width: 100%;
+  left: calc((50vw - (4 * var(--u2))) - 50%);
+
+  section {
+    text-align: center;
+    color: rgba(128, 128, 255, 0.5);
+    em {
+      border-radius: 0.5rem;
+      filter: blur(0.05rem);
+      transform: rotate(180deg);
+      display: inline-block;
+      mix-blend-mode: normal;
+      background-blend-mode: color;
+    }
   }
 
-  background-color: rgba(0, 0, 0, 0.5);
+  div,
+  .wall {
+    position: absolute;
+    font-size: 0.5em;
+    line-height: 1;
+    width: 1em;
+    height: 1em;
+    background-size: contain; /* buggy: 100% or 10vh or 100% or img.src... various visibility quirks especially with non-colors i.e. black, gray??? */
+    background-color: rgba(240, 255, 240, 0.0605);
+    color: rgba(32, 32, 32, 0.75); /* alphaHash gets flippy here */
+  }
+
+  mp {
+    /* NOTE:
+    this REALLY helps OpenCV draw paths (mp-loader)
+    which needs some box area tolerance
+    as opposed to a background, (consistent foreground)
+    */
+    border: inset 1px transparent;
+  }
+
+  .floor mp {
+    animation-name: none;
+    transform: translateX(-0.5em);
+    /*unset */
+    margin: unset;
+    box-shadow: unset;
+    border-radius: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 1);
+
+    &:before {
+      content: '░';
+      background: none;
+      position: absolute;
+    }
+  }
+
+  .pp,
+  .ss {
+    animation-duration: 5s;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+    animation-direction: alternate;
+  }
+  .pp {
+    animation-name: pingpong;
+  }
+  .ss {
+    animation-name: spritesheet;
+  }
+
+  hr {
+    margin: 0 auto;
+    z-index: 0;
+    height: 1em;
+    background: #404040;
+    /* width: 4em; */
+    text-align: center;
+    color: yellow;
+    border-bottom: 0.5rem dashed yellow;
+  }
 
   .sky {
-    background-color: blue;
+    z-index: 99;
+    color: rgba(128, 128, 255, 1);
   }
   .floor {
-    background-color: brown;
+    z-index: -99;
+    color: rgba(0, 128, 0, 1);
+    background-color: rgba(128, 255, 128, 0.06);
+    position: relative;
+    text-align: center;
+    top: 0em;
   }
-  .walls {
-    background-color: #808080;
+  .wall {
+    z-index: 99;
   }
-  .bodies {
-    background-color: rgba(255, 0, 0, 0.5);
+  .body {
+    color: rgba(255, 0, 0, 0.5);
+  }
+
+  /* animations */
+
+  :nth-of-type(2n) {
+    animation-delay: 0.25s;
+  }
+  :nth-of-type(3n) {
+    animation-delay: 0.5s;
+  }
+
+  .p1 {
+  }
+  .p2 {
+  }
+}
+
+@keyframes pingpong {
+  100% {
+    transform: translate(600%, 0);
+  }
+}
+@keyframes spritesheet {
+  to {
+    /* trigger play state (does Chrome optimize?) */
+    transform: translate(0, 0.01em);
   }
 }
 
@@ -421,7 +533,8 @@ img {
 
 :focus,
 :active,
-.active {
+.active,
+.pulse {
   box-shadow: inset 0 0 0.125em 0.125em var(--active);
   animation: active 0.5s linear infinite alternate;
 }

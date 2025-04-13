@@ -41,7 +41,7 @@
           clearInterval(mp)
 
           // Add content dynamically
-          mpos.fnVar('xml', 'frag_suite.html', { selector: 'main' }).finally(() => {
+          mpos.fnVar('xml', 'xml_track.html', { selector: 'main' }).finally(() => {
             //
             // Add test of visual hierarchy
             mpos.fnVar('chain', '#overflow', { count: 4, symbol: '-' })
@@ -77,6 +77,8 @@
               mpos.mod.add().then((res) => {
                 console.log('mod add:', res)
 
+                /*
+
                 //
                 // Dynamic object update
                 const idxJSON = Object3D.getAttribute('data-idx')
@@ -96,6 +98,7 @@
                 mpos.mod.add(element, { grade: mpos.var.grade }).then((res) => {
                   console.log('mod add grade:', res)
                 })
+*/
               })
 
               // init has event listeners...?

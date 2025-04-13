@@ -79,12 +79,12 @@ const mpos = {
       z: 8
     },
     opt: {
-      fragment: 'frag_suite.html',
+      request: 'xml_suite.html',
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 8,
       inPolar: 4,
-      arc: 0,
+      arc: 0.5,
       delay: 0,
       update: function () {
         //
@@ -198,7 +198,7 @@ const mpos = {
         }
 
         last.classList.add('last')
-        last.innerHTML += opts.symbol
+        last.innerHTML += opts.symbol || ''
         if (element) element.prepend(chains)
 
         return chains
@@ -635,7 +635,7 @@ const mpos = {
       gui.domElement.classList.add('mp-native')
       for (const key in opt) {
         const params = {
-          fragment: [['frag_suite.html', 'frag_track.html']],
+          request: [['xml_suite.html', 'xml_track.html']],
           selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
           depth: [0, 32, 1],
           inPolar: [1, 4, 1],
@@ -649,7 +649,7 @@ const mpos = {
           controller.onFinishChange((v) => {
             ux.reflow({ type: 'delay', value: v })
           })
-        } else if (key === 'fragment') {
+        } else if (key === 'request') {
           controller.onFinishChange((v) => {
             vars.tool.xml(v, { selector: 'main' })
           })
@@ -2184,9 +2184,9 @@ const mpos = {
 
                   material.color = color
 
-                  if (rgba.a > 192) {
-                    //material.alphaHash = false
-                  } else if (rgba.a < 128) {
+                  if (rgba.a > 128) {
+                    material.alphaHash = false
+                  } else if (rgba.a > 1 && rgba.a < 32) {
                     // alphaTest: alpha has been through a lot!
                     material.opacity = rgba.a / 255
                   }
@@ -3072,7 +3072,7 @@ const mpos = {
           caret.title = rect.idx + rect.el.nodeName
           const caretROI = caret.style
           // visibility
-          const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.66)' : 'rgba(255,0,0,0.66)'
+          const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.5)' : 'rgba(255,0,0,0.5)'
           caretROI.backgroundColor = color
           // location
           if (rect.uv?.hasOwnProperty('w')) {
