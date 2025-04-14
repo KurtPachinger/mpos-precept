@@ -84,7 +84,7 @@ const mpos = {
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 8,
       inPolar: 4,
-      arc: 0.5,
+      arc: 0.0,
       delay: 0,
       update: function () {
         //
@@ -1546,7 +1546,7 @@ const mpos = {
         if (ux.u.has('tween') && !newTween) {
           // discard keyframes without change, unless a child of the element is tagged active
           const actors = rect.el.querySelector(allow)
-          if (!actors && time.slice(2)) ux.u.delete('tween')
+          if (!actors && time.slice(4)) ux.u.delete('tween')
         } else if (newTween && !ux.u.has('tween')) {
           // detect incidental changes...?
           ux.u.add('tween')
@@ -2225,7 +2225,7 @@ const mpos = {
       //deepest pseudo match (frame cache)
       const root = grade.el.parentElement
 
-      if (time.slice(8))
+      if (time.slice(8) & root)
         grade.capture = {
           hover: [...root.querySelectorAll('[data-idx]:hover')].pop(),
           active: [...root.querySelectorAll('[data-idx]:active')].pop(),
@@ -2262,7 +2262,7 @@ const mpos = {
             // note: css should do this, but it is tied to rate pre/post and not a major feature (UNLESS PSEUDO IS THE WRONG TERM ~~ OTHER)???
             // should diffs apply the prop directly?
 
-            if (stateOld || ux.u.size) {
+            if (stateOld || ux.u.size > 2 || ux.o) {
               // time.slice(2)
               // element ux changed or elevated
               // note: pseudo evaluates first, so atlas unset has consistent off-state

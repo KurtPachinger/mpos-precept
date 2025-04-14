@@ -183,160 +183,160 @@ main {
   .sub {
     background-color: var(--sub);
   }
+}
 
-  /*
+/*
   SPECIAL STRUCTURE */
 
-  /* containers */
-  .yt iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-  }
-  .yt {
-    position: relative;
-    width: 100%;
-    padding-bottom: 56.25%;
-  }
-  model-viewer {
-    width: 100%;
-    height: 6em;
-    position: relative;
-    contain: strict;
-  }
+/* containers */
+.yt iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.yt {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+}
+model-viewer {
+  width: 100%;
+  height: 6em;
+  position: relative;
+  contain: strict;
+}
 
-  /* 
+/* 
 EFFECTS, ANIMATION */
 
-  .tilt {
-    transform: rotate(-15deg);
+.tilt {
+  transform: rotate(-15deg);
+}
+
+.hinge {
+  position: relative;
+  /*animation: hinge 6s linear infinite alternate;*/
+}
+@keyframes hinge {
+  25% {
+    z-index: 0;
+    transform: rotate(0deg) scale(var(--baseKey));
   }
 
-  .hinge {
+  50% {
+    z-index: 99;
+    transform: rotate(-15deg) scale(var(--baseKey));
+  }
+
+  75% {
+    z-index: -3;
+    transform: rotate(0deg) scale(var(--baseKey));
+  }
+
+  100% {
+    z-index: 0;
+  }
+}
+
+.cycle {
+  animation: cycle 3s steps(1, start) infinite;
+}
+@keyframes cycle {
+  33% {
+    background-color: rgba(255, 0, 0, 0.5);
+  }
+  66% {
+    background-color: rgba(0, 255, 0, 0.5);
+  }
+  100% {
+    background-color: rgba(0, 0, 255, 0.5);
+  }
+}
+
+.blink {
+  border: 0.125rem dashed red;
+  animation: blink 3s linear infinite;
+  opacity: 1;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.bgnormal {
+  background-image: linear-gradient(to right, rgba(255, 0, 0, 0), rgba(255, 0, 0, 0.5)),
+    linear-gradient(to bottom, rgba(0, 255, 0, 0), rgba(0, 255, 0, 0.5)), linear-gradient(rgb(128, 128, 255), rgb(128, 128, 255));
+}
+.slides {
+  margin: 0;
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  .track {
+    flex-grow: 1;
+    flex-shrink: 4;
+    flex-basis: 0;
+    contain: inline-size;
+
+    /* off */
     position: relative;
-    /*animation: hinge 6s linear infinite alternate;*/
-  }
-  @keyframes hinge {
-    25% {
-      z-index: 0;
-      transform: rotate(0deg) scale(var(--baseKey));
+    transition: flex-grow 1.5s;
+    opacity: 50%;
+    img,
+    picture,
+    video {
+      display: block;
+      width: 100%;
+      height: 8em;
+      image-rendering: pixelated;
+      background-blend-mode: multiply;
+      /*background-attachment: fixed; toCanvas style conflicts inconsistent */
+      background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
+      background-size: auto 10vmin; /* 10vmin may be more compatible */
+      background-position: -10vmin -10vmin;
+      animation: media 6s linear infinite;
     }
 
-    50% {
-      z-index: 99;
-      transform: rotate(-15deg) scale(var(--baseKey));
-    }
-
-    75% {
-      z-index: -3;
-      transform: rotate(0deg) scale(var(--baseKey));
-    }
-
-    100% {
-      z-index: 0;
-    }
-  }
-
-  .cycle {
-    animation: cycle 3s steps(1, start) infinite;
-  }
-  @keyframes cycle {
-    33% {
-      background-color: rgba(255, 0, 0, 0.5);
-    }
-    66% {
-      background-color: rgba(0, 255, 0, 0.5);
-    }
-    100% {
-      background-color: rgba(0, 0, 255, 0.5);
-    }
-  }
-
-  .blink {
-    border: 0.125rem dashed red;
-    animation: blink 3s linear infinite;
-    opacity: 1;
-  }
-  @keyframes blink {
-    50% {
-      opacity: 0;
-    }
-  }
-
-  .bgnormal {
-    background-image: linear-gradient(to right, rgba(255, 0, 0, 0), rgba(255, 0, 0, 0.5)),
-      linear-gradient(to bottom, rgba(0, 255, 0, 0), rgba(0, 255, 0, 0.5)), linear-gradient(rgb(128, 128, 255), rgb(128, 128, 255));
-  }
-  .slides {
-    margin: 0;
-    align-items: center;
-    display: flex;
-    justify-content: center;
-    .track {
-      flex-grow: 1;
-      flex-shrink: 4;
-      flex-basis: 0;
-      contain: inline-size;
-
-      /* off */
-      position: relative;
-      transition: flex-grow 1.5s;
-      opacity: 50%;
+    &:hover,
+    &:active,
+    &:focus {
+      /* on (filter doesn't toCanvas) */
+      flex-grow: 4;
+      opacity: 100%;
+      animation: slider 3s linear infinite;
       img,
-      picture,
+      source,
       video {
-        display: block;
-        width: 100%;
-        height: 8em;
-        image-rendering: pixelated;
-        background-blend-mode: multiply;
-        /*background-attachment: fixed; toCanvas style conflicts inconsistent */
-        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
-        background-size: auto 10vmin; /* 10vmin may be more compatible */
-        background-position: -10vmin -10vmin;
-        animation: media 6s linear infinite;
+        border-radius: 0.5em;
       }
-
-      &:hover,
-      &:active,
-      &:focus {
-        /* on (filter doesn't toCanvas) */
-        flex-grow: 4;
-        opacity: 100%;
-        animation: slider 3s linear infinite;
-        img,
-        source,
-        video {
-          border-radius: 0.5em;
-        }
-      }
-    }
-
-    figcaption {
-      position: absolute;
-      top: 0;
-      z-index: 1;
-      transform: rotate(90deg);
-      transform-origin: left bottom;
-      white-space: nowrap;
-      /* consistent */
-      background-color: #fff;
     }
   }
 
-  @keyframes slider {
-    50% {
-      transform: translate(0, -0.5em);
-    }
+  figcaption {
+    position: absolute;
+    top: 0;
+    z-index: 1;
+    transform: rotate(90deg);
+    transform-origin: left bottom;
+    white-space: nowrap;
+    /* consistent */
+    background-color: #fff;
   }
+}
 
-  @keyframes media {
-    100% {
-      background-position: 0 0;
-    }
+@keyframes slider {
+  50% {
+    transform: translate(0, -0.5em);
+  }
+}
+
+@keyframes media {
+  100% {
+    background-position: 0 0;
   }
 }
 
@@ -449,11 +449,20 @@ EFFECTS, ANIMATION */
 
   /* animations */
 
+  :nth-of-type(1n) {
+    animation-delay: 0s;
+  }
   :nth-of-type(2n) {
-    animation-delay: 0.25s;
+    animation-delay: 0.5s;
   }
   :nth-of-type(3n) {
-    animation-delay: 0.5s;
+    animation-delay: 1s;
+  }
+  :nth-of-type(4n) {
+    animation-delay: 1.5s;
+  }
+  :nth-of-type(5n) {
+    animation-delay: 2s;
   }
 
   .p1 {
