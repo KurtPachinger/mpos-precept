@@ -80,6 +80,7 @@
     }
     100% {
       width: 0%;
+      background-color: red;
     }
   }
 </style>
@@ -130,42 +131,41 @@
   // Options: reset view and autoplay timer
   const opt = mpos.var.opt
   opt.selector = 'main'
-  //opt.inPolar = 3
   opt.arc = 0
   opt.delay = 16.666
 
+  let target
   const tooltip = document.querySelector('#tooltip')
   const meta = {
     introduction: {
       picture: '<big>📎</big>Hello! Willkommen!',
       focus: 'body',
-      inset: '25% 50% 75% 50%' 
+      inset: '25% 50% 75% 50%'
     },
     controls: {
       picture: '<big>🎚️</big>Controls affect FPS',
       focus: '.lil-gui',
-      inset: '25% 25% 75% 75%' 
+      inset: '25% 25% 75% 75%'
     },
     events: {
       picture: '<big>👆</big>Events raycast map',
       focus: '#atlas',
-      inset: '75% 25% 25% 75%' 
+      inset: '75% 25% 25% 75%'
     },
     fnvar: {
       picture: '<big>⚙️</big>Environment hook',
       focus: '#mp',
-      inset: '75% 50% 25% 50%' 
+      inset: '75% 50% 25% 50%'
     }
   }
-  
 
   const slides = setInterval(slide, 10000)
 
   function slide() {
-    console.log('slide')
-
+    
     // get slide
     let current = document.querySelector('section.current')
+    
     if (current) {
       current.classList.remove('current')
 
@@ -178,28 +178,27 @@
         // end of slideshow
         clearInterval(slides)
         // outro
-        
+
         tooltip.querySelector('picture').innerHTML = '<big>📎</big>END OF SLIDES'
         tooltip.style.inset = '50% 50% 50% 50%'
       }
     } else {
       //clearInterval(slides)
       current = document.querySelector('section#introduction')
-      if(current){
+      if (current) {
         current.classList.add('current')
         reveal(current)
-      }else{
+      } else {
         // DOM changed... perhaps user navigated away?
         clearInterval(slides)
       }
     }
+    console.log('slide', current.id)
   }
 
   function reveal(which) {
     which.scrollIntoView()
-    const idx = which.getAttribute('data-idx')
-    const rect = mpos.fnVar('find', idx, {})
-    console.log(idx, rect)
+    target = which
 
     // tooltip
 
@@ -214,10 +213,23 @@
 
     // position
     tooltip.style.inset = ttMeta.inset
-
-    // focus
-    const bound = rect.bound
-    //mpos.var.camera.lookAt(bound.x+(bound.width/2), -bound.y+(bound.height/2), rect.z)
   }
-  
+
+  mpos.var.cache.set('onBeforeRender', {
+    cam: function () {
+      // look at current slide smoothly
+      
+      if (target) {
+        const bound = target.getBoundingClientRect()
+        const x = bound.x + bound.width / 2
+        const y = -(bound.y + (bound.height / 2))
+
+        // bug: updates blocks texture update (i.e. Controls.target.lerp)?
+        const controls = mpos.var.controls
+        controls.target.lerp(new THREE.Vector3(x,y,0), 0.5)
+        controls.update()
+      }
+    }
+  })
+
 -->

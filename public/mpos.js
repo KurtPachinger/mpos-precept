@@ -2935,7 +2935,7 @@ const mpos = {
       }
     },
     render: function (gate) {
-      const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool, time } = mpos.var
+      const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool, time, cache } = mpos.var
 
       if (document.hidden) {
         // todo: visibilitychange prevent 300fps
@@ -3009,6 +3009,17 @@ const mpos = {
       // ###
 
       if (time.slice(1, true) || gate === 0) {
+        //
+        // subscribed callbacks (todo: no xhr pollute)
+        const obr = cache.get('onBeforeRender')
+        if (obr && time.slice(2, true)) {
+          // bug: updates blocks texture update (i.e. Controls.target.lerp)?
+          // maximum call stack exceeded?
+          Object.values(obr).forEach((callback) => {
+            callback()
+          })
+        }
+
         // gate if init or just force a frame?????
         //
         // FPS slice minimum (60fps?)
