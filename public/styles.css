@@ -104,23 +104,6 @@ main {
     }
   }
 
-  /*
-  ELEMENTS */
-  #thread {
-    font-size: 1.5em;
-    margin: 1rem 0 var(--u2);
-    min-height: 5rem;
-    background-color: rgba(255, 255, 128, 0.5);
-    div,
-    span,
-    section {
-      width: 50%;
-      float: left;
-      text-align: center;
-      background-color: rgba(128, 128, 128, 0.25);
-    }
-  }
-
   /* form */
   input,
   select {
@@ -168,6 +151,21 @@ main {
   /*
   STYLE */
 
+  #thread {
+    font-size: 1.5em;
+    margin: 1rem 0 var(--u2);
+    min-height: 5rem;
+    background-color: rgba(255, 255, 128, 0.5);
+    div,
+    span,
+    section {
+      width: 50%;
+      float: left;
+      text-align: center;
+      background-color: rgba(128, 128, 128, 0.25);
+    }
+  }
+
   /* accents */
   h2,
   details {
@@ -183,43 +181,130 @@ main {
   .sub {
     background-color: var(--sub);
   }
-}
 
-/*
-  SPECIAL STRUCTURE */
+  /* LIVE MEDIA */
 
-/* containers */
-.yt iframe {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-.yt {
-  position: relative;
-  width: 100%;
-  padding-bottom: 56.25%;
-}
-model-viewer {
-  width: 100%;
-  height: 6em;
-  position: relative;
-  contain: strict;
+  .slides {
+    margin: 0;
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    .track {
+      flex-grow: 1;
+      flex-shrink: 4;
+      flex-basis: 0;
+      contain: inline-size;
+
+      /* off */
+      position: relative;
+      transition: flex-grow 1.5s;
+      opacity: 50%;
+      img,
+      picture,
+      video {
+        display: block;
+        width: 100%;
+        height: 8em;
+        image-rendering: pixelated;
+        background-blend-mode: multiply;
+        /*background-attachment: fixed; toCanvas style conflicts inconsistent */
+        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
+        background-size: auto 10vmin; /* 10vmin may be more compatible */
+        background-position: -10vmin -10vmin;
+        animation: media 6s linear infinite;
+      }
+
+      &:hover,
+      &:active,
+      &:focus {
+        /* on (filter doesn't toCanvas) */
+        flex-grow: 4;
+        opacity: 100%;
+        animation: slider 3s linear infinite;
+        img,
+        source,
+        video {
+          border-radius: 0.5em;
+        }
+      }
+    }
+
+    figcaption {
+      position: absolute;
+      top: 0;
+      z-index: 1;
+      transform: rotate(90deg);
+      transform-origin: left bottom;
+      white-space: nowrap;
+      /* consistent */
+      background-color: #fff;
+    }
+  }
+
+  /*
+LAYOUT (may need global scope for css3d?) */
+  .w25,
+  .w33,
+  .w50,
+  .w66,
+  .w75 {
+    float: left;
+    max-width: 12rem;
+  }
+  .w25 {
+    width: 25%;
+  }
+  .w33 {
+    width: 33.3%;
+  }
+  .w50 {
+    width: 50%;
+  }
+  .w66 {
+    width: 66.6%;
+  }
+  .w75 {
+    width: 75%;
+  }
+  .w100 {
+    width: 100%;
+  }
+  img {
+    width: 100%;
+    height: auto;
+  }
+
+  /* ANIMATIONS */
+  .tilt {
+    transform: rotate(-15deg);
+  }
+  .hinge {
+    position: relative;
+    /*animation: hinge 6s linear infinite alternate;*/
+  }
+  .cycle {
+    animation: cycle 3s steps(1, start) infinite;
+  }
+  .blink {
+    border: 0.125rem dashed red;
+    animation: blink 3s linear infinite;
+    opacity: 1;
+  }
 }
 
 /* 
 EFFECTS, ANIMATION */
-
-.tilt {
-  transform: rotate(-15deg);
+@keyframes media {
+  100% {
+    background-position: 0 0;
+  }
+}
+@keyframes slider {
+  50% {
+    transform: translate(0, -0.5em);
+  }
 }
 
-.hinge {
-  position: relative;
-  /*animation: hinge 6s linear infinite alternate;*/
-}
 @keyframes hinge {
   25% {
     z-index: 0;
@@ -241,9 +326,6 @@ EFFECTS, ANIMATION */
   }
 }
 
-.cycle {
-  animation: cycle 3s steps(1, start) infinite;
-}
 @keyframes cycle {
   33% {
     background-color: rgba(255, 0, 0, 0.5);
@@ -256,264 +338,39 @@ EFFECTS, ANIMATION */
   }
 }
 
-.blink {
-  border: 0.125rem dashed red;
-  animation: blink 3s linear infinite;
-  opacity: 1;
-}
 @keyframes blink {
   50% {
     opacity: 0;
   }
 }
 
+/*
+  COMMON STRUCTURE */
+
+/* containers (may be cloned out of parent hierarchy) */
+.yt iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.yt {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+}
+model-viewer {
+  width: 100%;
+  height: 6em;
+  position: relative;
+  contain: strict;
+}
+
 .bgnormal {
   background-image: linear-gradient(to right, rgba(255, 0, 0, 0), rgba(255, 0, 0, 0.5)),
     linear-gradient(to bottom, rgba(0, 255, 0, 0), rgba(0, 255, 0, 0.5)), linear-gradient(rgb(128, 128, 255), rgb(128, 128, 255));
-}
-.slides {
-  margin: 0;
-  align-items: center;
-  display: flex;
-  justify-content: center;
-  .track {
-    flex-grow: 1;
-    flex-shrink: 4;
-    flex-basis: 0;
-    contain: inline-size;
-
-    /* off */
-    position: relative;
-    transition: flex-grow 1.5s;
-    opacity: 50%;
-    img,
-    picture,
-    video {
-      display: block;
-      width: 100%;
-      height: 8em;
-      image-rendering: pixelated;
-      background-blend-mode: multiply;
-      /*background-attachment: fixed; toCanvas style conflicts inconsistent */
-      background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
-      background-size: auto 10vmin; /* 10vmin may be more compatible */
-      background-position: -10vmin -10vmin;
-      animation: media 6s linear infinite;
-    }
-
-    &:hover,
-    &:active,
-    &:focus {
-      /* on (filter doesn't toCanvas) */
-      flex-grow: 4;
-      opacity: 100%;
-      animation: slider 3s linear infinite;
-      img,
-      source,
-      video {
-        border-radius: 0.5em;
-      }
-    }
-  }
-
-  figcaption {
-    position: absolute;
-    top: 0;
-    z-index: 1;
-    transform: rotate(90deg);
-    transform-origin: left bottom;
-    white-space: nowrap;
-    /* consistent */
-    background-color: #fff;
-  }
-}
-
-@keyframes slider {
-  50% {
-    transform: translate(0, -0.5em);
-  }
-}
-
-@keyframes media {
-  100% {
-    background-position: 0 0;
-  }
-}
-
-.world {
-  position: absolute;
-  font-size: 4rem;
-  width: 2em;
-  height: 2em;
-  image-rendering: pixelated;
-  z-index: -999;
-
-  /* center width for arc */
-  width: 100%;
-  left: calc((50vw - (4 * var(--u2))) - 50%);
-
-  section {
-    text-align: center;
-    color: rgba(128, 128, 255, 0.5);
-    em {
-      border-radius: 0.5rem;
-      filter: blur(0.05rem);
-      transform: rotate(180deg);
-      display: inline-block;
-      mix-blend-mode: normal;
-      background-blend-mode: color;
-    }
-  }
-
-  div,
-  .wall {
-    position: absolute;
-    font-size: 0.5em;
-    line-height: 1;
-    width: 1em;
-    height: 1em;
-    background-size: contain; /* buggy: 100% or 10vh or 100% or img.src... various visibility quirks especially with non-colors i.e. black, gray??? */
-    background-color: rgba(240, 255, 240, 0.0605);
-    color: rgba(32, 32, 32, 0.75); /* alphaHash gets flippy here */
-  }
-
-  mp {
-    /* NOTE:
-    this REALLY helps OpenCV draw paths (mp-loader)
-    which needs some box area tolerance
-    as opposed to a background, (consistent foreground)
-    */
-    border: inset 1px transparent;
-  }
-
-  .floor mp {
-    animation-name: none;
-    transform: translateX(-0.5em);
-    /*unset */
-    margin: unset;
-    box-shadow: unset;
-    border-radius: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    color: rgba(255, 255, 255, 1);
-
-    &:before {
-      content: '░';
-      background: none;
-      position: absolute;
-    }
-  }
-
-  .pp,
-  .ss {
-    animation-duration: 5s;
-    animation-iteration-count: infinite;
-    animation-timing-function: linear;
-    animation-direction: alternate;
-  }
-  .pp {
-    animation-name: pingpong;
-  }
-  .ss {
-    animation-name: spritesheet;
-  }
-
-  hr {
-    margin: 0 auto;
-    z-index: 0;
-    height: 1em;
-    background: #404040;
-    /* width: 4em; */
-    text-align: center;
-    color: yellow;
-    border-bottom: 0.5rem dashed yellow;
-  }
-
-  .sky {
-    z-index: 99;
-    color: rgba(128, 128, 255, 1);
-  }
-  .floor {
-    z-index: -99;
-    color: rgba(0, 128, 0, 1);
-    background-color: rgba(128, 255, 128, 0.06);
-    position: relative;
-    text-align: center;
-    top: 0em;
-  }
-  .wall {
-    z-index: 99;
-  }
-  .body {
-    color: rgba(255, 0, 0, 0.5);
-  }
-
-  /* animations */
-
-  :nth-of-type(1n) {
-    animation-delay: 0s;
-  }
-  :nth-of-type(2n) {
-    animation-delay: 0.5s;
-  }
-  :nth-of-type(3n) {
-    animation-delay: 1s;
-  }
-  :nth-of-type(4n) {
-    animation-delay: 1.5s;
-  }
-  :nth-of-type(5n) {
-    animation-delay: 2s;
-  }
-
-  .p1 {
-  }
-  .p2 {
-  }
-}
-
-@keyframes pingpong {
-  100% {
-    transform: translate(600%, 0);
-  }
-}
-@keyframes spritesheet {
-  to {
-    /* trigger play state (does Chrome optimize?) */
-    transform: translate(0, 0.01em);
-  }
-}
-
-/*
-LAYOUT */
-.w25,
-.w33,
-.w50,
-.w66,
-.w75 {
-  float: left;
-  max-width: 12rem;
-}
-.w25 {
-  width: 25%;
-}
-.w33 {
-  width: 33.3%;
-}
-.w50 {
-  width: 50%;
-}
-.w66 {
-  width: 66.6%;
-}
-.w75 {
-  width: 75%;
-}
-.w100 {
-  width: 100%;
-}
-img {
-  width: 100%;
-  height: auto;
 }
 
 .lil-gui.root {
@@ -553,7 +410,7 @@ img {
   }
 }
 
-/* test styles */
+/* TEST STYLES */
 
 .w33 {
   &:hover {

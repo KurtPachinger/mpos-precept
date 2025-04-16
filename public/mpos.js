@@ -58,6 +58,15 @@ const mpos = {
       sFenceFPS: 1 / 60, // 60 fps
       sFenceFPS_slice: { boundary: 0, gate: Infinity, ramp: 0, quota: { count: 0, average: 0 } },
       slice(boundary, gate) {
+        //
+        // Slice Disabled (Experimental):
+        // Don't "optimize" sync, potentially skipping frames
+        // which affects (variable) framerate.
+        // Guarantees constant feedback (i.e. native form gripper),
+        // but overhead tends to produce more delayed effects...
+        // ...which may be mitigated by mip level, quality toSvg, or user-level code.
+        if (!mpos.var.opt.slice) return true
+
         // bitmask power: %1==60fps || %2==30fps || %4==15fps
         const slice = this.sFenceFPS_slice
         boundary = slice.boundary % boundary === 0
@@ -79,13 +88,14 @@ const mpos = {
       z: 8
     },
     opt: {
-      request: 'xml_suite.html',
+      request: 'xml_guide.html',
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
-      depth: 8,
+      depth: 6,
       inPolar: 4,
       arc: 0.0,
-      delay: 0,
+      delay: 16.666,
+      slice: true,
       update: function () {
         //
         // GUI Options Panel
@@ -635,7 +645,7 @@ const mpos = {
       gui.domElement.classList.add('mp-native')
       for (const key in opt) {
         const params = {
-          request: [['xml_suite.html', 'xml_track.html']],
+          request: [['xml_suite.html', 'xml_track.html', 'xml_guide.html']],
           selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
           depth: [0, 32, 1],
           inPolar: [1, 4, 1],
@@ -651,7 +661,11 @@ const mpos = {
           })
         } else if (key === 'request') {
           controller.onFinishChange((v) => {
-            vars.tool.xml(v, { selector: 'main' })
+            vars.tool.xml(v, { selector: 'main' }).finally(() => {
+              mpos.mod.add().then((res) => {
+                console.log('mod add:', res)
+              })
+            })
           })
         }
       }
@@ -659,6 +673,8 @@ const mpos = {
       resolve(opts)
       reject('err')
     })
+
+    // note: delay timer may go here, BUT needs grade to continue...
 
     return promise
   },
@@ -1120,8 +1136,14 @@ const mpos = {
       //
       // NOTE: await tree recursion is not complete (constants race)
 
+      if (opt.delay && !mpos.ux.timers.delay.length) {
+        console.log('delay', opt.delay)
+        grade.major.queue.add('delay')
+        mpos.ux.reflow({ type: 'delay', value: opt.delay })
+      }
+
       mpos.step.sync(grade)
-      return opts || grade
+      return grade
     }
   },
   set: {
@@ -2334,7 +2356,7 @@ const mpos = {
       grade.wait = true
       grade.inPolar = opt.inPolar
       // Frame Sync and Feedback: render may invoke targets to collocate
-      const syncFPS = pointer ? time.slice(1, true) : 0
+      const syncFPS = pointer !== undefined ? time.slice(1, true) : 0
       // Framerate Limit: pivot sFenceSync describes execution priority, since event queue is indeterminate
       let sFenceSync = 1 / ((time.sFenceDelta - time.sFenceFPS) / (time.sFenceFPS / 2))
       sFenceSync *= 2
@@ -2613,7 +2635,8 @@ const mpos = {
             })
             .catch((error) => {
               // image source bad or unsupported type
-              console.log(error)
+              // or unexpected content (xml load/unload)
+              console.log('source error:', error)
             })
             .finally(() => {
               next()
@@ -3011,7 +3034,8 @@ const mpos = {
         }
 
         // instanced elements need texture update
-        mat_shader.userData.t.needsUpdate = true
+        const texture = mat_shader.userData.t
+        if (texture) texture.needsUpdate = true
         //instanced.instanceColor.needsUpdate = true
 
         // Compile

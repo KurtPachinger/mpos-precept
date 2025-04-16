@@ -1,6 +1,56 @@
 <!--
   Layout Demo: Suite of media types, like CMS/GUI.
 -->
+
+<!--//__THREE__
+
+  // Script node adds elements BEFORE elements are evaluated 
+
+  //
+  // Add test of visual hierarchy
+  mpos.fnVar('chain', '#overflow', { count: 4, symbol: '-' })
+  mpos.fnVar('chain', '#underflow', { count: 4, symbol: '+' })
+  // Get depth of element (even before init and add)
+  let m1 = mpos.fnVar('march', '#thread', {})
+  // Add test of live depth thresholds
+  mpos.fnVar('chain', '#thread', { count: m1.slot, symbol: m1.slot })
+
+  // Object Preload
+  const Object3D = document.createElement('object')
+  Object3D.alt = 'Object3D'
+  Object3D.classList.add('mp-loader')
+  Object3D.data = '//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json'
+  Object3D.style = 'display: block; width: 2em; height: 2em;'
+
+
+  // Get depth: m.root + m.slot = opts.depth
+  let m2 = mpos.fnVar('march', '#live', {})
+  // Add chain to depth
+  const chain = mpos.fnVar('chain', '#live', { count: m2.root, symbol: '&#65532;' })
+  // Add Object3D to chain: .last from parent, in case zero-length
+  chain.parentElement?.querySelector('.last').append(Object3D)
+
+  //
+  // Dynamic object update
+  const idxJSON = Object3D.getAttribute('data-idx')
+  const rect = mpos.fnVar('find', idxJSON, {})
+  // Loader status...?
+  console.log('Load status add/obj...?:', rect)
+  // Meanwhile flip-y (scale(-1, 0) flickers visibly)
+  rect.el.style.transform = 'rotateZ(180deg)'
+  rect.el.classList.add('blink')
+
+  //
+  // Dynamic content addition
+  const element = document.createElement('article')
+  element.innerHTML = `<h2>__USE_AFTER_THREE__</h2><div>dynamic<div>content<div>tree</div></div></div>`
+  document.querySelector('#live').prepend(element)
+
+  mpos.mod.add(element, { grade: mpos.var.grade }).then((res) => {
+    console.log('mod add grade:', res)
+  })
+
+-->
 <h2 class="mp-native">
   <span>main</span>
   <label class="cycle">

@@ -1,0 +1,223 @@
+<!--
+  Layout Demo: Presentation slides, with autoplay.
+-->
+<style>
+  .lil-gui.root.mp-native {
+    z-index: 1;
+  }
+  nav li {
+    background-color: rgba(64, 255, 255, 0.5);
+    padding-left: 1em;
+    border-left: 0.25em solid yellow;
+    :focus {
+      background-color: yellow;
+    }
+  }
+
+  section {
+    &.current > h2 {
+      animation: tweening 1s 5;
+    }
+    h2 {
+      font-size: 1.5em;
+      font-weight: bold;
+    }
+  }
+  #tooltip {
+    transition: top 2s, right 2s, bottom 2s, left 2s;
+    position: fixed;
+    top: 33%;
+    right: 50%;
+    bottom: 66%;
+    left: 50%;
+    right: 50%;
+    z-index: 9;
+    margin: 0;
+    white-space: nowrap;
+
+    picture {
+      font-size: 1.25rem;
+      background: rgba(255, 255, 0, 0.5);
+      border-radius: 0.25em;
+      padding: 0.25em;
+      line-height: 1;
+
+      position: absolute;
+      transform: translateX(-50%);
+
+      big {
+        vertical-align: middle;
+      }
+    }
+    :after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      background-color: yellow;
+      height: 0.25em;
+
+      animation: timer 10s 1 linear;
+    }
+  }
+  .focus {
+    box-shadow: inset 0 0 0 0.25rem rgba(255, 0, 0, 0);
+    animation: blink 1s 5;
+  }
+  @keyframes tweening {
+    50% {
+      background: rgba(255, 255, 0, 0.5);
+    }
+  }
+  @keyframes blink {
+    50% {
+      box-shadow: inset 0 0 0 0.25rem rgba(255, 255, 0, 1);
+    }
+  }
+  @keyframes timer {
+    0% {
+      width: 100%;
+    }
+    100% {
+      width: 0%;
+    }
+  }
+</style>
+<figure id="tooltip">
+  <picture><big>📎</big>Hello! Willkommen!</picture>
+</figure>
+<nav>
+  <h3>Table of Contents</h3>
+  <ul>
+    <li><a href="#introduction">Introduction</a></li>
+    <li><a href="#controls">Controls</a></li>
+    <li><a href="#events">Events</a></li>
+    <li><a href="#fnvar">fnVar</a></li>
+  </ul>
+</nav>
+<section id="introduction" class="current">
+  <h2>Introduction</h2>
+  <p>User provides a selector to traverse DOM tree. Nodes are graded by media type and/or manual hint.</p>
+  <p>
+    The THREE scene recreates layout styles, and events (such as hover). Events in the THREE scene are dispatched back to the original DOM
+    position.
+  </p>
+  <p>Inline, you may also load models and execute code.</p>
+</section>
+<section id="controls">
+  <h2>Controls</h2>
+  <p>GUI exposes depth, inPolar, arc, delay/slice.</p>
+  <ul>
+    <li>depth: flatten hierarchy, or limit toSvg depth</li>
+    <li>inPolar: limit within visible view, for FPS or security</li>
+    <li>arc: warp around central axis</li>
+    <li>delay: FPS refresh timer</li>
+    <li>slice: optimize frame sync</li>
+  </ul>
+</section>
+<section id="events">
+  <h2>Events</h2>
+  <p>Atlas of elements reflects THREE events (excluding loader). You may trace visibility back to data-idx. Divided into mip levels.</p>
+  <p>Both DOM and THREE sync events. Quirks of timing and bubble/capture are infinite.</p>
+</section>
+<section id="fnvar">
+  <h2>fnVar</h2>
+  <p>Tools to query elements and probe depth.</p>
+  <p>Emboss presets of media positions.</p>
+</section>
+
+<!--//__THREE__
+  // Options: reset view and autoplay timer
+  const opt = mpos.var.opt
+  opt.selector = 'main'
+  //opt.inPolar = 3
+  opt.arc = 0
+  opt.delay = 16.666
+
+  const tooltip = document.querySelector('#tooltip')
+  const meta = {
+    introduction: {
+      picture: '<big>📎</big>Hello! Willkommen!',
+      focus: 'body',
+      inset: '25% 50% 75% 50%' 
+    },
+    controls: {
+      picture: '<big>🎚️</big>Controls affect FPS',
+      focus: '.lil-gui',
+      inset: '25% 25% 75% 75%' 
+    },
+    events: {
+      picture: '<big>👆</big>Events raycast map',
+      focus: '#atlas',
+      inset: '75% 25% 25% 75%' 
+    },
+    fnvar: {
+      picture: '<big>⚙️</big>Environment hook',
+      focus: '#mp',
+      inset: '75% 50% 25% 50%' 
+    }
+  }
+  
+
+  const slides = setInterval(slide, 10000)
+
+  function slide() {
+    console.log('slide')
+
+    // get slide
+    let current = document.querySelector('section.current')
+    if (current) {
+      current.classList.remove('current')
+
+      // advance slide
+      const next = current.nextElementSibling
+      if (next) {
+        next.classList.add('current')
+        reveal(next)
+      } else {
+        // end of slideshow
+        clearInterval(slides)
+        // outro
+        
+        tooltip.querySelector('picture').innerHTML = '<big>📎</big>END OF SLIDES'
+        tooltip.style.inset = '50% 50% 50% 50%'
+      }
+    } else {
+      //clearInterval(slides)
+      current = document.querySelector('section#introduction')
+      if(current){
+        current.classList.add('current')
+        reveal(current)
+      }else{
+        // DOM changed... perhaps user navigated away?
+        clearInterval(slides)
+      }
+    }
+  }
+
+  function reveal(which) {
+    which.scrollIntoView()
+    const idx = which.getAttribute('data-idx')
+    const rect = mpos.fnVar('find', idx, {})
+    console.log(idx, rect)
+
+    // tooltip
+
+    const ttMeta = meta[which.id]
+    tooltip.querySelector('picture').innerHTML = ttMeta.picture
+
+    const focusCurrent = document.querySelector('.focus')
+    if (focusCurrent) focusCurrent.classList.remove('focus')
+
+    const focus = document.querySelector(ttMeta.focus)
+    if (focus) focus.classList.add('focus')
+
+    // position
+    tooltip.style.inset = ttMeta.inset
+
+    // focus
+    const bound = rect.bound
+    //mpos.var.camera.lookAt(bound.x+(bound.width/2), -bound.y+(bound.height/2), rect.z)
+  }
+  
+-->
