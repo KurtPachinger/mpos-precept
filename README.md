@@ -18,7 +18,7 @@ mpos.mod.add( 'main', opts )
 
 ### Markup Examples
 ```html
-<!-- Precept defaults -->
+<!-- Precept default -->
 <p>atlas cell</p>
 
 <!-- Loads mime as OpenCV to create Paths -->
@@ -39,8 +39,24 @@ mpos.mod.add( 'main', opts )
   <a>atlas cell</a>
 </form>
 
-<!-- Node is parsed -->
-<!--//__THREE__ let value; mpos.fnVar('error', value); -->
+<!-- Inline comment is executed -->
+<!--//__THREE__
+
+  // Options
+  mpos.var.opt.delay = (1/60) * 1000
+  mpos.var.opt.inPolar = 3
+
+  // Frameloop callbacks
+  mpos.var.cache.set('onBeforeRender', {
+    callback1: function() {
+      // effects, like camera tween...
+    }
+  })
+
+  // Scope and OOO
+  const uri = 'foo.json'
+  document.querySelector('object#foo').data = uri
+-->
 ```
 
 ### Tools
