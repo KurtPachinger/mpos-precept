@@ -129,7 +129,7 @@ const mpos = {
     mat: new THREE.MeshBasicMaterial({
       color: 'cyan'
     }),
-    mat_shape: new THREE.MeshBasicMaterial({ alphaHash: true }),
+    mat_shape: new THREE.MeshBasicMaterial({ alphaHash: true, depthWrite: false }),
     mat_line: new THREE.MeshBasicMaterial({
       color: 'cyan',
       wireframe: true
@@ -2191,7 +2191,7 @@ const mpos = {
                     // label contour
                     // in-out: element > reduced canvas > pyr sample (kmeans/inrange) > approxPoly
                     // ShapeGeometry path is not curve
-                    let geometry = new THREE.ShapeGeometry(shape, 0.5)
+                    let geometry = new THREE.ShapeGeometry(shape, 1)
                     // mergeVertices tolerance was crunched through opencv pyrdown
                     geometry = mergeVertices(geometry, 1)
                     mergedGeoms.push(geometry)
@@ -2206,9 +2206,9 @@ const mpos = {
 
                   material.color = color
 
-                  if (rgba.a > 128) {
+                  if (rgba.a > 192) {
                     material.alphaHash = false
-                  } else if (rgba.a > 1 && rgba.a < 32) {
+                  } else if (rgba.a < 64) {
                     // alphaTest: alpha has been through a lot!
                     material.opacity = rgba.a / 255
                   }
