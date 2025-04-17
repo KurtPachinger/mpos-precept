@@ -188,12 +188,15 @@
       if (current) {
         current.classList.add('current')
         reveal(current)
+
+        console.log('slide', current.id)
       } else {
         // DOM changed... perhaps user navigated away?
         clearInterval(slides)
+        mpos.var.cache.delete('onBeforeRender')
       }
     }
-    console.log('slide', current.id)
+    
   }
 
   function reveal(which) {
@@ -219,7 +222,7 @@
     cam: function () {
       // look at current slide smoothly
       
-      if (target) {
+      if (target && target.classList.contains('current')) {
         const bound = target.getBoundingClientRect()
         const x = bound.x + bound.width / 2
         const y = -(bound.y + (bound.height / 2))

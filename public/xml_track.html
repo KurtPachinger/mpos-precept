@@ -10,6 +10,10 @@
     image-rendering: pixelated;
     z-index: -999;
 
+    /* disable the source after a moment */
+    pointer-events: none;
+    animation: 3s linear 1s 1 forwards suspense;
+
     /* center width for arc */
     width: 100%;
     left: calc((50vw - (4 * var(--u2))) - 50%);
@@ -37,6 +41,10 @@
       background-size: contain; /* buggy: 100% or 10vh or 100% or img.src... various visibility quirks especially with non-colors i.e. black, gray??? */
       background-color: rgba(240, 255, 240, 0.0605);
       color: rgba(32, 32, 32, 0.75); /* alphaHash gets flippy here */
+    }
+
+    #icon {
+      animation: 15s infinite forwards skateboard;
     }
 
     mp {
@@ -133,6 +141,26 @@
     }
   }
 
+  @keyframes suspense {
+    0%,
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes skateboard {
+    0%,
+    50% {
+      transform: rotate(0deg);
+      transform-origin: 50% 50%;
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
   @keyframes pingpong {
     100% {
       transform: translate(600%, 0);
@@ -182,7 +210,7 @@
       </mp>
     </mp>
   </mp>
-  <mp class="mp-loader w33 floor" style="z-index: 999">🛹</mp>
+  <mp class="mp-loader w33 floor" style="z-index: 999" id="icon">🛹</mp>
   <mp class="mp-allow w33 floor" style="transform: scaleX(-1)">
     <mp class="mp-allow march">
       <mp class="mp-allow">
@@ -212,3 +240,24 @@
     <mp class="mp-poster body p2">👥</mp>
   </section>
 </div>
+
+<!--//__THREE__
+  // Options: reset view and curve gameboard
+  const opt = mpos.var.opt
+  opt.selector = 'main'
+  opt.inPolar = 3
+  opt.arc = 0.5
+
+  // position camera
+  const fovX = mpos.var.fov.width / 2
+  const player1 = document.querySelector('.p1')
+  const pos1 = player1.getBoundingClientRect() // player1
+
+  const icon = document.querySelector('#icon')
+  const pos2 = icon.getBoundingClientRect() // skateboard
+
+  mpos.var.camera.position.set(fovX, -pos1.y-600, 300)
+  mpos.var.controls.target.set(fovX, -pos2.y, 0)
+  mpos.var.controls.update()
+
+-->
