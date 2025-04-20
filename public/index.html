@@ -31,9 +31,21 @@
           clearInterval(mp)
 
           // Load template
-          mpos.fnVar('xml', 'xml_guide.html', { selector: 'main' }).finally(() => {
+          const uri = 'xml_adslot.html'
+          mpos.fnVar('xml', uri, { selector: 'main' }).finally(() => {
+            // Options may set Proxy (scene,camera,renderer) and config
+            const options = {}
+            if (uri === 'xml_adslot.html') {
+              // Proxy {scene, camera, renderer}
+              // or (new) init options configurations
+              options.config = {
+                camera: 'Orthographic'
+                //renderer: document.querySelector('#adspace')
+              }
+            }
+
             // init with event listeners
-            mpos.init().then((res) => {
+            mpos.init(options).then((res) => {
               console.log('mpos:', res)
               // Add DOM content (and run inline scripts)
               mpos.mod.add().then((res) => {

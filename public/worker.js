@@ -7,24 +7,5 @@ self.onmessage = function (e) {
       break
   }
 
-  // batch, send next on receipt, requestIdleCallback
+  //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
 }
-
-//
-//import init from './scene.js'
-//function init( canvas, width, height, pixelRatio, path ) {
-
-/*
-renderer = new THREE.WebGLRenderer( { antialias: true, canvas: canvas } );
-renderer.setPixelRatio( pixelRatio );
-renderer.setSize( width, height, false );
-
-animate();
-*/
-//}
-/*
-self.onmessage = function (message) {
-  const data = message.data
-  init(data.drawingSurface, data.width, data.height, data.pixelRatio, data.path)
-}
-*/

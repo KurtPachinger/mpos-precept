@@ -1,0 +1,237 @@
+<!--
+  Layout Demo: Proxy init, for ad slots
+-->
+<style>
+  #adspace {
+    pointer-events: none;
+    z-index: 999;
+    position: absolute;
+    inset: 0 0 0 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  main {
+    --c1: rgba(255, 48, 32, 1);
+    --c2: rgba(64, 48, 64, 0.25);
+    --c3: rgba(128, 48, 64, 0.5);
+
+    width: 40rem;
+    max-width: 100%;
+    margin: 0 auto 4rem;
+    &,
+    header,
+    nav,
+    article,
+    aside,
+    footer {
+      overflow: hidden;
+      overflow-y: auto;
+    }
+
+    header,
+    footer {
+      clear: both;
+    }
+    header {
+      h2 {
+        font-size: 2.5em;
+        border-color: transparent;
+      }
+      nav ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        li {
+          min-width: 33.333%;
+          float: left;
+          line-height: 1;
+          a {
+            padding: 0.5rem 1rem;
+            display: block;
+            color: #fff;
+            &:hover {
+              background-color: var(--c2);
+            }
+            text-decoration: none;
+            small {
+              color: #000;
+            }
+          }
+          &:nth-of-type(1) {
+            background-color: var(--c1);
+          }
+          &:nth-of-type(2) {
+            background-color: var(--c1);
+          }
+          &:nth-of-type(3) {
+            background-color: var(--c1);
+          }
+        }
+      }
+    }
+    article {
+      width: calc(100% - 12rem);
+      float: left;
+      section {
+        h2 {
+          font-size: 1.75em;
+          small {
+            color: #000;
+          }
+        }
+        &:nth-of-type(1) h2 {
+          color: var(--c1);
+        }
+        &:nth-of-type(2) h2 {
+          color: var(--c1);
+        }
+        &:nth-of-type(3) h2 {
+          color: var(--c1);
+        }
+      }
+    }
+    aside {
+      width: 12rem;
+      float: left;
+      /* unset global stylesheet */
+      position: relative;
+      left: initial;
+    }
+    footer {
+      section {
+        width: 33.333%;
+        float: left;
+      }
+    }
+    aside section,
+    footer section {
+      background: var(--c2);
+
+      .widget {
+        font-size: 2em;
+        line-height: 1.5;
+        color: rgba(0, 0, 0, 0.5);
+      }
+    }
+    line-height: 1;
+
+    @media (orientation: portrait) {
+      aside,
+      article {
+        float: none;
+        clear: both;
+        width: 100%;
+      }
+      aside section {
+        width: 33.333%;
+        float: left;
+      }
+    }
+  }
+</style>
+<canvas id="adspace" class="mp-block"></canvas>
+<header>
+  <h2><big>&boxbox;</big>MP-PROXY</h2>
+  <nav>
+    <ul>
+      <li>
+        <a href="#MP01"><small>01</small>init</a>
+      </li>
+      <li>
+        <a href="#MP02"><small>02</small>sync</a>
+      </li>
+      <li>
+        <a href="#MP03"><small>03</small>data</a>
+      </li>
+    </ul>
+  </nav>
+</header>
+
+<article>
+  <section id="MP01">
+    <h2><small>MP01</small>init</h2>
+    <p>Media post to ad slots. Mode configures [1] Orthographic camera and [2] unranged zIndex. Render callback targets different slots.</p>
+  </section>
+  <section id="MP02">
+    <h2><small>MP02</small>sync</h2>
+    <p>Events may include: non-invasive fullscreen, dynamic content replacement, novel depth effects, sensor use, assistive mascots...</p>
+  </section>
+  <section id="MP03">
+    <h2><small>MP03</small>data</h2>
+    <p>Unique session demographics may require device permission or access to personal profile for data of interest.</p>
+  </section>
+</article>
+
+<aside>
+  <section><div class="widget">&blk34;&blk12;&blk12;</div></section>
+  <section><div>&boxbox;MP-AD</div></section>
+  <section><div class="widget">&blk34;&blk12;&blk12;</div></section>
+</aside>
+
+<footer>
+  <section><div>MP-PROXY-CC0</div></section>
+  <section><div>&boxbox;MP-AD</div></section>
+  <section><div>&boxbox;MP-AD</div></section>
+</footer>
+
+<!--//__THREE__
+  
+  // Options: re-init with ortho camera & unranged zIndex
+  // ... maybe proxy scene fit canvas to element?
+  // ... xmlchange cleanupfor other templates: {opts}, controls
+  const vars = mpos.var
+  const opt = vars.opt
+  opt.selector = 'main'
+  opt.delay = (1/60) * 1000
+
+  // center scene
+  //vars.controls.enableZoom = vars.controls.enableRotate = false
+  let { width, height } = vars.fov
+  vars.camera.position.set(width/2, -height/2, 1024/8)
+  mpos.var.camera.lookAt(width/2, -height/2, 0)
+  vars.controls.target.set(width/2, -height/2, 0)
+  vars.controls.enabled = false
+  
+  // branding
+  const geometry = new THREE.BoxGeometry(100, 100, 100)
+  const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+  const cube = new THREE.Mesh(geometry, material)
+  cube.name = 'cube'
+  vars.scene.add(cube)
+  cube.position.set(width/2, -height/2, 0)
+
+
+  const target = document.querySelector('#adspace')
+  mpos.var.cache.set('onBeforeRender', {
+    cta: function () {
+      // some CTAs for user engagement
+      
+      if (target) {
+        cube.rotation.x += 0.01
+        cube.rotation.y += 0.01
+        cube.rotation.z += 0.01
+
+        // cube is not auto-updated by mpos queue
+        // ...but could have been attached by an object.data with css???
+        cube.position.x = mpos.var.fov.width/2
+       
+      }
+    }
+  })
+
+
+  const disconnect = setInterval(connect, 1000)
+  function connect() {
+    if(!target){
+      // DOM changed... perhaps user navigated away?
+      clearInterval(disconnect)
+
+      //
+      vars.controls.enabled = true
+      
+      mpos.var.cache.delete('onBeforeRender')
+    }
+  }
+
+-->

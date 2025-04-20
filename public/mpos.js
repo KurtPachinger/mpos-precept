@@ -528,7 +528,7 @@ const mpos = {
       vars.renderer =
         opts.renderer ||
         new THREE.WebGLRenderer({
-          //canvas: canvas
+          canvas: opts.config?.renderer || undefined
           //antialias: false,
           //precision: 'lowp',
           //powerPreference: 'low-power',
@@ -541,7 +541,12 @@ const mpos = {
       fov.width = opts.host.offsetWidth
       fov.height = opts.host.offsetHeight
       const frustum = fov.basis * opt.depth
-      vars.camera = opts.camera || new THREE.PerspectiveCamera(45, fov.width / fov.height, fov.z / 2, frustum * 4)
+      vars.camera =
+        opts.camera ||
+        (opts.config?.camera === 'Orthographic'
+          ? new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, fov.z, fov.basis)
+          : new THREE.PerspectiveCamera(45, fov.width / fov.height, fov.z / 2, frustum * 4))
+      //vars.camera = opts.camera || new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, 8, 1000)
 
       //
       // Inject Stage
@@ -642,11 +647,12 @@ const mpos = {
       //domElement.addEventListener('input', ux.event, false)
 
       const gui = new GUI()
+      console.log('gui', gui)
       gui.domElement.classList.add('mp-native')
       for (const key in opt) {
         const params = {
-          request: [['xml_suite.html', 'xml_track.html', 'xml_guide.html']],
-          selector: [['body', 'main', '#native', '#text', '#loader', '#media', '#live', 'custom']],
+          request: [['xml_suite.html', 'xml_track.html', 'xml_guide.html', 'xml_adslot.html']],
+          selector: [['body', 'main', 'custom']],
           depth: [0, 32, 1],
           inPolar: [1, 4, 1],
           delay: [0, 133.333, 8.333],
@@ -670,6 +676,8 @@ const mpos = {
         }
       }
 
+      vars.gui = gui
+
       resolve(opts)
       reject('err')
     })
@@ -690,7 +698,7 @@ const mpos = {
         ),
       poster: `.mp-poster,canvas,img,picture,figcaption,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
       native:
-        `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
+        `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,fieldset,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
           ','
         ),
       native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
@@ -2359,7 +2367,7 @@ const mpos = {
       const syncFPS = pointer !== undefined ? time.slice(1, true) : 0
       // Framerate Limit: pivot sFenceSync describes execution priority, since event queue is indeterminate
       let sFenceSync = 1 / ((time.sFenceDelta - time.sFenceFPS) / (time.sFenceFPS / 2))
-      sFenceSync *= 2
+      sFenceSync *= 2.0
       let sPhaseSync = 0.5
 
       const step = { frame: 0, queue: new Set(major.queue), syncFPS: syncFPS, quality: 1 }
@@ -2505,6 +2513,7 @@ const mpos = {
           // tile scale
           //const wSize = uv.hasOwnProperty('idxMip') ? atlas.uv[uv.mip].map : atlas.uv['1.0'].map
           options.canvasWidth = options.canvasHeight = atlas.uv[uv.mip].map // a little speculative presumption that our mip will be honored by inventory space?
+
           // distance * performance
           const pixelRatio = rect.ux.o || rect.ux.u.size ? quality : 0.8
           options.pixelRatio = fov.dpr * pixelRatio
@@ -2916,6 +2925,16 @@ const mpos = {
               fov.height = container.offsetHeight
 
               camera.aspect = fov.width / fov.height
+
+              if ((camera.type = 'OrthographicCamera')) {
+                camera.left = fov.width / -2
+                camera.right = fov.width / 2
+                camera.top = fov.height / 2
+                camera.bottom = fov.height / -2
+
+                camera.position.x = window.innerWidth / 2
+              }
+
               camera.updateProjectionMatrix()
 
               renderer.setSize(fov.width, fov.height)
