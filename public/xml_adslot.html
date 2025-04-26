@@ -176,61 +176,69 @@
 </footer>
 
 <!--//__THREE__
-  
+
   // Options: re-init with ortho camera & unranged zIndex
   // ... maybe proxy scene fit canvas to element?
-  // ... xmlchange cleanupfor other templates: {opts}, controls
-  const vars = mpos.var
-  const opt = vars.opt
+  // ... cleanup for other templates: camera/controls, opts, BoxGeometry/s,  
+
+  const { opt, fov, controls, camera, batch, cache, scene } = mpos.var
+
   opt.selector = 'main'
-  opt.delay = (1/60) * 1000
+  opt.delay = (1 / 60) * 1000
+
+
+  let z = 1024/8
+  if(camera.isPerspectiveCamera){
+    // Layout Demo expects Orthographic Camera, but it's ok for toggle
+    z = 1024
+  }
+
+  //controls.enableZoom = controls.enableRotate = false
+  controls.enabled = false
 
   // center scene
-  //vars.controls.enableZoom = vars.controls.enableRotate = false
-  let { width, height } = vars.fov
-  vars.camera.position.set(width/2, -height/2, 1024/8)
-  mpos.var.camera.lookAt(width/2, -height/2, 0)
-  vars.controls.target.set(width/2, -height/2, 0)
-  vars.controls.enabled = false
-  
+  let { width, height } = fov
+  camera.position.set(width / 2, -height / 2, z)
+  camera.lookAt(width / 2, -height / 2, 0)
+  controls.target.set(width / 2, -height / 2, 0)
+
   // branding
   const geometry = new THREE.BoxGeometry(100, 100, 100)
   const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 })
   const cube = new THREE.Mesh(geometry, material)
+  cube.position.set(width / 2, -height / 2, 0)
   cube.name = 'cube'
-  vars.scene.add(cube)
-  cube.position.set(width/2, -height/2, 0)
+  scene.add(cube)
 
+  //
+  // Animation Frameloop Callback
 
-  const target = document.querySelector('#adspace')
-  mpos.var.cache.set('onBeforeRender', {
-    cta: function () {
-      // some CTAs for user engagement
-      
-      if (target) {
-        cube.rotation.x += 0.01
-        cube.rotation.y += 0.01
-        cube.rotation.z += 0.01
+  const obr = cache.get('onBeforeRender')
+  obr.cta = function () {
+    // todo: some user engagement
 
-        // cube is not auto-updated by mpos queue
-        // ...but could have been attached by an object.data with css???
-        cube.position.x = mpos.var.fov.width/2
-       
-      }
-    }
-  })
-
-
-  const disconnect = setInterval(connect, 1000)
-  function connect() {
-    if(!target){
-      // DOM changed... perhaps user navigated away?
-      clearInterval(disconnect)
-
+    if (batch === mpos.var.batch) {
       //
-      vars.controls.enabled = true
-      
-      mpos.var.cache.delete('onBeforeRender')
+      // Host node attached: could be GUID, unique container, or live selector, etc...
+
+      cube.rotation.x += 0.01
+      cube.rotation.y += 0.01
+      cube.rotation.z += 0.01
+
+      // cube is not auto-updated by mpos queue (not DOM object.data)
+      cube.position.x = fov.width / 2
+    } else {
+      //
+      // Host node detached
+
+      // delete key (from global)
+      obr.cta = null
+
+      //unload or reset shared process
+      controls.enabled = true
+      scene.remove(cube)
+
+      // ...set PerspectiveCamera, config opts, etc.
     }
   }
 

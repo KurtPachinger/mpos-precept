@@ -51,7 +51,7 @@ const mpos = {
   },
   var: {
     batch: 0,
-    cache: new Map(),
+    cache: new Map([['onBeforeRender', {}]]),
     time: {
       sFence: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
       sFenceDelta: 0,
@@ -88,7 +88,7 @@ const mpos = {
       z: 8
     },
     opt: {
-      request: 'xml_guide.html',
+      request: 'xml_suite.html',
       selector: 'main',
       custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
       depth: 6,
@@ -544,7 +544,7 @@ const mpos = {
       vars.camera =
         opts.camera ||
         (opts.config?.camera === 'Orthographic'
-          ? new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, fov.z, fov.basis)
+          ? new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, fov.z / 2, frustum * 4)
           : new THREE.PerspectiveCamera(45, fov.width / fov.height, fov.z / 2, frustum * 4))
       //vars.camera = opts.camera || new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, 8, 1000)
 
@@ -2915,7 +2915,7 @@ const mpos = {
 
         mpos.ux.timers[timer].push(
           setTimeout(() => {
-            const { opt, fov, camera, renderer, rendererCSS } = mpos.var
+            const { opt, fov, camera, controls, renderer, rendererCSS } = mpos.var
             // setTimeout is global scope, so strictly re-declare vars
 
             if (e.type === 'resize') {
@@ -2936,6 +2936,7 @@ const mpos = {
               }
 
               camera.updateProjectionMatrix()
+              controls.update()
 
               renderer.setSize(fov.width, fov.height)
               rendererCSS.setSize(fov.width, fov.height)
@@ -3035,7 +3036,7 @@ const mpos = {
           // bug: updates blocks texture update (i.e. Controls.target.lerp)?
           // maximum call stack exceeded?
           Object.values(obr).forEach((callback) => {
-            callback()
+            if (callback) callback()
           })
         }
 

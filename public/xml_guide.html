@@ -129,10 +129,10 @@
 
 <!--//__THREE__
   // Options: reset view and autoplay timer
-  const opt = mpos.var.opt
+  const { opt, cache, controls } = mpos.var
   opt.selector = 'main'
   opt.arc = 0
-  opt.delay = (1/60) * 1000
+  opt.delay = (1 / 60) * 1000
 
   let target
   const tooltip = document.querySelector('#tooltip')
@@ -162,10 +162,9 @@
   const slides = setInterval(slide, 10000)
 
   function slide() {
-    
     // get slide
     let current = document.querySelector('section.current')
-    
+
     if (current) {
       current.classList.remove('current')
 
@@ -177,8 +176,8 @@
       } else {
         // end of slideshow
         clearInterval(slides)
-        // outro
 
+        // outro
         tooltip.querySelector('picture').innerHTML = '<big>📎</big>END OF SLIDES'
         tooltip.style.inset = '50% 50% 50% 50%'
       }
@@ -193,10 +192,10 @@
       } else {
         // DOM changed... perhaps user navigated away?
         clearInterval(slides)
-        mpos.var.cache.delete('onBeforeRender')
+        //cache.delete('onBeforeRender')
+        obr.cam = null
       }
     }
-    
   }
 
   function reveal(which) {
@@ -218,21 +217,22 @@
     tooltip.style.inset = ttMeta.inset
   }
 
-  mpos.var.cache.set('onBeforeRender', {
-    cam: function () {
-      // look at current slide smoothly
-      
-      if (target && target.classList.contains('current')) {
-        const bound = target.getBoundingClientRect()
-        const x = bound.x + bound.width / 2
-        const y = -(bound.y + (bound.height / 2))
+  //
+  // Animation Frameloop Callback
 
-        // bug: updates blocks texture update (i.e. Controls.target.lerp)?
-        const controls = mpos.var.controls
-        controls.target.lerp(new THREE.Vector3(x,y,0), 0.5)
-        controls.update()
-      }
+  const obr = cache.get('onBeforeRender')
+  obr.cam = function () {
+    // look at current slide smoothly
+
+    if (target && target.classList.contains('current')) {
+      const bound = target.getBoundingClientRect()
+      const x = bound.x + bound.width / 2
+      const y = -(bound.y + bound.height / 2)
+
+      // bug: updates blocks texture update (i.e. Controls.target.lerp)?
+      controls.target.lerp(new THREE.Vector3(x, y, 0), 0.5)
+      controls.update()
     }
-  })
+  }
 
 -->

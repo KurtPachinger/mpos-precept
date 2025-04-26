@@ -175,7 +175,7 @@
 </style>
 
 <h2><big style="font-size: 2em">Sk8r🛹Frog</big></h2>
-<p>SK8RFROG needs NASA to explain NASA. Can you defeat GOLDFISH to save OLDMAN?</p>
+<p>Help Sk8rFrog cross the Snazz-Mazze to avoid doom.</p>
 <mp class="mp-allow march">
   <mp class="mp-allow p">
     <mp class="mp-allow p">🐡</mp>
@@ -243,21 +243,23 @@
 
 <!--//__THREE__
   // Options: reset view and curve gameboard
-  const opt = mpos.var.opt
+  const { opt, fov, camera, controls } = mpos.var
   opt.selector = 'main'
   opt.inPolar = 3
   opt.arc = 0.5
 
   // position camera
-  const fovX = mpos.var.fov.width / 2
+  const fovX = fov.width / 2
   const player1 = document.querySelector('.p1')
   const pos1 = player1.getBoundingClientRect() // player1
 
   const icon = document.querySelector('#icon')
   const pos2 = icon.getBoundingClientRect() // skateboard
 
-  mpos.var.camera.position.set(fovX, -pos1.y-600, 300)
-  mpos.var.controls.target.set(fovX, -pos2.y, 0)
-  mpos.var.controls.update()
+  camera.position.set(fovX, -pos1.y-600, 300)
+  controls.target.set(fovX, -pos2.y, 0)
+  controls.update()
+
+  // ... reset arc onBeforeUnload?
 
 -->
