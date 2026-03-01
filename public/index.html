@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Imposter DOM Rects in THREE." />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="./styles.css" />
     <script type="importmap">
       {
         "imports": {
@@ -15,6 +15,7 @@
       }
     </script>
   </head>
+
   <body class="mp-unstyle">
     <div id="errorMessage"></div>
     <main>
@@ -32,7 +33,7 @@
 
           // Load template
           const uri = 'xml_suite.html'
-          mpos.fnVar('xml', uri, { selector: 'main' }).finally(() => {
+          mpos.fnVar('load', uri, { io: 'xml', node: 'main' }).then((fetch) => {
             // Options may set Proxy (scene,camera,renderer) and config
             const options = {}
             if (uri === 'xml_adslot.html') {
@@ -72,7 +73,7 @@
         false
       )
     </script>
-    <script src="opencv.js" async></script>
+    <script src="./opencv.js" async></script>
     <!--<script src="//cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.min.js" async></script>-->
   </body>
 </html>

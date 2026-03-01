@@ -24,13 +24,10 @@
     }
   }
   #tooltip {
-    transition: top 2s, right 2s, bottom 2s, left 2s;
-    position: fixed;
-    top: 33%;
-    right: 50%;
-    bottom: 66%;
-    left: 50%;
-    right: 50%;
+    transition: top 2s, left 2s;
+    top: 0%;
+    position: sticky;
+    float: right;
     z-index: 9;
     margin: 0;
     white-space: nowrap;
@@ -41,10 +38,7 @@
       border-radius: 0.25em;
       padding: 0.25em;
       line-height: 1;
-
       position: absolute;
-      transform: translateX(-50%);
-
       big {
         vertical-align: middle;
       }
@@ -129,10 +123,15 @@
 
 <!--//__THREE__
   // Options: reset view and autoplay timer
-  const { opt, cache, controls } = mpos.var
+  const { opt, cache, controls, camera, fov } = mpos.var
   opt.selector = 'main'
+  opt.inPolar = 3
   opt.arc = 0
-  opt.delay = (1 / 60) * 1000
+  opt.delay = (1/15)
+
+  document.body.scrollIntoView()
+  camera.position.set(fov.width/2,-fov.height/2,1000)
+  controls.update()
 
   let target
   const tooltip = document.querySelector('#tooltip')
@@ -140,22 +139,22 @@
     introduction: {
       picture: '<big>📎</big>Hello! Willkommen!',
       focus: 'body',
-      inset: '25% 50% 75% 50%'
+      inset: '0%'
     },
     controls: {
       picture: '<big>🎚️</big>Controls affect FPS',
       focus: '.lil-gui',
-      inset: '25% 25% 75% 75%'
+      inset: '10%'
     },
     events: {
       picture: '<big>👆</big>Events raycast map',
       focus: '#atlas',
-      inset: '75% 25% 25% 75%'
+      inset: '20%'
     },
     fnvar: {
       picture: '<big>⚙️</big>Environment hook',
       focus: '#mp',
-      inset: '75% 50% 25% 50%'
+      inset: '30%'
     }
   }
 
@@ -179,7 +178,7 @@
 
         // outro
         tooltip.querySelector('picture').innerHTML = '<big>📎</big>END OF SLIDES'
-        tooltip.style.inset = '50% 50% 50% 50%'
+        tooltip.style.top = '50%'
       }
     } else {
       //clearInterval(slides)
@@ -214,7 +213,7 @@
     if (focus) focus.classList.add('focus')
 
     // position
-    tooltip.style.inset = ttMeta.inset
+    tooltip.style.top = ttMeta.inset
   }
 
   //

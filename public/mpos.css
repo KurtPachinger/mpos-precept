@@ -13,7 +13,7 @@ MP SELECTORS */
   }
 
   &.mp-unset {
-    will-change: transform;
+    /* will-change: transform; */
   }
   &.mp-poster {
     /* will-change: display; */
@@ -30,7 +30,7 @@ MP SELECTORS */
     &,
     > * {
       /* css3d and children */
-      will-change: transform;
+      /* will-change: transform; */
     }
   }
 }
@@ -137,7 +137,6 @@ MP INTERFACE */
   #css3d,
   canvas[data-engine] {
     position: absolute;
-    cursor: crosshair;
   }
   canvas {
     image-rendering: pixelated;
@@ -147,7 +146,8 @@ MP INTERFACE */
     background-color: rgba(255, 255, 255, 0.75);
     overflow: hidden;
     /*overflow-y: auto;*/
-    &:hover {
+    &:hover,
+    &.active {
       transform: scale(2);
       transform-origin: bottom right;
     }
@@ -160,6 +160,7 @@ MP INTERFACE */
       height: auto;
       background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIElEQVQYV2Nk+M/QwMDI0MAABYxgGkkQIoAkiBCACgIABm4HhEEa4PgAAAAASUVORK5CYII=');
       background-size: auto 100%;
+      pointer-events: none;
     }
     #caret {
       /* index and inPolar */

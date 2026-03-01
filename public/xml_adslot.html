@@ -154,7 +154,7 @@
     <p>Media post to ad slots. Mode configures [1] Orthographic camera and [2] unranged zIndex. Render callback targets different slots.</p>
   </section>
   <section id="MP02">
-    <h2><small>MP02</small>sync</h2>
+    <h2 class="mp-loader"><small>MP02</small>sync</h2>
     <p>Events may include: non-invasive fullscreen, dynamic content replacement, novel depth effects, sensor use, assistive mascots...</p>
   </section>
   <section id="MP03">
@@ -181,10 +181,11 @@
   // ... maybe proxy scene fit canvas to element?
   // ... cleanup for other templates: camera/controls, opts, BoxGeometry/s,  
 
-  const { opt, fov, controls, camera, batch, cache, scene } = mpos.var
+  const { opt, fov, controls, camera, batch, cache, scene, renderer } = mpos.var
 
-  opt.selector = 'main'
-  opt.delay = (1 / 60) * 1000
+  opt.selector = 'main';
+  opt.depth = 4
+  opt.delay = 125;
 
 
   let z = 1024/8
@@ -203,12 +204,31 @@
   controls.target.set(width / 2, -height / 2, 0)
 
   // branding
-  const geometry = new THREE.BoxGeometry(100, 100, 100)
-  const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-  const cube = new THREE.Mesh(geometry, material)
-  cube.position.set(width / 2, -height / 2, 0)
-  cube.name = 'cube'
-  scene.add(cube)
+  let icon_target = document.querySelector('h2.mp-loader');
+  icon_target.style = ""; // reloading page reset
+  let iconTime;
+  let icon = scene.getObjectByName('icon')
+  if (!icon) {
+
+    // add geometry
+    const geometry = new THREE.TetrahedronGeometry(200, 0);
+    const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 })
+    icon = new THREE.Mesh(geometry, material)
+    icon.position.set(width / 2, -height / 2, 0)
+    icon.name = 'icon'
+    icon.castShadow = icon.receiveShadow = true
+
+    // add lighting
+    renderer.shadowMap.enabled = true;
+    const light = new THREE.DirectionalLight(0x808080, 1, 1000);
+    light.position.set(width / 2, -height / 2, 200)
+    light.name = 'luma'
+    light.castShadow = true
+
+    scene.add(icon, light);
+    
+
+  }
 
   //
   // Animation Frameloop Callback
@@ -218,15 +238,52 @@
     // todo: some user engagement
 
     if (batch === mpos.var.batch) {
+
+
+      if (!iconTime) {
+        iconTime = performance.now();
+
+        // scene init?
+        let instaFam = scene.getObjectByProperty('isInstancedMesh', true)
+        console.log('IF', instaFam)
+
+        // icon
+        
+        const rect = mpos.fnVar('find', icon_target.dataset.idx, {}).then((rect) => {
+          mpos.fnVar('load', 'obj', { node: rect }).then((key) => {
+            icon_target.style.border = ".125em dashed red";
+            icon_target.style.opacity = "opacity";
+            icon_target.style.color = "rgba(0,0,0,0.125)";
+            icon_target.style.zIndex = 999;
+            icon_target.style.transform = "scale(2)"
+            icon_target = key
+
+            //
+            key.children.forEach((cluster) => {
+              console.log('cv.kmeans needs shadow?', cluster)
+              cluster.castShadow = cluster.receiveShadow = true;
+            })
+            
+          })
+        })
+
+      }
+
+
       //
       // Host node attached: could be GUID, unique container, or live selector, etc...
+      let iconTimeNew = performance.now()
+      let delta = (iconTime - iconTimeNew) / (500 * 15)
+      iconTime = iconTimeNew
 
-      cube.rotation.x += 0.01
-      cube.rotation.y += 0.01
-      cube.rotation.z += 0.01
+      icon.rotation.x += delta
+      icon.rotation.y += delta
+      icon.rotation.z += delta
 
-      // cube is not auto-updated by mpos queue (not DOM object.data)
-      cube.position.x = fov.width / 2
+      if(icon_target.isObject3D) icon_target.position.x += .02
+
+      // icon is not auto-updated by mpos queue (not DOM object.data)
+      icon.position.x = fov.width / 2
     } else {
       //
       // Host node detached
@@ -236,7 +293,10 @@
 
       //unload or reset shared process
       controls.enabled = true
-      scene.remove(cube)
+      renderer.shadowMap.enabled = false;
+      instaFam.receiveShadow = false
+      scene.remove(luma)
+      scene.remove(icon)
 
       // ...set PerspectiveCamera, config opts, etc.
     }

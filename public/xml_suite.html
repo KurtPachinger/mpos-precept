@@ -2,55 +2,66 @@
   Layout Demo: Suite of media types, like CMS/GUI.
 -->
 
-<!--//__THREE__
+<!--//__THREE__ 
+  // Load Misc. Content Types (before/after init)
 
-  // Script node adds elements BEFORE elements are evaluated 
+  // 1. flat chain, inner
+  mpos.fnVar("chain", "#frames", { count: 4, symbol: "-" });
 
-  //
-  // Add test of visual hierarchy
-  mpos.fnVar('chain', '#overflow', { count: 4, symbol: '-' })
-  mpos.fnVar('chain', '#underflow', { count: 4, symbol: '+' })
-  // Get depth of element (even before init and add)
-  let m1 = mpos.fnVar('march', '#thread', {})
-  // Add test of live depth thresholds
-  mpos.fnVar('chain', '#thread', { count: m1.slot, symbol: m1.slot })
-
-  // Object Preload
-  const Object3D = document.createElement('object')
-  Object3D.alt = 'Object3D'
-  Object3D.classList.add('mp-loader')
-  Object3D.data = '//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json'
-  Object3D.style = 'display: block; width: 2em; height: 2em;'
-
-
-  // Get depth: m.root + m.slot = opts.depth
-  let m2 = mpos.fnVar('march', '#live', {})
-  // Add chain to depth
-  const chain = mpos.fnVar('chain', '#live', { count: m2.root, symbol: '&#65532;' })
-  // Add Object3D to chain: .last from parent, in case zero-length
-  chain.parentElement?.querySelector('.last').append(Object3D)
+  // 2. deep chain, outer
+  let m1 = mpos.fnVar("march", "#thread", {});
+  mpos.fnVar("chain", "#thread", { count: m1.slot, symbol: m1.slot });
 
   //
-  // Dynamic object update
-  const idxJSON = Object3D.getAttribute('data-idx')
-  const rect = mpos.fnVar('find', idxJSON, {})
-  // Loader status...?
-  console.log('Load status add/obj...?:', rect)
-  // Meanwhile flip-y (scale(-1, 0) flickers visibly)
-  rect.el.style.transform = 'rotateZ(180deg)'
-  rect.el.classList.add('blink')
+  // Dynamic load (pre add)...
+
+  // 1. flat dynamic, element
+  const element = document.createElement("article");
+  element.id = "uid" + new Date().getTime();
+  element.innerHTML = `<h2>__USE_AFTER_THREE__</h2><div>dynamic<div>load</div></div>`;
+
+  document.querySelector("#dynamic").prepend(element);
+
+  // 2. deep dynamic, object
+  const Object3D = document.createElement("object");
+  Object3D.classList.add("mp-loader", "blink");
+  Object3D.data = "//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json";
+  Object3D.style = "display: block; width: 2em; height: 2em;";
+
+  let m2 = mpos.fnVar("march", "#dynamic", {});
+  mpos
+    .fnVar("chain", "#dynamic", { count: m2.root + 1, symbol: "&#65532;" })
+    .then((chains) => {
+      chains.parentElement?.querySelector(".last").append(Object3D);
+      // set property
+      Object3D.style.transform = "rotateZ(180deg)";
+
+      // #comment parsing (no [data-idx], grade.rect...)
+    });
 
   //
-  // Dynamic content addition
-  const element = document.createElement('article')
-  element.innerHTML = `<h2>__USE_AFTER_THREE__</h2><div>dynamic<div>content<div>tree</div></div></div>`
-  document.querySelector('#live').prepend(element)
+  // Dynamic load (post add)...?
 
-  mpos.mod.add(element, { grade: mpos.var.grade }).then((res) => {
-    console.log('mod add grade:', res)
-  })
+  // poll key: grade
+  mpos.fnVar("load", "grade", { node: mpos.var }).then((key1) => {
+    console.log("load:", key1);
 
+    // add dynamic (to [data-idx], grade.rect...)
+    mpos.mod.add(element, { grade: key1 });
+    mpos.mod.add(Object3D, { grade: key1 });
+
+    // find rect by [data-idx] from grade
+    const idxJSON = Object3D.getAttribute("data-idx");
+    const rect = mpos.fnVar("find", idxJSON, {}).then((rect) => {
+      console.log("rect", rect);
+      // poll key: JSONLoader
+      mpos.fnVar("load", "obj", { node: rect }).then((key2) => {
+        console.log("load:", key2);
+      });
+    });
+  });
 -->
+
 <h2 class="mp-native">
   <span>main</span>
   <label class="cycle">
@@ -58,27 +69,21 @@
     cycle
   </label>
 </h2>
-<p class="cycle stage" id="overflow">
-  differ tween: passive, overflow<br />
-  <span id="fragment" contenteditable style="color: red">
-    <style>
-      #fragment {
-        /* some properties don't cascade */
-        background-color: rgba(255, 0, 0, 0.75);
-        text-shadow: 0.05em 0.125em 0.025em #fff;
-        box-shadow: inset 0em 0.2em 0.05em 0em #000;
-      }
-      .score {
-        background-color: rgba(0, 255, 0, 0.25);
-      }
-    </style>
-    <span class="score">#fragment</span>
-  </span>
-  <br />
-  Update queue attribute from cache of split-priority.<br />
-</p>
+
+\n TEXT_NODE \n
+
 <details id="static" class="mp-allow" open>
   <summary>details<span>#static</span></summary>
+
+  <ul class="ticker mp-poster scroll resize">
+    <li><span class="ico">&starf;</span>1 <b class="sub">[==----]</b></li>
+    <li><span class="ico">&starf;</span>2 <b class="sub">[----==]</b></li>
+    <li><span class="ico">&starf;</span>3 <b class="sub">[--==--]</b></li>
+    <li><span class="ico">&starf;</span>4 <b class="sub">[--==--]</b></li>
+    <li><span class="ico">&starf;</span>5 <b class="sub">[----==]</b></li>
+    <li><span class="ico">&starf;</span>6 <b class="sub">[==----]</b></li>
+  </ul>
+
   <div class="stage" id="underflow"></div>
   <aside id="native" class="tilt scroll">
     <h2>aside<span>#native</span></h2>
@@ -104,7 +109,7 @@
   </aside>
   <section id="deep">
     <h2>section<span>#deep</span></h2>
-    \n TEXT NODE \n
+
     <ul class="tilt">
       <h3>deep list</h3>
       <li>
@@ -125,6 +130,7 @@
       <li>B. BBBBBBBB</li>
       <li>C. CCCCCCCC</li>
     </ul>
+
     <div id="thread" class="resize bgnormal">
       <div>
         <div>
@@ -133,16 +139,16 @@
         </div>
         <div>
           3
-          <a href="//discourse.threejs.org" target="_blank">4</a>
+          <a href="#">4</a>
         </div>
       </div>
       <div>
         <div>
           <div>
-            <div><a href="#">A</a></div>
+            <a href="#">A</a>
             <div>B</div>
           </div>
-          <div><span></span><span></span></div>
+          <div><span>C</span><span>C</span></div>
         </div>
         <div>
           <div>7</div>
@@ -150,10 +156,31 @@
         </div>
       </div>
     </div>
+
+    <p class="cycle stage" id="frames">
+      #frames: differ tween<br />
+      ux:phase queue prop race<br />
+      <span id="fragment" contenteditable style="color: red">
+        <style>
+          #fragment {
+            /* some properties don't cascade */
+            background-color: rgba(255, 0, 0, 0.75);
+            text-shadow: 0.05em 0.125em 0.025em #fff;
+            box-shadow: inset 0em 0.2em 0.05em 0em #000;
+          }
+          .score {
+            background-color: rgba(0, 255, 0, 0.25);
+          }
+        </style>
+        <span class="score">#fragment</span>
+      </span>
+      <br />
+      &hellip;lossy slice?<br />
+    </p>
   </section>
   <section id="load">
     <h2>section<span>#load</span></h2>
-    <p class="mp-loader">Class <span class="sup">mp-loader</span> TXT2IMG?</p>
+    <p class="mp-loader">Text<span class="sup">.mp-loader</span> &rang; cv.kmeans &rang; poly-path white<span class="sub">-space</span>?</p>
     <a
       class="mp-loader w33"
       href="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/setPath/Decompress/parse.glb"
@@ -171,7 +198,7 @@
       <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
       <track kind="captions" />
     </video>
-    <div class="w33" id="Object3D"></div>
+    <!--<div class="w33" id="Object2D"></div>-->
   </section>
   <section id="type" class="bgnormal">
     <h2>section<span>#type</span></h2>
@@ -196,7 +223,8 @@
             <!--comment-->
             <![CDATA[ escape ]]>
             <?php echo('hello world') ?>
-            <?xml version="1.0" encoding="UTF-8"?>
+            <?xml
+            version="1.0" encoding="UTF-8"?>
             <xml>XML</xml>
             <!--//__THREE__
                 const uri = '//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/suzanne_buffergeometry.json'
@@ -230,32 +258,22 @@
         <tr>
           <td>object</td>
           <td>
-            <object
-              alt="SVG"
-              data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg"
-              rel="dns-prefetch"
-            ></object>
+            <object alt="SVG" data="../source/Tetrix_projection_fill_plane.svg" rel="dns-prefetch"></object>
           </td>
         </tr>
         <tr>
           <td>iframe</td>
           <td>
             <div class="yt mp-native">
-              <iframe src="//youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media;" title="YouTube"></iframe>
+              <iframe src="https://youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media" title="YouTube"></iframe>
             </div>
           </td>
         </tr>
         <tr>
           <td>model-viewer</td>
           <td>
-            <script type="module" src="//ajax.googleapis.com/ajax/libs/model-viewer/4.1.0/model-viewer.min.js"></script>
-            <model-viewer
-              ar
-              camera-controls
-              touch-action="pan-y"
-              src="//modelviewer.dev/shared-assets/models/Astronaut.glb"
-              alt="A 3D model of an astronaut"
-            >
+            <script type="module" src="../source/model-viewer.min.js"></script>
+            <model-viewer ar camera-controls touch-action="pan-y" src="../source/Astronaut.glb" alt="A 3D model of an astronaut">
               <button slot="ar-button" style="border: none; position: absolute; top: 16px; right: 16px">👋 Activate AR</button>
             </model-viewer>
           </td>
@@ -313,7 +331,9 @@
   <article>
     <h2>Article 02: Predictive</h2>
     <p>Defined slot to sample for systems.</p>
-    <img alt="" class="w100" src="data:," style="height: 8em; background-color: rgb(0, 128, 0)" />
+    <div id="flood">
+      <img alt="" class="w100" src="data:," style="height: 8em; background-color: rgb(0, 128, 0)" />
+    </div>
     <ul>
       Proposal...
       <li>script: cast data routine</li>
@@ -333,3 +353,67 @@
     </ul>
   </article>
 </details>
+
+<!--//__THREE__
+  // Particle Lifecycle
+  const flood = document.querySelector("#flood");
+  flood.style = "position:relative;";
+  const swarm = document.createElement("div");
+  swarm.style =
+    "position:absolute;top:0;right:0;bottom:0;left:0;overflow:hidden;" +
+    "color:rgba(255, 255, 255,.5);filter: grayscale(0.25) contrast(0.75) brightness(1.5) blur(0.125em);";
+  swarm.id = "swarm";
+  flood.appendChild(swarm);
+
+  let emoji = ["A", "B", "C", "D", "E", "F", "G"];
+
+  let fsCount = 120;
+  let fsItems = new Array(6);
+  const fsInterval = setInterval(() => {
+    if (fsCount <= 0) {
+      clearInterval(fsInterval);
+      swarm.innerHTML = "END";
+    }
+
+    for (let i = 0; i < fsItems.length; i++) {
+      let num = Math.round(fsItems.length / (i + 1));
+      // add
+      mpos
+        .fnVar("chain", "#swarm", { count: num, symbol: emoji[num] })
+        .then((chains) => {
+          // add 2
+          chains.id = ["c", fsCount, i].join("_");
+          //const last = chains.querySelector(".last");
+          const n2 = Math.round(num / 2);
+          const c2 = mpos.fnVar("chain", "#" + chains.id + " .last", {
+            count: n2,
+            symbol: chains.id,
+          });
+
+          // style
+          const deg = Math.random() * 360 + "deg";
+          const top = Math.random() * 100 + "%";
+          const left = Math.random() * 100 + "%";
+          chains.style =
+            "position:absolute; top:" +
+            top +
+            "; left:" +
+            left +
+            "; rotate:" +
+            deg +
+            ";";
+          // save
+          fsItems[i] = chains;
+          // remove
+          setTimeout(
+            () => {
+              chains.remove();
+            },
+            fsCount * 10 * 1.5,
+          );
+        });
+    }
+    fsCount--;
+  }, fsCount * 10);
+  
+-->
