@@ -15,48 +15,55 @@
   //
   // Dynamic load (pre add)...
 
-  // 1. flat dynamic, element
-  const element = document.createElement("article");
-  element.id = "uid" + new Date().getTime();
-  element.innerHTML = `<h2>__USE_AFTER_THREE__</h2><div>dynamic<div>load</div></div>`;
+  
+  const dynamic = document.querySelector("#dynamic");
+  let element, chains, Object3D;
+  if (dynamic.querySelectorAll(".uid").length < 3) {
 
-  document.querySelector("#dynamic").prepend(element);
 
-  // 2. deep dynamic, object
-  const Object3D = document.createElement("object");
-  Object3D.classList.add("mp-loader", "blink");
-  Object3D.data = "//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json";
-  Object3D.style = "display: block; width: 2em; height: 2em;";
+      // 2. deep dynamic, object
+    Object3D = document.createElement("object");
+    Object3D.classList.add("mp-loader", "blink");
+    Object3D.data = "//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json";
+    Object3D.style = "display: block; width: 2em; height: 2em;";
 
-  let m2 = mpos.fnVar("march", "#dynamic", {});
-  mpos
-    .fnVar("chain", "#dynamic", { count: m2.root + 1, symbol: "&#65532;" })
-    .then((chains) => {
-      chains.parentElement?.querySelector(".last").append(Object3D);
-      // set property
-      Object3D.style.transform = "rotateZ(180deg)";
+    // set property (will apply to Object3D, once loaded)
+    Object3D.style.transform = "rotateZ(180deg)";
+    // #comment parsing (no [data-idx], grade.rect...)
 
-      // #comment parsing (no [data-idx], grade.rect...)
-    });
+
+    // 1. flat dynamic, element
+    const uid = "uid" + new Date().getTime()
+    element = document.createElement("article");
+    element.classList.add("uid", uid);
+    element.innerHTML = "<h2>__USE_AFTER_THREE__</h2><div>" + uid + "</div><div>"+dynamic.querySelectorAll(".uid").length+"</div>";
+
+    dynamic.prepend(element);
+
+    let m2 = mpos.fnVar("march", "#dynamic", {});
+    chains = mpos.fnVar("chain", "."+uid, { count: m2.root + 2, symbol: Object3D });
+
+  }
+
 
   //
   // Dynamic load (post add)...?
 
   // poll key: grade
-  mpos.fnVar("load", "grade", { node: mpos.var }).then((key1) => {
-    console.log("load:", key1);
+  mpos.fnVar("load", "grade", { node: mpvar }).then((key1) => {
 
     // add dynamic (to [data-idx], grade.rect...)
-    mpos.mod.add(element, { grade: key1 });
-    mpos.mod.add(Object3D, { grade: key1 });
+    if (element) mpos.mod.add(element, { grade: key1 });
+    //mpos.mod.add(Object3D, { grade: key1 });
 
     // find rect by [data-idx] from grade
     const idxJSON = Object3D.getAttribute("data-idx");
     const rect = mpos.fnVar("find", idxJSON, {}).then((rect) => {
-      console.log("rect", rect);
+
       // poll key: JSONLoader
       mpos.fnVar("load", "obj", { node: rect }).then((key2) => {
-        console.log("load:", key2);
+        
+        //console.log("load:", key2);
       });
     });
   });
@@ -181,30 +188,26 @@
   <section id="load">
     <h2>section<span>#load</span></h2>
     <p class="mp-loader">Text<span class="sup">.mp-loader</span> &rang; cv.kmeans &rang; poly-path white<span class="sub">-space</span>?</p>
-    <a
-      class="mp-loader w33"
-      href="//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/setPath/Decompress/parse.glb"
-    ></a>
     <object
       alt="SVG"
       class="mp-loader w33 hinge"
       data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=10"
       rel="dns-prefetch"
     ></object>
-    <img alt="" class="mp-loader w33 hinge" src="./image.webp?t=10" crossorigin="anonymous" />
-    <img alt="" class="mp-loader w33 hinge" src="./image.gif?t=10" />
+    <img alt="" class="mp-loader w33 hinge" src="./image.webp?t=11" crossorigin="anonymous" />
+    <img alt="" class="mp-loader w33 hinge" src="./image.gif?t=11" />
     <video class="mp-loader w33 hinge" crossorigin="anonymous" loop autoplay muted>
       <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm" />
       <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
       <track kind="captions" />
     </video>
-    <!--<div class="w33" id="Object2D"></div>-->
+    <a id="link" class="mp-loader w33 hinge" href="//github.com/mrdoob/three.js/raw/refs/heads/dev/examples/models/gltf/duck.glb">DRACKO</a>
   </section>
   <section id="type" class="bgnormal">
     <h2>section<span>#type</span></h2>
     <article>
-      <img alt="" class="w33 hinge" src="./image.webp?t=10" />
-      <img alt="" class="w33 hinge" src="./image.gif?t=10" />
+      <img alt="" class="w33 hinge" src="./image.webp?t=11" />
+      <img alt="" class="w33 hinge" src="./image.gif?t=11" />
     </article>
     <details id="test" class="mp-allow tilt" open>
       <summary>details<span>#test</span></summary>
@@ -232,7 +235,7 @@
                 loader.load( uri, function ( data ){
                 
                   const filename = uri.split('/').pop()
-                  const resource = mpos.var.grade.group.getObjectByName(filename)
+                  const resource = mpvar.grade.group.getObjectByName(filename)
                   
                   if( !resource ){
 
@@ -244,7 +247,7 @@
                     object.scale.multiplyScalar( scale );
                     object.position.set( -scale, scale, 0 );
                   
-                    mpos.var.grade.group.add( object );
+                    mpvar.grade.group.add( object );
                     
                   }
 
@@ -258,22 +261,32 @@
         <tr>
           <td>object</td>
           <td>
-            <object alt="SVG" data="../source/Tetrix_projection_fill_plane.svg" rel="dns-prefetch"></object>
+            <object
+              alt="SVG"
+              data="//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg"
+              rel="dns-prefetch"
+            ></object>
           </td>
         </tr>
         <tr>
           <td>iframe</td>
           <td>
             <div class="yt mp-native">
-              <iframe src="https://youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media" title="YouTube"></iframe>
+              <iframe src="//youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media" title="YouTube"></iframe>
             </div>
           </td>
         </tr>
         <tr>
           <td>model-viewer</td>
           <td>
-            <script type="module" src="../source/model-viewer.min.js"></script>
-            <model-viewer ar camera-controls touch-action="pan-y" src="../source/Astronaut.glb" alt="A 3D model of an astronaut">
+            <script type="module" src="//ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+            <model-viewer
+              ar
+              camera-controls
+              touch-action="pan-y"
+              src="//modelviewer.dev/shared-assets/models/Astronaut.glb"
+              alt="A 3D model of an astronaut"
+            >
               <button slot="ar-button" style="border: none; position: absolute; top: 16px; right: 16px">👋 Activate AR</button>
             </model-viewer>
           </td>
@@ -365,55 +378,65 @@
   swarm.id = "swarm";
   flood.appendChild(swarm);
 
-  let emoji = ["A", "B", "C", "D", "E", "F", "G"];
+  let emoji = ['xxx'];
 
   let fsCount = 120;
   let fsItems = new Array(6);
-  const fsInterval = setInterval(() => {
-    if (fsCount <= 0) {
-      clearInterval(fsInterval);
-      swarm.innerHTML = "END";
-    }
 
-    for (let i = 0; i < fsItems.length; i++) {
-      let num = Math.round(fsItems.length / (i + 1));
-      // add
-      mpos
-        .fnVar("chain", "#swarm", { count: num, symbol: emoji[num] })
-        .then((chains) => {
-          // add 2
-          chains.id = ["c", fsCount, i].join("_");
-          //const last = chains.querySelector(".last");
-          const n2 = Math.round(num / 2);
-          const c2 = mpos.fnVar("chain", "#" + chains.id + " .last", {
-            count: n2,
-            symbol: chains.id,
+  function go(){
+    swarm.innerHTML = "";
+    emoji.push(setInterval(() => {
+      if (fsCount <= 0) {
+        for (let j=0; j<emoji.length; j++){
+          clearInterval(emoji[j]);
+        }
+        swarm.innerHTML = "END";
+        fsCount = 60;
+      }
+
+      for (let i = 0; i < fsItems.length; i++) {
+        let num = Math.round(fsItems.length / (i + 1));
+        // add
+        mpos
+          .fnVar("chain", "#swarm", { count: num, symbol: emoji[emoji.length-1] })
+          .then((chains) => {
+            // add 2
+            chains.id = ["c", fsCount, i].join("_");
+            //const last = chains.querySelector(".last");
+            const n2 = Math.round(num / 2);
+            const c2 = mpos.fnVar("chain", "#" + chains.id + " .last", {
+              count: n2,
+              symbol: chains.id,
+            });
+
+            // style
+            const deg = Math.random() * 360 + "deg";
+            const top = Math.random() * 100 + "%";
+            const left = Math.random() * 100 + "%";
+            chains.style =
+              "position:absolute; top:" +
+              top +
+              "; left:" +
+              left +
+              "; rotate:" +
+              deg +
+              ";";
+            // save
+            fsItems[i] = chains;
+            // remove
+            setTimeout(
+              () => {
+                chains.remove();
+              },
+              fsCount * 10 * 1.5,
+            );
           });
+      }
+      fsCount--;
+    }, fsCount * 10)
+    )
+  }
 
-          // style
-          const deg = Math.random() * 360 + "deg";
-          const top = Math.random() * 100 + "%";
-          const left = Math.random() * 100 + "%";
-          chains.style =
-            "position:absolute; top:" +
-            top +
-            "; left:" +
-            left +
-            "; rotate:" +
-            deg +
-            ";";
-          // save
-          fsItems[i] = chains;
-          // remove
-          setTimeout(
-            () => {
-              chains.remove();
-            },
-            fsCount * 10 * 1.5,
-          );
-        });
-    }
-    fsCount--;
-  }, fsCount * 10);
+  swarm.addEventListener('click',go)
   
 -->

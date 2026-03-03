@@ -89,6 +89,7 @@ MP SELECTORS */
   bottom: 0;
   right: 0;
   z-index: 3;
+  cursor: zoom-in;
 }
 
 /* CSS3D: added to user stylesheet to target cloned elements */
@@ -137,6 +138,7 @@ MP INTERFACE */
   #css3d,
   canvas[data-engine] {
     position: absolute;
+    /*cursor: grab;*/
   }
   canvas {
     image-rendering: pixelated;

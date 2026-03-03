@@ -10,9 +10,777 @@ import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRe
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 
 import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
 import { parseGIF, decompressFrames } from 'gifuct-js'
+
+//
+//
+const mpvar = {
+  batch: 0,
+  cache: new Map([['onBeforeRender', {}]]),
+  time: {
+    sFence: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
+    sFenceDelta: 0,
+    sFenceFPS: 1 / 60, // 60 fps
+    sFenceFPS_slice: {
+      boundary: 1,
+      gate: true,
+      ramp: 0,
+      sma: { count: 0, average: 0 }
+    },
+    slice(boundary) {
+      // legacy/deprecated (pow...greater...decorator...)
+      //if (!mpvar.opt.slice) return true;
+      const slice = this.sFenceFPS_slice
+      boundary = slice.boundary >= boundary
+
+      return boundary
+    },
+    st: { gate: false, subsub: false, pingpong: false }
+  },
+  fov: {
+    basis: 1024,
+    dpr: Math.min(devicePixelRatio, 1),
+    width: window.innerWidth,
+    height: window.innerHeight,
+    z: 8
+  },
+  opt: {
+    request: 'xml_suite.html',
+    selector: 'main',
+    custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
+    depth: 6,
+    inPolar: 4,
+    arc: 0.0,
+    delay: 0, //16.666
+    setFlash: false,
+    update: function () {
+      //
+      // GUI Options Panel
+      let selector = this.selector
+      const options = { depth: this.depth }
+
+      if (this.selector === 'custom') {
+        // Document from URI (CORS?)
+        if (this.custom.startsWith('//') || this.custom.startsWith('http')) {
+          //|| this.custom === '#fragment'
+          // '#custom template'
+          selector = '#custom object'
+          options.custom = this.custom
+        } else {
+          selector = this.custom
+        }
+      }
+
+      mpos.mod.add(selector, options)
+    }
+  },
+
+  cloneX: class {
+    constructor(opts = {}) {
+      for (let k in opts) {
+        this[k] = opts[k]
+      }
+    }
+
+    //
+    // toSvg options: for atlas and OpenCV
+    //... shallow copy and append
+
+    pixelRatio = 1
+    preferredFontFormat = 'woff2'
+    fontEmbedCSS = ''
+    imagePlaceholder = 'data:,'
+    //imagePlaceholder =
+    'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='
+    style = {
+      margin: 'initial',
+      transform: 'initial'
+      //imageRendering: "pixelated",
+      // display: 'block',
+    }
+    includeStyleProperties = [
+      //
+      //:root{--global},
+      //"animation",
+      //"animation-play-state",
+      'background',
+      'background-blend-mode',
+      'background-color',
+      'background-image',
+      'background-position',
+      'border',
+      'border-bottom',
+      'border-left',
+      'border-radius',
+      'border-right',
+      'border-top',
+      'bottom',
+      'box-shadow',
+      'box-sizing',
+      'color',
+      'content',
+      'contain',
+      'display',
+      'filter',
+      'flex-basis',
+      'flex-direction',
+      'flex-grow',
+      'flex-shrink',
+      'flex-wrap',
+      'float',
+      'font',
+      'font-family',
+      'font-size',
+      'height',
+      //"image-rendering",
+      'inset',
+      'left',
+      'line-height',
+      'list-style',
+      'margin',
+      'max-height',
+      'max-width',
+      'min-height',
+      'min-width',
+      'mix-blend-mode',
+      'opacity',
+      'overflow',
+      'overflow-x',
+      'overflow-y',
+      'padding',
+      'perspective',
+      'position',
+      'right',
+      'rotate',
+      'scale',
+      'text-align',
+      'text-decoration',
+      'text-shadow',
+      'text-transform',
+      'top',
+      'transform',
+      'transform-origin',
+      //"transition",
+      'translate',
+      'translate3d',
+      'vertical-align',
+      'visibility',
+      'width',
+      'zoom',
+      'z-index'
+    ]
+
+    //
+    // Filter (like precept/inPolar): reduce memory use... don't alter whitespace!
+    // Child nodes may be malformed, or create documents in the loop
+
+    allow = new Set(['FORM', 'FIELDSET', 'MODEL-VIEWER'])
+    block = new Set([
+      //"#comment", //8
+      //"#cdata-section", //4
+      //"#text",//3
+      'STYLE',
+      'SCRIPT',
+      'TEMPLATE',
+      'IFRAME',
+      'VIDEO',
+      'SOURCE',
+      'TRACK',
+      'DATALIST'
+    ])
+
+    // public static (...not this.#clone) since access/override moving structs
+    static filterEmpty(clone) {
+      //this.#node = clone;
+      const { grade } = mpvar
+      //
+      // Filter Clone Nodes from Memory
+      // complex return of (mostly unnecessary) multi-factor (map/pyramid) structure
+
+      // 0. hierarchy
+
+      // not element or text (#comment, #cdata-section...)
+      if (clone.nodeType > 3 || grade.wait === Infinity) return
+      if (clone.nodeType < 3) {
+        // not reserved element-specific protection (block/allow)
+        const reserve =
+          !this.allow.has(clone.nodeName) ||
+          !this.allow.has(clone.parentElement.nodeName) ||
+          (!this.block.has(clone.nodeName) && !this.block.has(clone.parentElement.nodeName))
+
+        if (!reserve) return
+      }
+
+      // Element or coerced #text
+      // clone in toSvg(rect.el) needs stricter test
+      // since mat type (visible/blacklist) ABORTS
+      // to remove EMPTY/HIDDEN element nodes, or approximate GHOST text nodes
+
+      //if (clone.nodeType === 3) return true
+      const el = clone.nodeType === 3 ? clone.parentElement : clone
+      const ancestor = el.closest('[data-idx]')
+      const rect = grade.rects.get(ancestor.dataset['idx'])
+
+      // ***
+      //if (el.isSameNode(ancestor)) return true;
+      const _tempLim = grade.atlas.mmFull
+      if (!rect || _tempLim) {
+        // edge cases: may be hard refresh, or atlas is too full (~128/2)
+        //console.log("flood!");
+
+        // expensive to children (anonymous quality?)
+        const deep = mpos.fnVar('march', el, {}).root > 8
+        const whitelist = rect && (rect.ux.o || rect.ux.u.size)
+        if (!rect || deep || !whitelist) return
+        // note: frame===0, atlas (with breakpoints) no [data-idx], so filter ghosts boxes (low-quality)
+      }
+      //
+      // ***
+
+      // 1. empty sprite (not test of whitespace, such as #text \n <br>)
+      const hidden =
+        !rect.bound.box.width ||
+        !rect.bound.box.height ||
+        el.style.display === 'none' ||
+        (el.textContent.trim() === '' && rect.css?.style?.background === 'none') // block fullscreen overlay
+      // 2. relatives (...shallow, grade.el) exceed mip size
+      const overflow =
+        // !! NEGATE CLONE == RECT.EL ??  (text|el) ?: [data-idx]    el==ancestor
+        //!el.isSameNode(ancestor) &&
+        rect.uv?.mip < 2 &&
+        (ancestor.querySelectorAll('[data-idx]').length > 8 || // L0-1: match parent/self (data-idx FAR UP tree)
+          el.childElementCount > 16) // L0: self
+
+      //if (hidden || overflow) console.log("filter", clone, mip);
+      // ~7 less elements per frame: (blank.gif, <br />, <object>, <script>, <source>)
+      return !hidden || !overflow
+      //if (!!clone.shadowRoot || element.getRootNode() instanceof ShadowRoot)
+    }
+
+    static filterSelf(clone) {
+      // draw background: hide children, since box size set
+      return !clone.parentElement
+    }
+  },
+  geo: new THREE.BoxGeometry(1, 1, 1),
+  mat: new THREE.MeshBasicMaterial({ color: 'cyan' }),
+  mat_shape: new THREE.MeshBasicMaterial({
+    alphaHash: true,
+    depthWrite: false
+  }),
+  mat_line: new THREE.MeshBasicMaterial({ color: 'cyan', wireframe: true }),
+  mat_shader: new THREE.RawShaderMaterial({
+    //discourse.threejs.org/t/13221/18
+    //discourse.threejs.org/t/33191/12
+    uniforms: {
+      map: { type: 't', value: null },
+      atlasSize: { type: 'f', value: null }
+    },
+    vertexShader: `precision mediump float;
+
+      uniform mat4 modelViewMatrix;
+      uniform mat4 projectionMatrix;
+
+      attribute vec3 position;
+      attribute vec2 uv;
+      attribute mat4 instanceMatrix;
+      attribute vec3 uvOffset;
+
+      uniform float atlasSize;
+      varying vec2 vUv;
+
+
+      void main() {
+        vUv = vec2(uvOffset.x, uvOffset.y) + ((uv* uvOffset.z) / atlasSize ) ;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }
+      `,
+    fragmentShader: `precision lowp float;
+
+      varying vec2 vUv;
+      uniform sampler2D map;
+
+      void main() {
+        gl_FragColor = texture2D(map, vUv);
+      }
+      `
+  }),
+  tool: {
+    //
+    // Tools and fnVar: compatibility or direct access?
+    eq: function (value, opts) {
+      let equals = true
+      const epsilon = 6
+      function dec(v) {
+        //const isNumeric = (val) => typeof val !== 'boolean' && val !== '' && !isNaN(val);
+        v = isFinite(+v) ? +v.toFixed(epsilon) : v
+        return v
+      }
+
+      if (!opts) {
+        // numeric precision
+        equals = dec(value)
+      } else if (opts.avg) {
+        // simple moving average
+        const avg = opts.avg
+        const acc = avg.average + (value - avg.average) / (1 + avg.count)
+        avg.average = acc
+        avg.count++
+      } else if (opts.diff) {
+        // compare objects
+        // A.isSameNode(B), string===string, or {...epsilon}
+        const A = value
+        const B = opts.diff
+        if (!opts.deep) {
+          // string === string
+          equals = JSON.stringify(A) === JSON.stringify(B)
+          //console.log("shallow", equals, A, B);
+        } else {
+          // keys === keys
+          let a, b
+          for (const key in A) {
+            if (a !== b) {
+              equals = false
+              break
+            }
+          }
+        }
+        //
+      }
+
+      return equals
+    },
+    avg: function (val, acc) {
+      // moving average
+      let avg = acc.average + (val - acc.average) / (1 + acc.count)
+      // moving average
+      acc.average = avg
+      acc.count++
+    },
+    march: function (element, opts = {}) {
+      const { grade, opt } = opts.mpvar
+      const depth = grade?.depth || opts.depth || opt.depth
+
+      //
+      // z relative to root(s) and slot depth(s)
+      let inner = element
+      const outer = grade?.el || document.querySelector(opt.selector) || document.body
+      const m = { root: 0, slot: 0 }
+      while (m.root < 32 && inner && inner.parentElement && !inner.isSameNode(outer)) {
+        m.root++
+        inner = inner.parentElement.closest(opts.precept.allow)
+      }
+
+      m.slot = depth - m.root
+
+      return m
+    },
+    chain: function (element, opts = {}) {
+      // chain of elements to count
+      let nodeName = opts.nodeName || 'mp'
+      let chains = document.createElement(nodeName)
+      chains.classList.add('mp-allow', 'march')
+      let last = chains
+      while (--opts.count > 0) {
+        let chain = document.createElement(nodeName)
+        chain.classList.add('mp-allow', 'p')
+        if (opts.count % 2 === 0) {
+          chain.classList.add('odd')
+        }
+        // path scatter sample (no pointerevents)
+        chain.innerHTML += `<mp class='k'>${opts.count}</mp>`
+
+        last.append(chain)
+        last = chain
+      }
+
+      last.classList.add('last')
+      last.append(opts.symbol || '')
+      if (element) element.prepend(chains)
+
+      return chains
+    },
+    omni: function (terms, opts = {}) {
+      const grade = opts.grade || mpvar.grade
+      // Get Element(s) and rect(s)
+      // options: sort, poll, callback, find/load?
+      // o[delist,enlist], .. children
+
+      const omni = {
+        terms: terms instanceof Array ? terms : [terms],
+        rects: {},
+        o: { count: 0, time: performance.now() }
+      }
+
+      for (let i = 0; i < omni.terms.length; i++) {
+        let term = omni.terms[i]
+
+        //invalid, element, queryselector, dataid
+        if (term === undefined) {
+          // bad selector
+          continue
+        } else if (opts.node || opts.io) {
+          // load [node, io] term(s) path from async
+          let load = {}
+          ;['node', 'io'].forEach((o) => {
+            load[o] = opts[o] instanceof Array ? opts[o][i] : opts[o]
+          })
+          this.tool.load(v, { node: load.node, io: load.io })
+        } else {
+          let idx
+          if (term.__proto__.constructor.name === 'rect') {
+            // expected query but got rect
+            // o[delist,enlist] {...children} ?
+            continue
+          } else if (term instanceof HTMLElement) {
+            // Element
+            idx = term.dataset['idx']
+          } else if (isFinite(term)) {
+            let el = document.querySelector("[data-idx='" + term + "']")
+            if (el) {
+              omni.terms[i] = el
+              // attribute [data-idx]
+              idx = term
+            }
+          } else if (!isFinite(term)) {
+            // term may be selector/multiselector, 2d/3d
+            const omni3d = ['atlas', 'other', 'first', 'last']
+            const omni2d = ['mp', 'img', 'div', 'li', 'p', '[data-idx]', '*']
+
+            if (omni3d.includes(term)) {
+              // select rect (major or position)
+              let rect
+              if (['atlas', 'other'].includes(term)) {
+                // major
+                rect = grade.major[term]
+              } else {
+                // position
+                const rects = Array.from(grade.rects)
+                const position = term === 'first' ? 0 : rects.length - 1
+                rect = rects[position][1]
+              }
+              // KEY
+              omni.rects[term] = rect
+            } else {
+              // select element (multiple or single)
+              // note: omni2d is the selector regex
+              term = omni2d.includes(term) ? document.querySelectorAll(term) : document.querySelector(term)
+              if (term instanceof NodeList || term instanceof HTMLElement) {
+                // KEY
+                omni.terms[i] = term
+                if (!term.length) term = [term]
+                term.values().forEach((t) => {
+                  idx = t.dataset['idx']
+                  if (idx) omni.rects[idx] = grade.rects.get(idx.toString())
+                })
+              }
+            }
+          }
+
+          // KEY: rect from attribute [data-idx]
+          if (isFinite(idx)) omni.rects[idx] = grade.rects.get(idx.toString())
+
+          // ...callbacks
+        }
+      }
+
+      //omni.terms = omni.terms.filter(term => {
+      //  let ok = (term instanceof HTMLElement && omni.o.count++)
+      //  return ok
+      //})
+
+      omni.o.time = performance.now() - omni.o.time
+      return omni
+    },
+    load: function (packet, opts = {}) {
+      // media io
+      if (!opts.node) {
+        return ['NO OPTS NODE', packet, opts]
+      }
+
+      if (opts.io === 'xml') {
+        // document fragment
+        return fetch(packet)
+          .then((response) => response.text())
+          .then((html) => {
+            document.querySelector(opts.node).innerHTML = html
+          })
+          .catch((error) => {
+            console.error('fetch error:', error)
+          })
+      } else if (opts.io === 'src') {
+        // offscreen quad
+        return new Promise((resolve, reject) => {
+          opts.node.onload = (e) => resolve(e)
+          opts.node.onerror = (e) => reject(e)
+          opts.node.setAttribute(opts.attribute, packet)
+        })
+      } else {
+        // polling obj['key']
+        return new Promise((resolve, reject) => {
+          let retry = 10
+          const poll = setInterval(() => {
+            const key = opts.node[packet]
+            if (key || retry < 1) {
+              clearInterval(poll)
+              resolve(key)
+              reject('fail: ', opts.node, packet)
+            }
+            retry--
+          }, 1000)
+        })
+      }
+    },
+    find: function (term, opts = {}) {
+      return new Promise((resolve, reject) => {
+        // find rects by key
+        let rect
+
+        const grade = opts.mpvar.grade
+
+        if (['first', 'last'].includes(term)) {
+          // position
+          const rects = Array.from(grade.rects)
+          const position = term === 'first' ? 0 : rects.length - 1
+          rect = rects[position][1]
+        } else if (['atlas', 'other'].includes(term)) {
+          // all major
+          rect = grade.major[term]
+        } else if (isFinite(term)) {
+          // data-idx
+          rect = grade.rects.get(term.toString())
+        } else {
+          // HTMLElement or 'selector'
+          term = term instanceof HTMLElement ? term : document.querySelector(term)
+          term = term.dataset['idx']
+          rect = grade.rects.get(term)
+        }
+
+        resolve(rect)
+        reject('load error')
+      })
+      //return rect;
+    },
+
+    diffs: function (type, opts = {}) {
+      let differ = false
+      const rect = opts.rect
+      const style = rect.css.style || rect.el.style // computed or direct if not priority
+
+      //
+      // Different from Baseline Generic Primitive
+
+      if (type === 'rect') {
+        // should TRUE indicate need for action, like other diffs, despire FALSE being the problem?
+        //rect.el.naturalWidth, rect.el.naturalHeight
+
+        // WARNING: bipolar feature test... not to be passed to ux.u?
+        // force flush, similar to syncFPS===0 (but saved rect)
+        // - NO ATLAS CELL (UX.CHANGE/PRIOR) AND MUST SET: frame:-1 :
+        // - NO SIZE ELEMENT AND MUST SET: ATLAS?
+        //
+
+        differ = !rect.el.clientWidth || !rect.el.clientHeight
+        // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
+      } else if (type === 'matrix') {
+        // note: style source may re-prioritize by accumulating frames
+        const newFrame = rect.frame === -1
+        const newBound = rect.bound.width / rect.bound.height !== rect.bound.box.width / rect.bound.box.height
+        differ = newFrame || newBound || style.transform?.startsWith('matrix')
+      } else if (type === 'tween') {
+        // note: loose definition
+        // ...transform, filter, overlay, allow-discrete
+        const keyframes =
+          (style.transitionProperty !== '' && parseFloat(style.transitionDuration) > 0) ||
+          (style.animationName !== 'none' && style.animationPlayState === 'running')
+        differ = keyframes
+      } else if (type === 'flow') {
+        // note: if position overflows scrollOffset, canvas may not draw
+        differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
+        //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
+      } else if (type === 'pseudo') {
+        // note: get pseudo capture once per frame for all rects
+        let css = rect.css
+        if (css) {
+          // deepest pseudo match: pass an object (to avoid per-element / per-frame)
+          const root = rect.el.parentElement || document.body // note: document.body is excessive, but may prevent error in a loop
+          let capture = opts.capture || {
+            hover: [...root.querySelectorAll(':hover')].pop(),
+            active: [...root.querySelectorAll(':active')].pop(),
+            focus: [...root.querySelectorAll(':focus')].pop()
+          }
+
+          // note: pseudo (or unset prior frame) enqueued for atlas
+          differ = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.minor === 'poster')
+        }
+      }
+
+      //
+      // WARNING: direct update to rect
+      // ?? duplicate access get/set per frame ??
+      differ ? rect.ux.u.add(type) : rect.ux.u.delete(type)
+
+      if (opts.node) {
+        // todo: node may be set manually
+        // check on tail, so other updates (like pseudo) bubble to queue
+        differ = differ || opts.node.classList.contains('mp-diff')
+      }
+
+      return differ
+    },
+    dpr: function (distance) {
+      const { fov, camera, grade } = mpvar
+      //
+      // todo: could be used for anisotropy
+      const dprPractical = (fov.width + fov.height) / 2
+      const camPosition = camera.position
+      const distanceZ = camPosition.distanceTo({
+        x: camPosition.x,
+        y: camPosition.y,
+        z: 0
+      })
+      let distanceTarget = grade?.group.position || { x: 0, y: 0, z: 0 }
+      let sample = distance || camPosition.distanceTo(distanceTarget)
+
+      const eDPI = dprPractical / ((sample + distanceZ) / 2)
+      fov.dpr = Math.max(Math.min(eDPI, 1), 0.5)
+
+      return fov.dpr
+    },
+    resort(object) {
+      //
+      // Structure of Map requires coercion: for access by index, reverse-order, or other query set
+      const array = []
+      Array.from(object)
+        .flat()
+        .forEach((rect) => {
+          if (rect.el) array.push(rect.el)
+        })
+      return array
+    },
+    old: function () {
+      const { scene, grade } = mpvar
+      //console.log(mpvar.renderer.info)
+      return new Promise((resolve, reject) => {
+        //
+        // THREE traverse dispose
+        const groups = scene?.getObjectsByProperty('type', 'Group')
+        if (groups && groups.length) {
+          for (let g = groups.length - 1; g >= 0; g--) {
+            const group = groups[g].children || []
+            for (let o = group.length - 1; o >= 0; o--) {
+              const obj = group[o]
+              if (obj.type === 'Mesh') {
+                const material = obj.material
+                // Cache flag from loader asset to dispose...?
+                let cache
+                if (material.length) {
+                  for (let m = material.length - 1; m >= 0; m--) {
+                    const mat = material[m]
+                    if (mat) {
+                      // ...?
+                      //cache = mat.userData.cache
+                      // cubemap front [5]
+                      mat.canvas && (mat.canvas = null)
+                      mat.map && mat.map.dispose()
+                      // shader
+                      mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
+                      mat.userData.t && mat.userData.t.dispose()
+                      mat.dispose()
+                    }
+                  }
+                } else {
+                  // ...?
+                  //cache = material.userData.cache
+                  // front
+                  //if (!cache) {
+                  material.map && material.map.dispose()
+                  material.dispose()
+                  //}
+                }
+
+                // Loader rules...?
+                if (obj.animate?.gif) {
+                  // Cache loader SuperGif case study:
+                  // hogs memory, frames backwards reused, strange loader signature...?
+                  //obj.animate.gif.pause()
+                  obj.animate.gif = obj.animate.context = obj.animate.patch = null
+                }
+                //
+                cache = obj.userData.cache
+                if (!cache) {
+                  obj.geometry.dispose()
+                }
+              }
+              obj.removeFromParent()
+            }
+            groups[g].removeFromParent()
+          }
+        }
+
+        //
+        // DOM traverse unbind
+
+        // Elements dataset
+        mpos.ux.observer?.disconnect()
+        document.querySelectorAll('[data-idx]').forEach((el) => el.removeAttribute('data-idx'))
+
+        // CSS3DRenderer clones
+        const css3d = mpvar.rendererCSS.domElement
+        //const clones = css3d.querySelectorAll(':not(.mp-block)')
+        css3d.querySelectorAll('[data-batch]').forEach((el) => {
+          el.firstElementChild.remove()
+          el.parentElement.removeChild(el)
+          el = null
+        })
+
+        if (grade) {
+          // Canvas reset [...]
+          let canvas = grade.atlas?.canvas
+          if (canvas) {
+            //grade.atlas.ctx.reset()
+            canvas.remove()
+            canvas = null
+          }
+
+          // Keys clear
+          grade.major.atlas.clear()
+          grade.major.other.clear()
+          mpvar.grade.major.text = null
+        }
+
+        // Shader Atlas [...]
+        //let atlas = document.getElementById('atlas').children
+        //for (let c = atlas.length - 1; c >= 0; c--) {
+        // atlas[c].parentElement.removeChild(atlas[c])
+        //}
+
+        resolve('clear')
+        reject('no')
+      })
+    },
+    pyr: function (width, height, thumb = 16) {
+      // Reduce image to thumbnail
+      let pyr = { cols: width, rows: height }
+      if (Math.min(pyr.cols, pyr.rows) > thumb) {
+        // limit long edge
+        const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
+        const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
+        pyr = {
+          cols: Math.ceil(pyr.cols * scale),
+          rows: Math.ceil(pyr.rows * scale)
+        }
+      }
+      return [pyr.cols, pyr.rows]
+    }
+  }
+}
+//
+//
+//
 
 const mpos = {
   fnVar: function (tool, value, opts = {}) {
@@ -25,9 +793,9 @@ const mpos = {
     }
 
     // filter user variables from core
-    //opts.var = this.var;
+    //opts.mpvar = this.mpvar;
     const whitelist = ['batch', 'cache', 'camera', 'controls', 'fov', 'grade', 'gui', 'opt', 'renderer', 'scene']
-    opts.var = Object.fromEntries(Object.entries(this.var).filter(([key]) => whitelist.includes(key)))
+    opts.mpvar = Object.fromEntries(Object.entries(mpvar).filter(([key]) => whitelist.includes(key)))
 
     opts.value = value
     switch (tool) {
@@ -47,776 +815,19 @@ const mpos = {
 
     //
     // use tool
-    const fnvar = this.var.tool[tool]
+    const fnvar = mpvar.tool[tool]
     const response = fnvar ? fnvar(value, opts) : 'no fnVar'
-    //console.log("tool " + tool, opts.value, response);
+    console.log('fnVar:' + tool, opts.value, response)
     return response
-  },
-  var: {
-    batch: 0,
-    cache: new Map([['onBeforeRender', {}]]),
-    time: {
-      sFence: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
-      sFenceDelta: 0,
-      sFenceFPS: 1 / 60, // 60 fps
-      sFenceFPS_slice: {
-        boundary: 1,
-        gate: true,
-        ramp: 0,
-        quota: { count: 0, average: 0 }
-      },
-      slice(boundary) {
-        // legacy/deprecated (pow...greater...decorator...)
-        //if (!mpos.var.opt.slice) return true;
-        const slice = this.sFenceFPS_slice
-        boundary = slice.boundary >= boundary
-
-        return boundary
-      },
-      st: { gate: false, subsub: false, pingpong: false }
-    },
-    fov: {
-      basis: 1024,
-      dpr: Math.min(devicePixelRatio, 1),
-      width: window.innerWidth,
-      height: window.innerHeight,
-      z: 8
-    },
-    opt: {
-      request: 'xml_suite.html',
-      selector: 'main',
-      custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
-      depth: 6,
-      inPolar: 4,
-      arc: 0.0,
-      delay: 0, //16.666
-      setFlash: false,
-      update: function () {
-        //
-        // GUI Options Panel
-        let selector = this.selector
-        const options = { depth: this.depth }
-
-        if (this.selector === 'custom') {
-          // Document from URI (CORS?)
-          if (this.custom.startsWith('//') || this.custom.startsWith('http')) {
-            //|| this.custom === '#fragment'
-            // '#custom template'
-            selector = '#custom object'
-            options.custom = this.custom
-          } else {
-            selector = this.custom
-          }
-        }
-
-        mpos.mod.add(selector, options).then((res) => {
-          mpos.step.sync(res)
-        })
-      }
-    },
-
-    cloneX: class {
-      constructor(opts = {}) {
-        for (let k in opts) {
-          this[k] = opts[k]
-        }
-      }
-
-      //
-      // toSvg options: for atlas and OpenCV
-      //... shallow copy and append
-
-      pixelRatio = 1
-      preferredFontFormat = 'woff2'
-      fontEmbedCSS = ''
-      imagePlaceholder = 'data:,'
-      //imagePlaceholder =
-      'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='
-      style = {
-        margin: 'initial',
-        transform: 'initial'
-        //imageRendering: "pixelated",
-        // display: 'block',
-      }
-      includeStyleProperties = [
-        //
-        //:root{--global},
-        //"animation",
-        //"animation-play-state",
-        'background',
-        'background-blend-mode',
-        'background-color',
-        'background-image',
-        'background-position',
-        'border',
-        'border-bottom',
-        'border-left',
-        'border-radius',
-        'border-right',
-        'border-top',
-        'bottom',
-        'box-shadow',
-        'box-sizing',
-        'color',
-        'content',
-        'contain',
-        'display',
-        'filter',
-        'flex-basis',
-        'flex-direction',
-        'flex-grow',
-        'flex-shrink',
-        'flex-wrap',
-        'float',
-        'font',
-        'font-family',
-        'font-size',
-        'height',
-        //"image-rendering",
-        'inset',
-        'left',
-        'line-height',
-        'list-style',
-        'margin',
-        'max-height',
-        'max-width',
-        'min-height',
-        'min-width',
-        'mix-blend-mode',
-        'opacity',
-        'overflow',
-        'overflow-x',
-        'overflow-y',
-        'padding',
-        'perspective',
-        'position',
-        'right',
-        'rotate',
-        'scale',
-        'text-align',
-        'text-decoration',
-        'text-shadow',
-        'text-transform',
-        'top',
-        'transform',
-        'transform-origin',
-        //"transition",
-        'translate',
-        'translate3d',
-        'vertical-align',
-        'visibility',
-        'width',
-        'zoom',
-        'z-index'
-      ]
-
-      //
-      // Filter (like precept/inPolar): reduce memory use... don't alter whitespace!
-      // Child nodes may be malformed, or create documents in the loop
-
-      allow = new Set(['FORM', 'FIELDSET', 'MODEL-VIEWER'])
-      block = new Set([
-        //"#comment", //8
-        //"#cdata-section", //4
-        //"#text",//3
-        'STYLE',
-        'SCRIPT',
-        'TEMPLATE',
-        'IFRAME',
-        'VIDEO',
-        'SOURCE',
-        'TRACK',
-        'DATALIST'
-      ])
-
-      // public static (...not this.#clone) since access/override moving structs
-      static filterEmpty(clone) {
-        //this.#node = clone;
-        const { grade } = mpos.var
-        //
-        // Filter Clone Nodes from Memory
-        // complex return of (mostly unnecessary) multi-factor (map/pyramid) structure
-
-        // 0. hierarchy
-
-        // not element or text (#comment, #cdata-section...)
-        if (clone.nodeType > 3 || grade.wait === Infinity) return
-        if (clone.nodeType < 3) {
-          // not reserved element-specific protection (block/allow)
-          const reserve =
-            !this.allow.has(clone.nodeName) ||
-            !this.allow.has(clone.parentElement.nodeName) ||
-            (!this.block.has(clone.nodeName) && !this.block.has(clone.parentElement.nodeName))
-
-          if (!reserve) return
-        }
-
-        // Element or coerced #text
-        // clone in toSvg(rect.el) needs stricter test
-        // since mat type (visible/blacklist) ABORTS
-        // to remove EMPTY/HIDDEN element nodes, or approximate GHOST text nodes
-
-        //if (clone.nodeType === 3) return true
-        const el = clone.nodeType === 3 ? clone.parentElement : clone
-        const ancestor = el.closest('[data-idx]')
-        const rect = grade.rects.get(ancestor.dataset['idx'])
-
-        // ***
-        //if (el.isSameNode(ancestor)) return true;
-        const _tempLim = grade.atlas.mmFull
-        if (!rect || _tempLim) {
-          // edge cases: may be hard refresh, or atlas is too full (~128/2)
-          //console.log("flood!");
-
-          // expensive to children (anonymous quality?)
-          const deep = mpos.fnVar('march', el, {}).root > 8
-          const whitelist = rect && (rect.ux.o || rect.ux.u.size)
-          if (!rect || deep || !whitelist) return
-          // note: frame===0, atlas (with breakpoints) no [data-idx], so filter ghosts boxes (low-quality)
-        }
-        //
-        // ***
-
-        // 1. empty sprite (not test of whitespace, such as #text \n <br>)
-        const hidden =
-          !rect.bound.box.width ||
-          !rect.bound.box.height ||
-          el.style.display === 'none' ||
-          (el.textContent.trim() === '' && rect.css?.style?.background === 'none') // block fullscreen overlay
-        // 2. relatives (...shallow, grade.el) exceed mip size
-        const overflow =
-          // !! NEGATE CLONE == RECT.EL ??  (text|el) ?: [data-idx]    el==ancestor
-          //!el.isSameNode(ancestor) &&
-          rect.uv?.mip < 2 &&
-          (ancestor.querySelectorAll('[data-idx]').length > 8 || // L0-1: match parent/self (data-idx FAR UP tree)
-            el.childElementCount > 16) // L0: self
-
-        //if (hidden || overflow) console.log("filter", clone, mip);
-        // ~7 less elements per frame: (blank.gif, <br />, <object>, <script>, <source>)
-        return !hidden || !overflow
-        //if (!!clone.shadowRoot || element.getRootNode() instanceof ShadowRoot)
-      }
-
-      static filterSelf(clone) {
-        // draw background: hide children, since box size set
-        return !clone.parentElement
-      }
-    },
-    geo: new THREE.BoxGeometry(1, 1, 1),
-    mat: new THREE.MeshBasicMaterial({ color: 'cyan' }),
-    mat_shape: new THREE.MeshBasicMaterial({
-      alphaHash: true,
-      depthWrite: false
-    }),
-    mat_line: new THREE.MeshBasicMaterial({ color: 'cyan', wireframe: true }),
-    mat_shader: new THREE.RawShaderMaterial({
-      //discourse.threejs.org/t/13221/18
-      //discourse.threejs.org/t/33191/12
-      uniforms: {
-        map: { type: 't', value: null },
-        atlasSize: { type: 'f', value: null }
-      },
-      vertexShader: `precision mediump float;
-
-      uniform mat4 modelViewMatrix;
-      uniform mat4 projectionMatrix;
-
-      attribute vec3 position;
-      attribute vec2 uv;
-      attribute mat4 instanceMatrix;
-      attribute vec3 uvOffset;
-
-      uniform float atlasSize;
-      varying vec2 vUv;
-
-
-      void main() {
-        vUv = vec2(uvOffset.x, uvOffset.y) + ((uv* uvOffset.z) / atlasSize ) ;
-        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-      }
-      `,
-      fragmentShader: `precision lowp float;
-
-      varying vec2 vUv;
-      uniform sampler2D map;
-
-      void main() {
-        gl_FragColor = texture2D(map, vUv);
-      }
-      `
-    }),
-    tool: {
-      //
-      // Tools and fnVar: compatibility or direct access?
-      avg: function (val, acc) {
-        // moving average
-        let avg = acc.average + (val - acc.average) / (1 + acc.count)
-        // moving average
-        acc.average = avg
-        acc.count++
-      },
-      march: function (element, opts = {}) {
-        const { grade, opt } = opts.var
-        const depth = grade?.depth || opts.depth || opt.depth
-
-        //
-        // z relative to root(s) and slot depth(s)
-        let inner = element
-        const outer = grade?.el || document.querySelector(opt.selector) || document.body
-        const m = { root: 0, slot: 0 }
-        while (m.root < 32 && inner && inner.parentElement && !inner.isSameNode(outer)) {
-          m.root++
-          inner = inner.parentElement.closest(opts.precept.allow)
-        }
-
-        m.slot = depth - m.root
-
-        return m
-      },
-      chain: function (element, opts = {}) {
-        return new Promise((resolve, reject) => {
-          // chain of elements to count
-          let nodeName = opts.nodeName || 'mp'
-          let chains = document.createElement(nodeName)
-          chains.classList.add('mp-allow', 'march')
-          let last = chains
-          while (--opts.count > 0) {
-            let chain = document.createElement(nodeName)
-            chain.classList.add('mp-allow', 'p')
-            if (opts.count % 2 === 0) {
-              chain.classList.add('odd')
-            }
-            // path scatter sample (no pointerevents)
-            chain.innerHTML += `<mp class='k'>${opts.count}</mp>`
-
-            last.append(chain)
-            last = chain
-          }
-
-          last.classList.add('last')
-          last.innerHTML += opts.symbol || ''
-          if (element) element.prepend(chains)
-
-          //return chains;
-          resolve(chains)
-          reject('load error')
-        })
-      },
-      omni: function (terms, opts = {}) {
-        const grade = opts.grade || mpos.var.grade
-        // Get Element(s) and rect(s)
-        // options: sort, poll, callback, find/load?
-        // o[delist,enlist], .. children
-
-        const omni = {
-          terms: terms instanceof Array ? terms : [terms],
-          rects: {},
-          o: { count: 0, time: performance.now() }
-        }
-
-        for (let i = 0; i < omni.terms.length; i++) {
-          let term = omni.terms[i]
-
-          //invalid, element, queryselector, dataid
-          if (term === undefined) {
-            // bad selector
-            continue
-          } else if (opts.node || opts.io) {
-            // load [node, io] term(s) path from async
-            let load = {}
-            ;['node', 'io'].forEach((o) => {
-              load[o] = opts[o] instanceof Array ? opts[o][i] : opts[o]
-            })
-            this.tool.load(v, { node: load.node, io: load.io })
-          } else {
-            let idx
-            if (term.__proto__.constructor.name === 'rect') {
-              // expected query but got rect
-              // o[delist,enlist] {...children} ?
-              continue
-            } else if (term instanceof HTMLElement) {
-              // Element
-              idx = term.dataset['idx']
-            } else if (isFinite(term)) {
-              let el = document.querySelector("[data-idx='" + term + "']")
-              if (el) {
-                omni.terms[i] = el
-                // attribute [data-idx]
-                idx = term
-              }
-            } else if (!isFinite(term)) {
-              // term may be selector/multiselector, 2d/3d
-              const omni3d = ['atlas', 'other', 'first', 'last']
-              const omni2d = ['mp', 'img', 'div', 'li', 'p', '[data-idx]', '*']
-
-              if (omni3d.includes(term)) {
-                // select rect (major or position)
-                let rect
-                if (['atlas', 'other'].includes(term)) {
-                  // major
-                  rect = grade.major[term]
-                } else {
-                  // position
-                  const rects = Array.from(grade.rects)
-                  const position = term === 'first' ? 0 : rects.length - 1
-                  rect = rects[position][1]
-                }
-                // KEY
-                omni.rects[term] = rect
-              } else {
-                // select element (multiple or single)
-                // note: omni2d is the selector regex
-                term = omni2d.includes(term) ? document.querySelectorAll(term) : document.querySelector(term)
-                if (term instanceof NodeList || term instanceof HTMLElement) {
-                  // KEY
-                  omni.terms[i] = term
-                  if (!term.length) term = [term]
-                  term.values().forEach((t) => {
-                    idx = t.dataset['idx']
-                    if (idx) omni.rects[idx] = grade.rects.get(idx.toString())
-                  })
-                }
-              }
-            }
-
-            // KEY: rect from attribute [data-idx]
-            if (isFinite(idx)) omni.rects[idx] = grade.rects.get(idx.toString())
-
-            // ...callbacks
-          }
-        }
-
-        //omni.terms = omni.terms.filter(term => {
-        //  let ok = (term instanceof HTMLElement && omni.o.count++)
-        //  return ok
-        //})
-
-        omni.o.time = performance.now() - omni.o.time
-        return omni
-      },
-      load: function (packet, opts = {}) {
-        // media io
-        if (!opts.node) {
-          return ['NO OPTS NODE', packet, opts]
-        }
-
-        if (opts.io === 'xml') {
-          // document fragment
-          return fetch(packet)
-            .then((response) => response.text())
-            .then((html) => {
-              document.querySelector(opts.node).innerHTML = html
-            })
-            .catch((error) => {
-              console.error('fetch error:', error)
-            })
-        } else if (opts.io === 'src') {
-          // offscreen quad
-          return new Promise((resolve, reject) => {
-            opts.node.onload = (e) => resolve(e)
-            opts.node.onerror = (e) => reject(e)
-            opts.node.setAttribute(opts.attribute, packet)
-          })
-        } else {
-          // polling obj['key']
-          return new Promise((resolve, reject) => {
-            let retry = 10
-            const poll = setInterval(() => {
-              const key = opts.node[packet]
-              if (key || retry < 1) {
-                clearInterval(poll)
-                retry = key ? resolve(key) : reject('no ' + packet)
-              }
-              retry--
-            }, 1000)
-          })
-        }
-      },
-      find: function (term, opts = {}) {
-        return new Promise((resolve, reject) => {
-          // find rects by key
-          let rect
-
-          const grade = opts.var.grade
-
-          if (['first', 'last'].includes(term)) {
-            // position
-            const rects = Array.from(grade.rects)
-            const position = term === 'first' ? 0 : rects.length - 1
-            rect = rects[position][1]
-          } else if (['atlas', 'other'].includes(term)) {
-            // all major
-            rect = grade.major[term]
-          } else if (isFinite(term)) {
-            // data-idx
-            rect = grade.rects.get(term.toString())
-          } else {
-            // HTMLElement or 'selector'
-            term = term instanceof HTMLElement ? term : document.querySelector(term)
-            term = term.dataset['idx']
-            rect = grade.rects.get(term)
-          }
-
-          resolve(rect)
-          reject('load error')
-        })
-        //return rect;
-      },
-
-      diffs: function (type, opts = {}) {
-        let differ = false
-        const rect = opts.rect
-        const style = rect.css.style || rect.el.style // computed or direct if not priority
-
-        //
-        // Different from Baseline Generic Primitive
-
-        if (type === 'rect') {
-          // should TRUE indicate need for action, like other diffs, despire FALSE being the problem?
-          //rect.el.naturalWidth, rect.el.naturalHeight
-
-          // WARNING: bipolar feature test... not to be passed to ux.u?
-          // force flush, similar to syncFPS===0 (but saved rect)
-          // - NO ATLAS CELL (UX.CHANGE/PRIOR) AND MUST SET: frame:-1 :
-          // - NO SIZE ELEMENT AND MUST SET: ATLAS?
-          //
-
-          differ = !rect.el.clientWidth || !rect.el.clientHeight
-          // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
-        } else if (type === 'matrix') {
-          // note: style source may re-prioritize by accumulating frames
-          const newFrame = rect.frame === -1
-          const newBound = rect.bound.width / rect.bound.height !== rect.bound.box.width / rect.bound.box.height
-          differ = newFrame || newBound || style.transform?.startsWith('matrix')
-        } else if (type === 'tween') {
-          // note: loose definition
-          // ...transform, filter, overlay, allow-discrete
-          const keyframes =
-            (style.transitionProperty !== '' && parseFloat(style.transitionDuration) > 0) ||
-            (style.animationName !== 'none' && style.animationPlayState === 'running')
-          differ = keyframes
-        } else if (type === 'flow') {
-          // note: if position overflows scrollOffset, canvas may not draw
-          differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
-          //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
-        } else if (type === 'pseudo') {
-          // note: get pseudo capture once per frame for all rects
-          let css = rect.css
-          if (css) {
-            // deepest pseudo match: pass an object (to avoid per-element / per-frame)
-            const root = rect.el.parentElement || document.body // note: document.body is excessive, but may prevent error in a loop
-            let capture = opts.capture || {
-              hover: [...root.querySelectorAll(':hover')].pop(),
-              active: [...root.querySelectorAll(':active')].pop(),
-              focus: [...root.querySelectorAll(':focus')].pop()
-            }
-
-            // note: pseudo (or unset prior frame) enqueued for atlas
-            differ = rect.el === capture.active || rect.el === capture.focus || (rect.el === capture.hover && rect.minor === 'poster')
-          }
-        }
-
-        //
-        // WARNING: direct update to rect
-        // ?? duplicate access get/set per frame ??
-        differ ? rect.ux.u.add(type) : rect.ux.u.delete(type)
-
-        if (opts.node) {
-          // todo: node may be set manually
-          // check on tail, so other updates (like pseudo) bubble to queue
-          differ = differ || opts.node.classList.contains('mp-diff')
-        }
-
-        return differ
-      },
-      dpr: function (distance) {
-        const { fov, camera, grade } = mpos.var
-        //
-        // todo: could be used for anisotropy
-        const dprPractical = (fov.width + fov.height) / 2
-        const camPosition = camera.position
-        const distanceZ = camPosition.distanceTo({
-          x: camPosition.x,
-          y: camPosition.y,
-          z: 0
-        })
-        let distanceTarget = grade?.group.position || { x: 0, y: 0, z: 0 }
-        let sample = distance || camPosition.distanceTo(distanceTarget)
-
-        const eDPI = dprPractical / ((sample + distanceZ) / 2)
-        fov.dpr = Math.max(Math.min(eDPI, 1), 0.5)
-
-        return fov.dpr
-      },
-      resort(object) {
-        //
-        // Structure of Map requires coercion: for access by index, reverse-order, or other query set
-        const array = []
-        Array.from(object)
-          .flat()
-          .forEach((rect) => {
-            if (rect.el) array.push(rect.el)
-          })
-        return array
-      },
-      old: function () {
-        const { scene, grade } = mpos.var
-        //console.log(mpos.var.renderer.info)
-        return new Promise((resolve, reject) => {
-          // dispose of scene and release listeners
-          const groups = scene?.getObjectsByProperty('type', 'Group')
-
-          if (groups && groups.length) {
-            for (let g = groups.length - 1; g >= 0; g--) {
-              const group = groups[g].children || []
-              for (let o = group.length - 1; o >= 0; o--) {
-                const obj = group[o]
-                if (obj.type === 'Mesh') {
-                  const material = obj.material
-                  // Cache flag from loader asset to dispose...?
-                  let cache
-                  if (material.length) {
-                    for (let m = material.length - 1; m >= 0; m--) {
-                      const mat = material[m]
-                      if (mat) {
-                        // ...?
-                        //cache = mat.userData.cache
-                        // cubemap front [5]
-                        mat.canvas && (mat.canvas = null)
-                        mat.map && mat.map.dispose()
-                        // shader
-                        mat.userData.s && mat.userData.s.uniforms.texAtlas.value.dispose()
-                        mat.userData.t && mat.userData.t.dispose()
-                        mat.dispose()
-                      }
-                    }
-                  } else {
-                    // ...?
-                    //cache = material.userData.cache
-                    // front
-                    //if (!cache) {
-                    material.map && material.map.dispose()
-                    material.dispose()
-                    //}
-                  }
-
-                  // Loader rules...?
-                  if (obj.animate?.gif) {
-                    // Cache loader SuperGif case study:
-                    // hogs memory, frames backwards reused, strange loader signature...?
-                    //obj.animate.gif.pause()
-                    obj.animate.gif = obj.animate.context = obj.animate.patch = null
-                  }
-                  //
-                  cache = obj.userData.cache
-                  if (!cache) {
-                    obj.geometry.dispose()
-                  }
-                }
-                obj.removeFromParent()
-              }
-              groups[g].removeFromParent()
-            }
-          }
-
-          let canvas = grade?.atlas?.canvas
-          if (canvas) {
-            //
-            // Canvas
-            //const ctxC = grade.atlas.ctx
-            //ctxC.clearRect(0, 0, ctxC.width, ctxC.height)
-            //grade.atlas.ctx.reset()
-            canvas.remove()
-            canvas = null
-            // note: more grades would destroy canvases
-            //grade.atlas.canvas = grade.ctx = null
-          }
-
-          //
-          // CSS3D
-          const css3d = mpos.var.rendererCSS.domElement
-          //const clones = css3d.querySelectorAll(':not(.mp-block)')
-          css3d.querySelectorAll('[data-batch]').forEach((el) => {
-            el.firstElementChild.remove()
-            el.parentElement.removeChild(el)
-            el = null
-          })
-
-          // Shader Atlas
-          //let atlas = document.getElementById('atlas').children
-          //for (let c = atlas.length - 1; c >= 0; c--) {
-          // atlas[c].parentElement.removeChild(atlas[c])
-          //}
-          document.querySelectorAll('[data-idx]').forEach((el) => el.removeAttribute('data-idx'))
-          mpos.ux.observer?.disconnect()
-
-          //
-          // Performance ResourceTiming
-          // - clear it
-          // - entries against DOM to release last batch
-          function resourceUse(initiatorType = ['img', 'source', 'object', 'iframe']) {
-            const entries = []
-
-            /*'fetch','xmlhttprequest','script'*/
-            for (const res of window.performance.getEntriesByType('resource')) {
-              const media = initiatorType.indexOf(res.initiatorType) > -1
-              if (media) {
-                const name = res.name.split('/').pop()
-                if (!document.querySelector(`[src$="${name}"], [data$="${name}"]`)) {
-                  // none use
-                  //console.log('none:', res.initiatorType, name, res.name)
-                } else {
-                  // some use and parent
-                  ;['src', 'data'].forEach((attr) => {
-                    let els = document.querySelectorAll(`[${attr}$="${name}"]`)
-                    if (els.length) {
-                      //console.log('some:', els)
-                      els.forEach((el) => {
-                        //console.log('parent:', el.parentNode)
-                      })
-                      entries.push(els)
-                    }
-                  })
-                }
-              }
-            }
-
-            //console.log('entries:', entries)
-            performance.clearResourceTimings()
-            return entries
-          }
-
-          //resourceUse()
-
-          resolve('clear')
-          reject('no')
-        })
-      },
-      pyr: function (width, height, thumb = 16) {
-        // Reduce image to thumbnail
-        let pyr = { cols: width, rows: height }
-        if (Math.min(pyr.cols, pyr.rows) > thumb) {
-          // limit long edge
-          const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
-          const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
-          pyr = {
-            cols: Math.ceil(pyr.cols * scale),
-            rows: Math.ceil(pyr.rows * scale)
-          }
-        }
-        return [pyr.cols, pyr.rows]
-      }
-    }
   },
 
   init: function (opts = {}) {
-    const vars = mpos.var
-    const { opt, fov } = vars
+    const { opt, fov } = mpvar
 
     //
     // WebWorker...
-    vars.worker = new Worker('worker.js')
-    vars.worker.onmessage = (e) => {
+    mpvar.worker = new Worker('worker.js')
+    mpvar.worker.onmessage = (e) => {
       const result = e.data
       console.log('WW message:', result)
     } // -->
@@ -826,12 +837,12 @@ const mpos = {
       // Mode: Proxy or Standalone
       const proxy = !!(opts.scene && opts.camera && opts.renderer)
 
-      vars.scene = opts.scene || new THREE.Scene()
-      vars.scene.autoUpdate = vars.scene.matrixAutoUpdate = vars.scene.matrixWorldAutoUpdate = false
+      mpvar.scene = opts.scene || new THREE.Scene()
+      mpvar.scene.autoUpdate = mpvar.scene.matrixAutoUpdate = mpvar.scene.matrixWorldAutoUpdate = false
 
       //const canvas = document.createElement('canvas')
 
-      vars.renderer =
+      mpvar.renderer =
         opts.renderer ||
         new THREE.WebGLRenderer({
           canvas: opts.config?.renderer || undefined,
@@ -840,19 +851,19 @@ const mpos = {
           //powerPreference: "low-power",
         })
 
-      vars.renderer.setPixelRatio(fov.dpr)
-      const domElement = vars.renderer.domElement
+      mpvar.renderer.setPixelRatio(fov.dpr)
+      const domElement = mpvar.renderer.domElement
       opts.host = proxy ? domElement.parentElement : document.body
 
       fov.width = opts.host.offsetWidth
       fov.height = opts.host.offsetHeight
       const frustum = fov.basis * opt.depth
-      vars.camera =
+      mpvar.camera =
         opts.camera ||
         (opts.config?.camera === 'Orthographic'
           ? new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, fov.z / 2, frustum * 4)
           : new THREE.PerspectiveCamera(45, fov.width / fov.height, fov.z / 2, frustum * 4))
-      //vars.camera = opts.camera || new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, 8, 1000)
+      //mpvar.camera = opts.camera || new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, 8, 1000)
 
       //
       // Inject Stage
@@ -873,36 +884,36 @@ const mpos = {
       opts.host.appendChild(template.content)
       const mp = proxy ? opts.host : document.getElementById('mp')
       mp.classList.add('mp-block')
-      //mpos.var.atlas = mp.querySelector('#atlas canvas')
-      vars.caret = mp.querySelector('#caret')
+      //mpvar.atlas = mp.querySelector('#atlas canvas')
+      mpvar.caret = mp.querySelector('#caret')
 
-      vars.camera.layers.enableAll()
+      mpvar.camera.layers.enableAll()
       if (!proxy) {
-        vars.camera.position.z = frustum / 8
-        vars.renderer.setSize(fov.width, fov.height)
+        mpvar.camera.position.z = frustum / 8
+        mpvar.renderer.setSize(fov.width, fov.height)
         mp.appendChild(domElement)
-        vars.renderer.setClearColor(0x00ff00, 0)
+        mpvar.renderer.setClearColor(0x00ff00, 0)
         // helpers
         const axes = new THREE.AxesHelper(fov.basis)
-        vars.scene.add(axes)
+        mpvar.scene.add(axes)
       }
 
       // CSS3D
       const css3d = document.getElementById('css3d')
-      vars.rendererCSS = new CSS3DRenderer()
-      vars.rendererCSS.setSize(fov.width, fov.height)
-      css3d.appendChild(vars.rendererCSS.domElement)
+      mpvar.rendererCSS = new CSS3DRenderer()
+      mpvar.rendererCSS.setSize(fov.width, fov.height)
+      css3d.appendChild(mpvar.rendererCSS.domElement)
       css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
 
-      const controls = new MapControls(vars.camera, domElement)
+      const controls = new MapControls(mpvar.camera, domElement)
       controls.screenSpacePanning = true
       controls.maxDistance = frustum
 
       const halfHeight = -(fov.height / 2)
-      vars.camera.position.setY(halfHeight + 0.125)
+      mpvar.camera.position.setY(halfHeight + 0.125)
       controls.target.setY(halfHeight)
       controls.update()
-      vars.controls = controls
+      mpvar.controls = controls
 
       //
       // Enable UX
@@ -912,7 +923,7 @@ const mpos = {
       //
       const gridHelper = new THREE.GridHelper(fov.width, 4, 0x444444, 0xc0c0c0)
       gridHelper.rotateX(3.14 / 2)
-      vars.scene.add(gridHelper)
+      mpvar.scene.add(gridHelper)
 
       // First Paint
       ux.events.raycaster.layers.set(2)
@@ -974,33 +985,31 @@ const mpos = {
             // update (non-zero) target framerate, or normal step.quality will be lossy
 
             // RESET:
-            //vars.time.sFenceDelta = 0
-            //vars.time.sFenceFPS_slice = { boundary: 0, gate: Infinity, ramp: 0, quota: { count: 0, average: 0 } }
+            //mpvar.time.sFenceDelta = 0
+            //mpvar.time.sFenceFPS_slice = { boundary: 0, gate: Infinity, ramp: 0, sma: { count: 0, average: 0 } }
 
             const minfps = fps * 4
-            if (v) vars.time.sFenceFPS = v <= minfps ? v : minfps
+            if (v) mpvar.time.sFenceFPS = v <= minfps ? v : minfps
 
             ux.reflow({ type: 'delay', value: v })
           })
         } else if (key === 'request') {
           controller.onFinishChange((v) => {
-            vars.tool.load(v, { io: 'xml', node: 'main' }).finally(() => {
-              mpos.mod.add().then((res) => {
-                console.log('mod add:', res)
-              })
+            mpvar.tool.load(v, { io: 'xml', node: 'main' }).finally(() => {
+              mpos.mod.add()
             })
           })
         }
       }
 
-      vars.gui = gui
+      mpvar.gui = gui
 
       resolve(opts)
       reject('err')
     })
 
     // note: delay timer may go here, BUT needs grade to continue...
-
+    console.log('init:', promise)
     return promise
   },
   mod: {
@@ -1008,22 +1017,16 @@ const mpos = {
       //
       // Types for NodeIterator
       manual: `.mp-loader,.mp-poster,.mp-native`.split(','),
-      allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`.split(','),
-      block:
-        `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,track,source,iframe:not([src])`.split(
-          ','
-        ),
-      poster: `.mp-poster,canvas,img,picture,figcaption,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`.split(','),
-      native:
-        `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,fieldset,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`.split(
-          ','
-        ),
-      native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`.split(','),
-      cors: `iframe,object,.yt`.split(','),
-      unset: `.mp-offscreen`.split(','),
+      allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`,
+      block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,track,source,iframe:not([src])`,
+      poster: `.mp-poster,canvas,img,picture,figcaption,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`,
+      native: `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,fieldset,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`,
+      native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`,
+      cors: `iframe,object,.yt`,
+      unset: `.mp-offscreen`,
       //
       tween:
-        `width,height,border,margin,padding,top,right,bottom,left,position,flex,display,visibility,opacity,mask,filter,mix-blend-mode,background-blend-mode,color,background,font,align-content,stretch,float,border-radius,box-shadow,animation,transition`.split(
+        `width,height,border,margin,padding,top,right,bottom,left,position,flex,display,visibility,opacity,mask,filter,mix-blend-mode,background-blend-mode,color,background,font,align-content,stretch,float,border-radius,box-shadow,animation,transition,transform,z-index`.split(
           ','
         ),
       //
@@ -1041,7 +1044,7 @@ const mpos = {
         }
       }
     },
-    rect: class {
+    tRect: class {
       constructor(node, opts = {}) {
         for (let k in opts) {
           this[k] = opts[k]
@@ -1054,10 +1057,10 @@ const mpos = {
       bound = {}
       css = {
         // style: {},
-        transform: 0,
+        diff: {},
+        rotation: {},
         scale: 1,
-        degree: 0,
-        radian: 0
+        transforms: 0
       }
       ux = { i: 0, o: 0, u: new Set() /*p:*/ }
       frame = -1
@@ -1067,7 +1070,7 @@ const mpos = {
 
       z = 0
     },
-    treeGrade: class {
+    tGrade: class {
       //
       // Build DOM Tree Structure
 
@@ -1095,7 +1098,7 @@ const mpos = {
 
       // Template Isolate
       group = new THREE.Group()
-      batch = ++mpos.var.batch // unique group identifier
+      batch = ++mpvar.batch // unique group identifier
       atlas = {
         load: { listener: 0, image: new Image() },
         //idxMip: this.#lock, // implies poster++ (from depth/type) and not other
@@ -1190,12 +1193,12 @@ const mpos = {
         } else {
           //
           // Prototype for Records
-          const rect = new this.rect(node, {})
+          const rect = new this.tRect(node, {})
 
           if (mpos.set.inPolar(rect)) {
             // not empty
             if (node.nodeName === '#text') {
-              const control = mpos.var.tool.resort(grade.rects)
+              const control = mpvar.tool.resort(grade.rects)
 
               if (mpos.set.inPolar(rect, control) && sibling(node.parentNode)) {
                 // sanitize #text orphan (semantic or list) with parent visible
@@ -1215,12 +1218,19 @@ const mpos = {
               const idx = grade.elsMax++
               rect.idx = idx.toString()
               rect.el.setAttribute('data-idx', idx)
-              grade.rects.set(idx.toString(), rect)
-              rect.css = {
-                scale: 1,
-                transform: 0,
-                rotation: { x: 0, y: 0, z: 0 }
+
+              if (opts.grade) {
+                //rect.ux.o++;
+                //rect.ux.u.add('matrix');
+                //rect.ux.u.add('tween');
+                //console.log("opts.grade", rect.el);
               }
+              grade.rects.set(idx.toString(), rect)
+              //rect.css = {
+              //scale: 1,
+              //transform: 0,
+              //rotation: { x: 0, y: 0, z: 0 }
+              //};
             }
           }
         }
@@ -1384,8 +1394,7 @@ const mpos = {
       return
     },
     add: async function (selector, opts = {}) {
-      const vars = mpos.var
-      const { opt, tool, fov, geo, mat, mat_shader, mat_line, scene, cloneX } = vars // grade needs attention pre/post
+      const { opt, tool, fov, geo, mat, mat_shader, mat_line, scene, cloneX } = mpvar // grade needs attention pre/post
       const precept = this.precept
 
       //
@@ -1396,7 +1405,7 @@ const mpos = {
       opts.selector = selector || opt.selector
 
       // grade:
-      let grade = opts.grade || new this.treeGrade(opts)
+      let grade = opts.grade || new this.tGrade(opts)
       //if(isFinite(opts.grade))
 
       //
@@ -1414,7 +1423,6 @@ const mpos = {
         // Set selector (or uri object)
         let om = mpos.fnVar('omni', opts.selector, { grade: grade })
         let element = om.terms[0]
-        console.log('omni', om, element)
 
         //let element = document.querySelector(opts.selector);
         //console.log("...", element, opts.selector, selector, opt.selector);
@@ -1504,7 +1512,7 @@ const mpos = {
         })
         //
         // OUTPUT
-        vars.grade = grade
+        mpvar.grade = grade
         if (scene) scene.add(grade.group)
         grade.wait = false
       }
@@ -1521,12 +1529,15 @@ const mpos = {
       console.log('add grade:', grade)
 
       mpos.step.sync(grade)
+
+      // note: awaits (load, old, font), but async chain would not have rects processed.
       return grade
     }
   },
   set: {
     inPolar: function (rect, control) {
-      const { grade, opt, time } = mpos.var
+      const { grade, opt, time } = mpvar
+
       if (rect.frame >= grade?.frame) return rect.inPolar
       //
       // Visibility in Viewport
@@ -1553,7 +1564,8 @@ const mpos = {
             // 2: Node is tag
             vis++
 
-            const bound = (rect.bound = rect.el.getBoundingClientRect())
+            rect.css.diff.bound = rect.bound
+            rect.bound = rect.el.getBoundingClientRect()
             rect.bound.box = {
               width: rect.el.offsetWidth,
               height: rect.el.offsetHeight
@@ -1561,7 +1573,7 @@ const mpos = {
             const style = rect.css?.style || node.style
 
             const alphaTest =
-              !(bound.height === 0 || bound.width === 0) &&
+              !(rect.bound.height === 0 || rect.bound.width === 0) &&
               !(style.display === 'none' || style.visibility === 'hidden') &&
               !((style.opacity || Infinity) <= 0.25)
             // strict test (i.e. closed details)
@@ -1570,11 +1582,11 @@ const mpos = {
               vis++
 
               const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-              const scrollHeight = bound.bottom >= 0 && bound.top - viewHeight < 0
+              const scrollHeight = rect.bound.bottom >= 0 && rect.bound.top - viewHeight < 0
 
               if (scrollHeight) {
                 const viewWidth = Math.max(document.documentElement.clientWidth, window.innerWidth)
-                const scrollWidth = bound.right >= 0 && bound.left - viewWidth < 0
+                const scrollWidth = rect.bound.right >= 0 && rect.bound.left - viewWidth < 0
                 // 4: Tag in viewport
                 if (scrollWidth) vis++
               }
@@ -1639,11 +1651,15 @@ const mpos = {
       }
     },
     box: function (rect, opts = {}) {
-      const { geo, mat_line, fov, opt, grade } = mpos.var
+      const { geo, mat_line, fov, opt, grade } = mpvar
       // setFlash: diagnose lossy frames (isolate css/transform)
       // example: pingpong (interlace, stretch/offcenter), FOUC (bubble/pseudo, init/slow)
       // if (setFlash) { } // manual coalesce ??= BODY.wire, !css, ux.has("matrix") && ux.o
-      const setFlash = opt.setFlash && rect.frame >= opts.frame && opts.frame !== 0
+      const setFlash =
+        opt.setFlash &&
+        rect.frame >= opts.frame &&
+        /*rect.major === "atlas" &&*/
+        !rect.ux.u.has('matrix')
 
       // frame is "up-to-date"
       // - todo: but could be shallow copy (~pseudo bubble, tweens/matrix)
@@ -1654,7 +1670,7 @@ const mpos = {
 
       //
       // Accumulate Transforms: frame differ
-      if (!setFlash) mpos.set.css(rect, opts.frame)
+      mpos.set.css(rect, opts.frame)
 
       //
       // TYPE OF MESH FROM ELEMENT
@@ -1677,7 +1693,7 @@ const mpos = {
 
           if (rect.minor === 'native') {
             // todo: de-dupe all 'other' (loader) via rect.obj = Group && fit/use scene.getObjectByName
-            //const loaded = mpos.var.rendererCSS.domElement.querySelector(`[data-batch="${grade.batch}"] [data-idx="${rect.idx}"]`)
+            //const loaded = mpvar.rendererCSS.domElement.querySelector(`[data-batch="${grade.batch}"] [data-idx="${rect.idx}"]`)
 
             // note: element may not inherit some specific styles
             const el = rect.el.cloneNode(true)
@@ -1763,7 +1779,7 @@ const mpos = {
           obj.userData.el.style.width = w
           obj.userData.el.style.height = h
           // note: actually using cumulative
-          if (css.transform) {
+          if (css.transforms) {
             const cssScale = 'scale(' + css.scale + ')'
             const cssDeg = Math.round(css.rotation.z * (180 / Math.PI))
             const cssRotate = 'rotate(' + cssDeg + 'deg)'
@@ -1827,13 +1843,15 @@ const mpos = {
       } else if (rect.add > 1 && !rect.obj) {
         // Object3D was detached by repeat attempts to add
         console.log('detached:', rect)
-        rect.obj = mpos.var.scene.getObjectByName(rect.idx)
+        rect.obj = mpvar.scene.getObjectByName(rect.idx)
       }
 
+      //let r = res
+      let r = setFlash ? false : res
       return res
     },
     css: function (rect, frame) {
-      const { grade, tool, time } = mpos.var
+      const { grade, tool, time } = mpvar
 
       //
       // CSS Style Transforms: accumulate a natural box model
@@ -1844,16 +1862,20 @@ const mpos = {
 
         //
         // Implicit: diffs reference
+        css.diff.rotation = rect.css.rotation
+        css.diff.scale = rect.css.scale
+        css.diff.tween = rect.css.tween
+        css.diff.pseudo = ux.u.has('pseudo')
         const differ = {
-          bound: rect.bound,
-          rotation: css.rotation || { x: 0, y: 0, z: 0 },
-          scale: css.scale,
-          pseudo: ux.u.has('pseudo'),
-          tween: css.tween
+          bound: rect.bound
+          //rotation: rect.css.rotation || { x: 0, y: 0, z: 0 },
+          //scale: rect.css.scale,
+          //pseudo: ux.u.has("pseudo"),
+          //tween: rect.css.tween,
         }
         // Reset diffs feature
         css.scale = 1
-        css.transform = 0
+        css.transforms = 0
         css.rotation = { x: 0, y: 0, z: 0 }
         css.tween = {}
         const stateOld = ux.u.has('pseudo')
@@ -1878,7 +1900,7 @@ const mpos = {
         if (!css.style && (ux.i || matrix)) css.style = window.getComputedStyle(rect.el)
         // Priority ux: escalate
         if (rect.major === 'atlas') tool.diffs('pseudo', { rect: rect, capture: grade.capture })
-        const priority = tool.diffs('tween', { rect: rect }) || ux.u.has('pseudo') || differ.pseudo || matrix
+        const priority = tool.diffs('tween', { rect: rect }) || ux.u.has('pseudo') || css.diff.pseudo || matrix
         ux.o = priority ? ux.i + 1 : ux.i
         ux.o += ux.u.size
         // compute qualified stylesheet (not inline)
@@ -1943,10 +1965,10 @@ const mpos = {
                     rz = 0
                   }
 
-                  css.rotation.x += rx
-                  css.rotation.y += ry
-                  css.rotation.z += rz
-                  css.transform++
+                  css.rotation.x += tool.eq(rx)
+                  css.rotation.y += tool.eq(ry)
+                  css.rotation.z += tool.eq(rz)
+                  css.transforms++
                 }
               } else {
                 // Fallback to 2D matrix(...) and explicit rotate functions
@@ -1957,8 +1979,8 @@ const mpos = {
                     const scaleVal = Math.sqrt(vals[0] * vals[0] + vals[1] * vals[1])
                     const ang = Math.atan2(vals[1], vals[0])
                     css.scale *= scaleVal
-                    css.rotation.z += ang
-                    css.transform++
+                    css.rotation.z += tool.eq(ang)
+                    css.transforms++
                   }
                 }
 
@@ -2003,58 +2025,68 @@ const mpos = {
         rect.css = css
 
         // curated shortlist of discrete style properties related to presentation
+        // similar to cloneX includeStyleProperties for toSvg
         mpos.mod.precept.tween.forEach((prop) => {
-          if (css.style?.hasOwnProperty(prop)) css.tween[prop] = css.style[prop]
+          //if (css.style?.hasOwnProperty(prop)) // need indirect
+          css.tween[prop] = css.style[prop]
         })
 
-        // bound belongs in inPolar, but pre/post is more "live" here
-        //rect.bound = rect.el.getBoundingClientRect();
-        //rect.bound.box = { width: rect.el.offsetWidth, height: rect.el.offsetHeight};
-        //rect.bound.symmetry = [rect.el.offsetWidth, rect.el.offsetHeight].join("_");
+        // NOTE: inPolar caches rect.bound/box (getBoundingClientRect), but is more "live" here
 
-        // Implicit: compare frame result to detect change... i.e. parent had transform matrix?
-        // deep ... A.isEqualNode(B)
-        const newTransform =
-          differ.rotation.x !== css.rotation.x ||
-          differ.rotation.y !== css.rotation.y ||
-          differ.rotation.z !== css.rotation.z ||
-          differ.scale !== css.scale
+        // Implicit: compare frame result (pre/post) for "true" change, or inherited...
+        // deep: A.isEqualNode(B)
+
+        const newTransform = css.diff.scale !== css.scale || !tool.eq(css.diff.rotation, { diff: css.rotation })
+        //if(newTransform) {console.log('newTransform', newTransform, rect.el, css.diff.rotation, css.rotation);}
+
         // shallow (but could be square rotated 90-degrees)
-        const newBounding = differ.bound && JSON.stringify(differ.bound) !== JSON.stringify(rect.bound)
+        const newBounds = differ.bound && !tool.eq(css.diff.bound, { diff: rect.bound })
+        //if(newBounding) {console.log('newBounding', newBounding, rect.el, css.diff.bound, rect.bound);}
         // tween doesn't initialize with values
-        const newTween = differ.tween && JSON.stringify(differ.tween) !== JSON.stringify(rect.css.tween)
-
-        if (newTransform || newBounding) {
+        const newTweens = css.diff.tween && !tool.eq(css.diff.tween, { diff: css.tween })
+        //if(newTweens) {console.log('newTweens', newTweens, rect.el, css.diff.tween, css.tween);}
+        if (newTransform || newBounds) {
           ux.u.add('matrix')
         }
+
+        // 1. if same bound width/height
+
         if (ux.u.has('matrix')) {
           // Revoke explicit key for subjective sync (rate, atlas...)
           if (!newTransform) {
             // transformed, but not transforming (on frame)
-            if (!newBounding) {
+            if (!newBounds) {
               // implies reference is unchanged (yet ux.o remains elevated by differs)
+              if (tool.eq(css.diff.rotation, { diff: css.rotation }))
+                // no change, including circle/square at 90deg
+                ux.u.delete('matrix')
+            } else if (
+              css.diff.bound.width === rect.bound.width &&
+              css.diff.bound.height === rect.bound.height &&
+              tool.eq(css.diff.rotation, { diff: css.rotation })
+            ) {
+              // only position change (on page scroll):
+              // matrix ignored: atlas>toSvg (slow, unset angles)
+              // matrix include: box>transforms (coalesce)
               ux.u.delete('matrix')
-            } else if (differ.bound.width === rect.bound.width && differ.bound.height === rect.bound.height) {
-              // only position change (on page scroll), which invalidates extension of priority (toSvg)
-              ux.u.delete('matrix')
+              //...add tweens (if not)?
             }
           } else {
             // transform does not require style update, or user qualification may intervene
             // if no tweens and no i, we can reduce a lot of purely rotational redraws
             // users could easily specify i=1 (native) or add a animation name
-            //if (ux.o < 2 && ux.u.size < 1) {
-            // ux.i === 0 && !ux.u.has('tweens')
-            // ux.o < 3 && ux.u.size < 2
-            ux.u.delete('matrix')
-            //}
+            if (!(ux.o || ux.u.has('tweens') || ux.u.has('pseudo'))) {
+              ux.u.delete('matrix')
+            }
           }
         }
 
-        if (!newTween && ux.u.has('tween')) {
+        if (!newTweens && ux.u.has('tween')) {
           // discard keyframes without change, unless a child of the element is tagged active
-          const actors = rect.el.querySelector(allow)
-          if (!actors) ux.u.delete('tween')
-        } else if (newTween && !ux.u.has('tween')) {
+          //const actors = rect.el.querySelector(allow);
+          //if (!actors) ux.u.delete("tween");
+          ux.u.delete('tween')
+        } else if (newTweens && !ux.u.has('tween')) {
           // detect incidental changes...?
           ux.u.add('tween')
         }
@@ -2074,7 +2106,7 @@ const mpos = {
       return // { width: rect.box.width, height: rect.box.height };
     },
     use: function (object, off) {
-      const { time } = mpos.var
+      const { time } = mpvar
       // update matrix manually
 
       //if (!off && !time.st.subsub) return;
@@ -2127,7 +2159,7 @@ const mpos = {
         group.position.x -= dummy.scale.x / 2
         group.position.y += dummy.scale.y / 2
         // note: group may lack depth (SVG/OpenCV) or not (JSONLoader)
-        group.translateZ(mpos.var.fov.z / 2)
+        group.translateZ(mpvar.fov.z / 2)
 
         mpos.set.use(group, true)
 
@@ -2139,26 +2171,42 @@ const mpos = {
       // Stash resource at uri, with flag for disposal
       if (data) asset.data = data
       console.log('set cache', asset)
-      mpos.var.cache.set(uri, asset)
+      mpvar.cache.set(uri, asset)
       // dispose...?
       Object.values(asset.flag).forEach((obj) => {
         if (obj.isObject3D && obj.userData) obj.userData.cache = true
       })
     },
-    loader: function (rect, dummy) {
+    loader: async function (rect, dummy) {
       //
-      // Loaded check: async presentation, as dummy fits group with source
+      // Loaded++: match mime to Loader, and async fit dummy/group
 
-      const { cache, grade, cloneX, geo, mat, mat_shape, mat_line, tool } = mpos.var
+      const { cache, grade, cloneX, geo, mat, mat_shape, mat_line, tool } = mpvar
 
+      // source: location, Element, Object[src]
       const source = rect.el
-      // source is location or contains one
       let uri = typeof source === 'string' ? source : source.data || source.src || source.currentSrc || source.href
-      // source is image
-      let mime = uri && uri.match(/\.(json|gltf|glb|svg|gif|jpg|jpeg|png|avif|heif|hevc|heic|avc|webp|webm|mp4|mov|ogv)(\?|$)/gi)
-      mime = mime ? mime[0].toUpperCase() : 'File'
-      // tier: tags and extensions, supported THREE.Loader standard and callback
-      let loader = !!((mime === 'File' && uri) || mime.match(/(JSON|GLTF|GLB|SVG|GIF)/gi))
+      // source media match: loader or general
+      const mimes = {
+        OPENCV: ['JPG', 'JPEG', 'PNG', 'WEBP'], //[avif,heif,hevc,heic,avc]
+        VIDEO: ['MP4', 'MOV', 'OGV', 'WEBM'],
+        GIF: ['GIF'],
+        GLTF: ['GLB', 'GLTF'],
+        SVG: ['SVG'],
+        JSON: ['JSON']
+      }
+      mimes.all = Object.values(mimes).flat().join('|')
+      mimes.pattern = new RegExp(`\\.(${mimes.all})(?=\\?|$)`, 'i')
+
+      // RegEx test pattern
+      let mime = uri && uri.match(mimes.pattern)
+      mime = mime ? mime[1].toUpperCase() : 'File'
+      // Loaders: THREE (MIME/File), OpenCV, callback
+      let loader = !!((mime === 'File' && uri) || [mimes.GIF, mimes.GLTF, mimes.SVG, mimes.JSON].flat().includes(mime))
+
+      // Dynamically load Loader
+      //
+      //const { namedExport1, namedExport2 } = await import('./myModule.js');
 
       //
       // Cache: models (or whatever...?)
@@ -2167,7 +2215,8 @@ const mpos = {
       //console.log(source, uri, mime, loader, dummy )
       let group = rect.obj
 
-      if (mime.match(/^(.WEBM|.MP4|.OGV)$/gi)) {
+      if (mimes.VIDEO.includes(mime)) {
+        //
         // HANDLER: such as VideoTexture, AudioLoader...
         const material = mat_shape.clone()
         const texture = new THREE.VideoTexture(source)
@@ -2185,7 +2234,7 @@ const mpos = {
 
         mesh.layers.set(2)
         rect.add++
-      } else if (mime.match('.GIF')) {
+      } else if (mimes.GIF.includes(mime)) {
         const material = mat_shape.clone()
         const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
 
@@ -2328,31 +2377,35 @@ const mpos = {
             //
             // Cache Hit: opt-in to reuse assets (currently only JSON loader...)
             // todo: default type reuse/disposal for unique instances
-            console.log('cache hit')
-            callback(asset.data)
+            const unique = asset.data.isObject3D ? asset.data.clone() : asset.data
+            callback(unique)
           } else {
             //
             // LOAD Custom: stage specific or generic
-            if (mime.match('.GIF')) {
+            if (mimes.GIF.includes(mime)) {
               //gc = source.cloneNode()
               //document.querySelector('#custom').appendChild(gc)
-              //
-              //
             }
 
             //mime.match(/^(GLTF|GLB)$/gi)
             //cdn.jsdelivr.net/npm/three-gltf-loader@1.111.0/index.min.js
             //import data from "//cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/loaders/GLTFLoader.js" with { type: "json" };
 
-            loader = mime.match('.SVG')
+            loader = mimes.SVG.includes(mime)
               ? new SVGLoader()
-              : //: mime.match('.GIF')
+              : //: mimes.match('GIF')
               //? new SuperGif({ gif: gc, max_width: 64, auto_play: false })
-              mime.match('.JSON')
+              mimes.JSON.includes(mime)
               ? new THREE.ObjectLoader()
-              : mime.match(/^(GLTF|GLB)$/gi)
-              ? new THREE.GLTFLoader()
+              : mimes.GLTF.includes(mime)
+              ? new GLTFLoader()
               : new THREE.FileLoader()
+
+            if (mimes.GLTF.includes(mime)) {
+              const dracoLoader = new DRACOLoader()
+              dracoLoader.setDecoderPath('//www.gstatic.com/draco/versioned/decoders/1.5.6/')
+              loader.setDRACOLoader(dracoLoader)
+            }
 
             const params = loader instanceof THREE.Loader ? uri : callback
             const res = loader.load(
@@ -2373,7 +2426,7 @@ const mpos = {
 
             if (mime === 'File') {
               // file is not image (XML?)
-            } else if (mime.match('.JSON')) {
+            } else if (mimes.JSON.includes(mime)) {
               // Object.data Extension: Object/Scene Format
               // todo: assign scene values from data-idx
 
@@ -2381,9 +2434,12 @@ const mpos = {
 
               mpos.set.fit(dummy, group, { add: data })
               if (!asset.data) mpos.set.cache(asset, uri, data)
-            } else if (mime.match(/^(.GLTF|.GLB)$/gi)) {
-              console.log('setPath, decompress, and parse', data)
-            } else if (mime.match('.SVG')) {
+            } else if (mimes.GLTF.includes(mime)) {
+              // DRACO?
+              const model = data.scene
+              group.add(model)
+              mpos.set.use(model, true)
+            } else if (mimes.SVG.includes(mime)) {
               // Object.data Extension: Scalable Vector Graphics Format
               const paths = data.paths || []
 
@@ -2484,7 +2540,7 @@ const mpos = {
 
             // KMEANS
             const pyr = src.clone()
-            const [width, height] = mpos.var.tool.pyr(pyr.cols, pyr.rows, clusters * 8)
+            const [width, height] = mpvar.tool.pyr(pyr.cols, pyr.rows, clusters * 8)
             cv.resize(pyr, pyr, new cv.Size(width, height), 0, 0, cv.INTER_NEAREST) //AREA,LINEAR,NEAREST
 
             const sample = new cv.Mat(pyr.rows * pyr.cols, 3, cv.CV_32F)
@@ -2685,7 +2741,7 @@ const mpos = {
                   // label color
                   const rgba = label.rgba
                   const color = new THREE.Color('rgb(' + [rgba.r, rgba.g, rgba.b].join(',') + ')')
-                  const material = mpos.var.mat_shape.clone()
+                  const material = mpvar.mat_shape.clone()
 
                   material.color = color
 
@@ -2723,7 +2779,7 @@ const mpos = {
   },
   step: {
     rate: function (grade, step) {
-      const { tool, time, opt } = mpos.var
+      const { tool, time, opt } = mpvar
       const { major } = grade
       const { frame, queue } = step
 
@@ -2752,7 +2808,7 @@ const mpos = {
         // get ux.u (for feature tests, pre/post) before css refreshes phase
         const { ux } = rect
         // phase: effects bubble and cascade (style, transform matrix...)
-        const stateOld = ux.u.has('pseudo')
+        const stateOld = ux.u.has('pseudo') || rect.frame === -1
         // ?? early-exit midrange frames ?? == 80fps w/o all textures
         if (!stateOld && !time.st.subsub) continue
 
@@ -2760,10 +2816,10 @@ const mpos = {
         // Phase Refresh
         mpos.set.inPolar(rect)
         let inPolar = rect.inPolar >= grade.inPolar
-        if (inPolar) mpos.set.css(rect, step.frame)
+        if (inPolar || stateOld) mpos.set.css(rect, step.frame)
         const stateNew = rect.major === 'atlas' && (ux.o || ux.u.size) // && time.st.subsub
 
-        if (stateOld || stateNew) {
+        if (stateOld || stateNew /* && inPolar */) {
           // element ux changed or elevated
           step.queue.add(idx)
           if (rect.el.tagName !== 'BODY') continue
@@ -2828,13 +2884,13 @@ const mpos = {
         }
       }
     },
-    sync: async function (grade, pointer) {
+    sync: function (grade, pointer) {
       if (!grade || grade.wait || (pointer && !grade.major.queue.size)) {
         // drop frame
         return
       }
 
-      const { opt, time, tool } = mpos.var
+      const { opt, time, tool } = mpvar
       //const { major, atlas } = grade;
 
       grade.wait = true
@@ -2857,23 +2913,27 @@ const mpos = {
         //
         // HARD-update: build queue for rects
 
-        // helper for viewport document.body bounds
-        const idx = Date.now().toString()
-        const rect = new mpos.mod.rect(document.body, {
-          idx: idx,
-          major: 'other',
-          minor: 'wire',
-          z: -9,
-          fix: true,
-          add: 1
-        })
-        document.body.setAttribute('data-idx', idx)
-        mpos.set.inPolar(rect)
-        //rect.ux.i = 1;
+        // Viewport Helper (bounds mesh)
+        // no recreate, for random document idx
+        const viewHelper = grade.el.getRootNode().body
+        if (!viewHelper.dataset['idx']) {
+          const idx = [viewHelper.nodeName, grade.batch, new Date().getTime()].join('_')
+          const rect = new mpos.mod.tRect(viewHelper, {
+            idx: idx,
+            major: 'other',
+            minor: 'wire',
+            z: -9,
+            fix: true,
+            add: 1
+          })
+          viewHelper.setAttribute('data-idx', idx)
+          mpos.set.inPolar(rect)
+          //rect.ux.i = 1;
 
-        // define manually
-        grade.rects.set(idx, rect)
-        mpos.set.key(grade, rect)
+          // define manually
+          grade.rects.set(idx, rect)
+          mpos.set.key(grade, rect)
+        }
       } else {
         //
         // SOFT-update: Observer or frame
@@ -2913,7 +2973,7 @@ const mpos = {
       const slice = time.sFenceFPS_slice
       let s0 = 1 / (slice.boundary + 0.001) // [0-16+] +0.001
       let s1 = 1 / slice.ramp // [1-4+]
-      let s2 = 1 / slice.quota.average // [1-64+]
+      let s2 = 1 / slice.sma.average // [1-64+]
       let s3 = Math.abs(sFenceSync / 2) // [-2-0]
       // averages for quality modulation
       let sA = ((s0 + s1) / 2 + (s2 + s3)) / 3
@@ -2982,7 +3042,7 @@ const mpos = {
       }
 
       /* // WebWorker
-      mpos.var.worker.postMessage(
+      mpvar.worker.postMessage(
         {
           msg: 'atlas',
           origin: 'worker.js',
@@ -2991,8 +3051,8 @@ const mpos = {
         []
       ) */
     },
-    atlas: async function (grade, step = {}) {
-      const { tool, fov, cloneX } = mpos.var
+    atlas: function (grade, step = {}) {
+      const { tool, fov, cloneX } = mpvar
       const { atlas, major } = grade
       let { frame, queue, syncFPS, quality } = step
 
@@ -3015,8 +3075,9 @@ const mpos = {
         if (step.syncFPS === 0) return true
         if (rect.inPolar < grade.inPolar) return false
 
-        const whitelist = rect.ux.o || rect.ux.u.size
-        return whitelist
+        const shallow = rect.ux.u.has('tweens') || rect.ux.u.has('pseudo')
+        const whitelist = rect.ux.o > 1
+        return shallow || whitelist
       }
 
       // Structures for toSVG > Node Options:
@@ -3168,7 +3229,7 @@ const mpos = {
     transforms: function (grade, step, paint) {
       const { atlas, major, rects } = grade
       const { frame, queue, syncFPS } = step
-      const { time } = mpos.var
+      const { time, tool } = mpvar
 
       //
       // Proceed with internal updates (meshes, raycast) before render
@@ -3254,9 +3315,8 @@ const mpos = {
         // Primitive feature differ (backgroundColor)
         // todo: ad-hoc flags (clipping scroll, linked:toolgroup, catmull metaballs)
         const inPolar = rect.inPolar >= grade.inPolar
-        const meta = rect.ux.u.has('tween') || rect.ux.u.has('pseudo')
 
-        if (inPolar && meta && time.st.subsub) {
+        if (inPolar && (rect.ux.u.has('tween') || rect.ux.u.has('pseudo'))) {
           // Instance color phase (pre/post)
           let oldRGB = new THREE.Color()
           if (instanced.instanceColor) instanced.getColorAt(count, oldRGB)
@@ -3275,10 +3335,12 @@ const mpos = {
           }
 
           // differ colors update
+          let rgb1 = [tool.eq(oldRGB.r), tool.eq(oldRGB.g), tool.eq(oldRGB.b)]
+          let rgb2 = [tool.eq(color.r), tool.eq(color.g), tool.eq(color.b)]
+          const equalsNode0 = tool.eq(oldRGB, { diff: color, deep: true })
           const equalsNode =
-            oldRGB.r.toFixed(2) === color.r.toFixed(2) &&
-            oldRGB.g.toFixed(2) === color.g.toFixed(2) &&
-            oldRGB.b.toFixed(2) === color.b.toFixed(2)
+            tool.eq(oldRGB.r) === tool.eq(color.r) && tool.eq(oldRGB.g) === tool.eq(color.g) && tool.eq(oldRGB.b) === tool.eq(color.b)
+          //console.log("eqNode", equalsNode0, equalsNode, rgb1, rgb2, );
           if (!equalsNode) {
             instanced.setColorAt(count, color)
             newRGB = true
@@ -3290,7 +3352,7 @@ const mpos = {
         let vis = -1
         let x, y, z
         const uv = rect.uv
-        if (meta || dummy || rect.ux.u.has('matrix')) {
+        if (dummy || rect.ux.u) {
           newUVW = true
           if (uv || rect.minor === 'self') {
             // rated structure/hierarchy crossed boundary
@@ -3365,8 +3427,8 @@ const mpos = {
     },
     reflow: function (e) {
       // balance lag of input versus update
-      const { var: vars, ux, step } = mpos
-      const { grade, opt } = vars
+      const { ux, step } = mpos
+      const { grade, opt } = mpvar
       if (!grade) {
         return
       }
@@ -3417,7 +3479,7 @@ const mpos = {
 
         // if delay invoked, update access at gui opt
         // note: don't overwrite so render can restore after sleep
-        //if(timer === 'delay' && timeout !== mpos.var.opt.delay) mpos.var.opt.delay = timeout
+        //if(timer === 'delay' && timeout !== mpvar.opt.delay) mpvar.opt.delay = timeout
 
         ux.timers.clear(timer)
         if (e.value === -1) {
@@ -3427,8 +3489,8 @@ const mpos = {
 
         ux.timers[timer].push(
           setTimeout(() => {
-            const { opt, fov, camera, controls, renderer, rendererCSS } = mpos.var
-            // setTimeout is global scope, so strictly re-declare vars
+            const { opt, fov, camera, controls, renderer, rendererCSS } = mpvar
+            // setTimeout is global scope, so strictly re-declare mpvar
 
             if (e.type === 'resize') {
               // ...recalculate inPolar and update?
@@ -3467,7 +3529,7 @@ const mpos = {
       }
     },
     render: function (gate) {
-      const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool, time, cache, opt } = mpos.var
+      const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool, time, cache, opt } = mpvar
 
       if (!document.hasFocus()) {
         // prevent framerate spikes on focus loss
@@ -3539,23 +3601,23 @@ const mpos = {
         // - boundary: time slice composed of gate and 1+ ramp
         // - gate: notional fps (expected measure) ..||.|:..
         // - ramp: subframes from render lambda (undebounced script, reflow, controls pan/zoom...)
-        // - quota.average: indicator of continuous frames (low is better)
+        // - sma.average: indicator of continuous frames (low is better)
         //
         // Avoid lag, prevent it!
-        // - mixin: sFenceSync < -1.5 || boundary > 2 || quota > 16
+        // - mixin: sFenceSync < -1.5 || boundary > 2 || sma > 16
         // - branch: rebalance task load (gc, re-build atlas...)
         // - modulate: compare and shift dense fault periods
         //
 
-        const quota = Math.floor(time.sFenceDelta / time.sFenceFPS) // Math.floor(.6/.3)
-        slice.boundary += 2 * quota - 1 // fast [0-1], slow [8-16+]
+        const sma = Math.floor(time.sFenceDelta / time.sFenceFPS) // Math.floor(.6/.3)
+        slice.boundary += 2 * sma - 1 // fast [0-1], slow [8-16+]
 
         if (slice.boundary > 32) {
           // reset accumulator (truncate outliers)
-          slice.quota.count /= 2
+          slice.sma.count /= 2
           slice.boundary = 1
         }
-        tool.avg(quota, slice.quota)
+        tool.eq(sma, { avg: slice.sma })
 
         //stackoverflow.com/questions/11285065/#answer-51942991
         time.sFenceDelta %= time.sFenceFPS
@@ -3563,14 +3625,14 @@ const mpos = {
 
       // range [1-4+] guarded on reflow, not granular events
       slice.ramp++
-      //console.log(slice.boundary, slice.ramp, slice.quota.average)
+      //console.log(slice.boundary, slice.ramp, slice.sma.average)
       // [1,33,4,3,16,1], [4,2,1,1,3,1], [32,4,8,12,8,16]
 
       //
       // Time Slice Decorators: used in sync loop to reduce update queue!!1
       time.st.gate = syncFPS // (FIFO) render time measure: ground truth
       time.st.subsub = slice.boundary >= 16 && slice.ramp < 2 // (Batch) idle: !!burst
-      time.st.pingpong = (syncFPS && time.st.subsub) || (slice.quota.average < 16 && time.sFenceSync < -1.75) // (Round robin) gate or slice is stable: !!50% load balance
+      time.st.pingpong = (syncFPS && time.st.subsub) || (slice.sma.average < 16 && time.sFenceSync < -1.75) // (Round robin) gate or slice is stable: !!50% load balance
 
       const obr = cache.get('onBeforeRender')
       if (time.st.pingpong) {
@@ -3628,7 +3690,7 @@ const mpos = {
       //requestAnimationFrame(this)
     },
     raycast: function (e) {
-      const { grade, camera, caret, time, tool } = mpos.var
+      const { grade, camera, caret, time, tool } = mpvar
       let synthetic = {}
 
       //
@@ -3711,7 +3773,7 @@ const mpos = {
       // Events (parallel to queue)
       let uxPass = !rect || !uv,
         uxLoss
-      const { controls, time } = mpos.var
+      const { controls, time } = mpvar
 
       if (!uxPass) {
         //
@@ -3761,7 +3823,7 @@ const mpos = {
       //
       // Event Candidate(s) to emit
       let emit
-      const kapturoo = mpos.var.grade.el
+      const kapturoo = mpvar.grade.el
       const bubklist = '[data-engine^=three], section#mp, .lil-gui'
       const emits = document.elementsFromPoint(x, y).filter((el) => {
         // note: event bubbles on root may wander in inauthentic dev environment
@@ -3779,7 +3841,7 @@ const mpos = {
         // example: app-level imposed (filters/group); frame (miss/buffer); delay (touchstart/drag/click); user-agent media rejection;
         console.log('oob emit target')
       }
-      console.log('event emits', e.type, emit || element)
+      //console.log("event emits", e.type, emit || element);
 
       // Synthetic Event
       const MouseEventInit = {
@@ -3811,5 +3873,6 @@ const mpos = {
   }
 }
 
+window.mpvar = mpvar
 window.mpos = mpos
-export default mpos
+export { mpos, mpvar }

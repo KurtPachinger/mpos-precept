@@ -569,17 +569,20 @@ model-viewer {
   }
 }
 
-:focus,
-:active,
-.active,
-.pulse {
-  box-shadow: inset 0 0 0.125em 0.125em var(--active);
-  animation: active 0.5s linear infinite alternate;
+main {
+  :focus,
+  :active,
+  .active,
+  .pulse {
+    box-shadow: inset 0 0 0.125em 0.125em var(--active);
+    animation: active 0.5s linear infinite alternate;
+  }
 }
 
 @keyframes active {
   to {
     box-shadow: inset 0 0 0em 0.125em cyan;
+    background-color: rgba(0, 255, 255, 0.25);
   }
 }
 

@@ -181,7 +181,7 @@
   // ... maybe proxy scene fit canvas to element?
   // ... cleanup for other templates: camera/controls, opts, BoxGeometry/s,  
 
-  const { opt, fov, controls, camera, batch, cache, scene, renderer } = mpos.var
+  const { opt, fov, controls, camera, batch, cache, scene, renderer } = mpvar
 
   opt.selector = 'main';
   opt.depth = 4
@@ -237,7 +237,7 @@
   obr.cta = function () {
     // todo: some user engagement
 
-    if (batch === mpos.var.batch) {
+    if (batch === mpvar.batch) {
 
 
       if (!iconTime) {
