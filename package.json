@@ -1,13 +1,14 @@
 {
   "name": "mpos-precept",
-  "version": "1.1.0",
+  "version": "1.11.0",
   "description": "Imposter DOM rects in THREE",
   "keywords": ["ThreeJS", "DOM", "loader"],
   "main": "./public/index.js",
   "dependencies": {
     "three": "0.183.0",
     "html-to-image": "1.11.11",
-    "gifuct-js": "2.1.2"
+    "gifuct-js": "2.1.2",
+    "troika-three-text": "0.52.4"
   },
   "devDependencies": {},
   "scripts": {},
