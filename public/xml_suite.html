@@ -6,25 +6,26 @@
   // Load Misc. Content Types (before/after init)
 
   // 1. flat chain, inner
-  mpos.fnVar("chain", "#frames", { count: 4, symbol: "-" });
+  let mm = mpos.fnVar("march", "#frames", {});
+  mpos.fnVar("chain", "#frames", { count: mm.root, symbol: mm.slot });
 
   // 2. deep chain, outer
-  let m1 = mpos.fnVar("march", "#thread", {});
-  mpos.fnVar("chain", "#thread", { count: m1.slot, symbol: m1.slot });
+  mm = mpos.fnVar("march", "#thread", {});
+  mpos.fnVar("chain", "#thread", { count: mm.root, symbol: mm.slot });
 
   //
   // Dynamic load (pre add)...
 
   
   const dynamic = document.querySelector("#dynamic");
-  let element, chains, Object3D;
+  let element, Object3D;
   if (dynamic.querySelectorAll(".uid").length < 3) {
 
 
       // 2. deep dynamic, object
     Object3D = document.createElement("object");
     Object3D.classList.add("mp-loader", "blink");
-    Object3D.data = "//raw.githubusercontent.com/mrdoob/three.js/master/examples/models/json/lightmap/lightmap.json";
+    Object3D.data = "./lightmap.json";
     Object3D.style = "display: block; width: 2em; height: 2em;";
 
     // set property (will apply to Object3D, once loaded)
@@ -40,8 +41,8 @@
 
     dynamic.prepend(element);
 
-    let m2 = mpos.fnVar("march", "#dynamic", {});
-    chains = mpos.fnVar("chain", "."+uid, { count: m2.root + 2, symbol: Object3D });
+    mm = mpos.fnVar("march", "#dynamic", {});
+    mpos.fnVar("chain", "."+uid, { count: mm.root + 2, symbol: Object3D });
 
   }
 
@@ -50,24 +51,63 @@
   // Dynamic load (post add)...?
 
   // poll key: grade
-  mpos.fnVar("load", "grade", { node: mpvar }).then((key1) => {
+  mpos.fnVar("load", "grade", { node: mpvar }).then((g) => {
 
     // add dynamic (to [data-idx], grade.rect...)
-    if (element) mpos.mod.add(element, { grade: key1 });
-    //mpos.mod.add(Object3D, { grade: key1 });
+    if (element) mpos.mod.add(element, { grade: g });
+    //mpos.mod.add(Object3D, { grade: g });
 
     // find rect by [data-idx] from grade
     const idxJSON = Object3D.getAttribute("data-idx");
-    const rect = mpos.fnVar("find", idxJSON, {}).then((rect) => {
+    const rect = mpos.fnVar("omni", idxJSON, {});
 
-      // poll key: JSONLoader
-      mpos.fnVar("load", "obj", { node: rect }).then((key2) => {
-        
-        //console.log("load:", key2);
-      });
+    // poll key: JSONLoader
+    mpos.fnVar("load", "obj", { node: rect }).then((key2) => {
+      //console.log("load:", key2);
     });
+    
   });
 -->
+
+<style>
+  #loop {
+    position: relative;
+  }
+  #lag {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    filter: grayscale(0.25) contrast(0.75) brightness(1.5) blur(0.125em);
+    cursor: pointer;
+
+    mp {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      .last {
+        color: #000;
+      }
+    }
+
+    #step {
+      font-size: 4em;
+      line-height: 1;
+      color: #000;
+      background-color: rgba(255, 255, 255, 0.5);
+      display: inline-block;
+      position: relative;
+      z-index: 99;
+      &:hover {
+        color: red !important;
+      }
+    }
+  }
+</style>
 
 <h2 class="mp-native">
   <span>main</span>
@@ -95,7 +135,6 @@
   <aside id="native" class="tilt scroll">
     <h2>aside<span>#native</span></h2>
     <form onSubmit="return false;">
-      <!--note: selector fieldset renders much smoother than form... perhaps due to events or toSVG? -->
       <fieldset class="sub">
         <legend>form</legend>
         <input name="listen" class="w50" type="text" placeholder="listen" />
@@ -106,12 +145,12 @@
     </form>
     <div>
       <h2>tag cloud</h2>
-      <span style="position: relative; z-index: 9">click</span>
-      <span style="position: relative; z-index: 0">mousemove</span>
-      <span style="position: relative; z-index: -6">mousedown</span>
-      <span style="position: relative; z-index: 6">mouseup</span>
-      <span style="position: relative; z-index: -3">mouseout</span>
-      <span style="position: relative; z-index: 3">mouseover</span>
+      <span style="z-index: 0">click</span>
+      <span style="z-index: 3">mousemove</span>
+      <span style="z-index: -3">mousedown</span>
+      <span style="z-index: 6">mouseup</span>
+      <span style="z-index: -6">mouseout</span>
+      <span style="z-index: 9">mouseover</span>
     </div>
   </aside>
   <section id="deep">
@@ -191,7 +230,7 @@
     <object
       alt="SVG"
       class="mp-loader w33 hinge"
-      data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=10"
+      data="//upload.wikimedia.org/wikipedia/commons/d/dd/Wheelchair_stairs.svg?t=11"
       rel="dns-prefetch"
     ></object>
     <img alt="" class="mp-loader w33 hinge" src="./image.webp?t=11" crossorigin="anonymous" />
@@ -201,7 +240,8 @@
       <source src="//interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4" />
       <track kind="captions" />
     </video>
-    <a id="link" class="mp-loader w33 hinge" href="//github.com/mrdoob/three.js/raw/refs/heads/dev/examples/models/gltf/duck.glb">DRACKO</a>
+    <a id="link" class="mp-loader w33 hinge" href="./duck.glb">DRAKO GLTF</a>
+    <object src="./sdf.txt" class="mp-loader w33 hinge" style="aspect-ratio: 1/1">TROIKA MSDF</object>
   </section>
   <section id="type" class="bgnormal">
     <h2>section<span>#type</span></h2>
@@ -272,7 +312,7 @@
           <td>iframe</td>
           <td>
             <div class="yt mp-native">
-              <iframe src="//youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media" title="YouTube"></iframe>
+              <iframe src="https://youtube.com/embed/joOIBteSo1w?vq=tiny" allow="encrypted-media" title="YouTube"></iframe>
             </div>
           </td>
         </tr>
@@ -344,7 +384,7 @@
   <article>
     <h2>Article 02: Predictive</h2>
     <p>Defined slot to sample for systems.</p>
-    <div id="flood">
+    <div id="loop">
       <img alt="" class="w100" src="data:," style="height: 8em; background-color: rgb(0, 128, 0)" />
     </div>
     <ul>
@@ -369,74 +409,75 @@
 
 <!--//__THREE__
   // Particle Lifecycle
-  const flood = document.querySelector("#flood");
-  flood.style = "position:relative;";
-  const swarm = document.createElement("div");
-  swarm.style =
-    "position:absolute;top:0;right:0;bottom:0;left:0;overflow:hidden;" +
-    "color:rgba(255, 255, 255,.5);filter: grayscale(0.25) contrast(0.75) brightness(1.5) blur(0.125em);";
-  swarm.id = "swarm";
-  flood.appendChild(swarm);
+  const loop = document.querySelector("#loop");
+  let grade;
+  let lag = loop.querySelector("#lag");
+  if (!lag) {
+    lag = document.createElement("div");
+    lag.id = "lag";
+    lag.classList.add("mp-allow");
+    loop.appendChild(lag);
+    lag.innerHTML = "<span id='step'>&target;</span>";
 
-  let emoji = ['xxx'];
-
-  let fsCount = 120;
-  let fsItems = new Array(6);
-
-  function go(){
-    swarm.innerHTML = "";
-    emoji.push(setInterval(() => {
-      if (fsCount <= 0) {
-        for (let j=0; j<emoji.length; j++){
-          clearInterval(emoji[j]);
-        }
-        swarm.innerHTML = "END";
-        fsCount = 60;
-      }
-
-      for (let i = 0; i < fsItems.length; i++) {
-        let num = Math.round(fsItems.length / (i + 1));
-        // add
-        mpos
-          .fnVar("chain", "#swarm", { count: num, symbol: emoji[emoji.length-1] })
-          .then((chains) => {
-            // add 2
-            chains.id = ["c", fsCount, i].join("_");
-            //const last = chains.querySelector(".last");
-            const n2 = Math.round(num / 2);
-            const c2 = mpos.fnVar("chain", "#" + chains.id + " .last", {
-              count: n2,
-              symbol: chains.id,
-            });
-
-            // style
-            const deg = Math.random() * 360 + "deg";
-            const top = Math.random() * 100 + "%";
-            const left = Math.random() * 100 + "%";
-            chains.style =
-              "position:absolute; top:" +
-              top +
-              "; left:" +
-              left +
-              "; rotate:" +
-              deg +
-              ";";
-            // save
-            fsItems[i] = chains;
-            // remove
-            setTimeout(
-              () => {
-                chains.remove();
-              },
-              fsCount * 10 * 1.5,
-            );
-          });
-      }
-      fsCount--;
-    }, fsCount * 10)
-    )
+    // prep scope to prepend
+    mpos.fnVar("load", "grade", { node: mpvar }).then((g) => {
+      grade = g;
+      mpos.mod.add(lag, { grade: grade });
+    });
   }
 
-  swarm.addEventListener('click',go)
-  
+  const timers = [];
+  const chains = 6;
+  let steps = 4;
+
+  function go() {
+    timers.push(
+      setInterval(() => {
+        
+        if (--steps < 0) {
+          for (let j = 0; j < timers.length; j++) {
+            clearInterval(timers[j]);
+          }
+          lag.querySelector("#step").innerText = "⌖";
+          steps = 8;
+          return;
+        }
+        lag.querySelector("#step").innerText = steps;
+
+        // create backpressure
+        const mm = mpos.fnVar("march", "#loop", {}).slot;
+        for (let i = 0; i < chains; i++) {
+          const chain = mpos.fnVar("chain", "#lag", {
+            count: mpvar.opt.depth - mm - 1,
+            symbol: [steps, i].join("_"),
+          });
+
+          // style radial
+          const degree = (i / chains) * 360 + "deg";
+          chain.style = "rotate:" + degree + ";";
+
+          mpos.mod.add(chain, { grade: grade }).then( g => {
+            // remove sequence
+            setTimeout(() => {
+              // race / stale closure: role of step.rate to check keys!
+              // get element by tag (mp), and idx by attr [data-idx],
+              // but either may be inaccessible (DOM element or rect idx)
+              let els = chain.querySelectorAll('[data-idx], mp');
+              els = Array.from(els);
+              els.push(chain);
+              els.forEach((el) => {
+                el.remove();
+                el = undefined;
+              })
+              
+            }, ((4000-1000) * (1-(i/chains))) + 250 );
+          })
+
+        }
+
+      }, 4000),
+    );
+  }
+
+  lag.addEventListener("click", go);
 -->

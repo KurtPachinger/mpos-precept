@@ -184,18 +184,16 @@ Analogue of raymarch chain:
 extract visual hierarchy*/
 .march {
   &,
-  mp,
-  mpk {
+  mp {
     /* Chains (root and child) */
     display: inline-block;
     position: relative;
     width: 1em;
     height: 1em;
-    text-align: center;
-    font-size: 1.125em;
+    /*font-size: 1.125em;*/
     border-radius: 0.25em;
     background-color: rgba(255, 0, 0, 0.5);
-    box-shadow: rgba(255, 255, 255, 0.75) 0em 0.125em 0.25em 0.125em inset, rgba(0, 0, 0, 0.25) 0px -0.125em 0.125em 0.125em inset;
+    box-shadow: rgba(255, 255, 255, 0.66) 0em 0.3em 0.15em 0.05em inset, rgba(0, 0, 0, 0.66) 0em -0.15em 0.15em 0.15em inset;
   }
 
   mp& {
@@ -203,6 +201,10 @@ extract visual hierarchy*/
     font-size: 1.5em;
     float: left;
     margin-right: -100%;
+  }
+
+  .mp-allow {
+    zoom: 1.25;
   }
 
   & mp {
@@ -216,10 +218,9 @@ extract visual hierarchy*/
     animation-play-state: paused;
 
     /* style repeat... */
-    margin-left: 0.5em;
+    /*margin-left: 0.5em;*/
     &.odd {
       background-color: rgba(0, 0, 255, 0.5);
-      bottom: 0.5em;
     }
 
     /* Chain child (secondary) */
@@ -230,34 +231,25 @@ extract visual hierarchy*/
       border-radius: 0.25em 0.25em 0 0;
       height: 0.5em;
     }
-    &:after {
-      /*
-      background-color: rgba(255, 255, 0, 0.25);
-      width: 50%;
-      top: 1em;
-      left: -0.5em;
-      */
-    }
-    &:before {
-      background-color: rgba(0, 128, 0, 0.25);
-      width: 100%;
-      top: 0;
-      left: 0;
-    }
   }
 
   & mp.k {
+    animation-name: none;
     /* path sample */
     font-size: 0.5em;
     box-shadow: none;
     background-color: rgba(255, 255, 0, 0.5);
+    border-radius: 0.5em 0 0 0;
     display: block;
-    margin: 0 auto -1em;
+
+    position: absolute;
+    /*margin: 0 auto -1em;*/
   }
+  line-height: 1;
 
   /* style jitter... */
   > mp.p {
-    font-size: var(--march);
+    /*font-size: var(--march);*/
     animation-delay: 0.125s !important;
     z-index: 3;
     > mp.p {
@@ -282,14 +274,14 @@ extract visual hierarchy*/
   60%,
   80%,
   100% {
-    transform: translate(0, 50%);
+    transform: translate(0, 12.5%) translate3d(-0.125em, 0.125em, 0);
   }
   10%,
   30%,
   50%,
   70%,
   90% {
-    transform: translate(0, -25%);
+    transform: translate(0, -25%) translate3d(0.5em, 0em, 0);
   }
 
   50% {

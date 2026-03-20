@@ -1,4 +1,4 @@
-import './mpos.css'
+//import "./mpos.css"
 // ...OpenCV, SuperGif
 
 import * as THREE from 'three'
@@ -10,13 +10,15 @@ import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRe
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 
-import { toSvg, toCanvas, getFontEmbedCSS } from 'html-to-image'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
+import { Text } from 'troika-three-text'
+
+//import * as TinySDF from "../cdn/tiny-sdf/tiny-sdf.js";
+
+import { toSvg, getFontEmbedCSS } from 'html-to-image' // bug > 11.11 getFontEmbed
 import { parseGIF, decompressFrames } from 'gifuct-js'
 
-//
-//
 const mpvar = {
   batch: 0,
   cache: new Map([['onBeforeRender', {}]]),
@@ -24,49 +26,31 @@ const mpvar = {
     sFence: new THREE.Clock(), // update (interval) and share (with nominal) via oldTime
     sFenceDelta: 0,
     sFenceFPS: 1 / 60, // 60 fps
-    sFenceFPS_slice: {
-      boundary: 1,
-      gate: true,
-      ramp: 0,
-      sma: { count: 0, average: 0 }
-    },
-    slice(boundary) {
-      // legacy/deprecated (pow...greater...decorator...)
-      //if (!mpvar.opt.slice) return true;
-      const slice = this.sFenceFPS_slice
-      boundary = slice.boundary >= boundary
-
-      return boundary
-    },
-    st: { gate: false, subsub: false, pingpong: false }
+    sFenceFPS_slice: { boundary: 1, gate: true, ramp: 0, sma: { count: 0, average: 0 } },
+    st: { gate: false, subsub: false, pingpong: false, flush: { fuse: -Infinity } }
   },
-  fov: {
-    basis: 1024,
-    dpr: Math.min(devicePixelRatio, 1),
-    width: window.innerWidth,
-    height: window.innerHeight,
-    z: 8
-  },
+  fov: { basis: 1024, dpr: 1, width: window.innerWidth, height: window.innerHeight, z: 8 },
   opt: {
     request: 'xml_suite.html',
     selector: 'main',
-    custom: '//upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
-    depth: 6,
+    custom: 'https://upload.wikimedia.org/wikipedia/commons/1/19/Tetrix_projection_fill_plane.svg',
+    depth: 8,
     inPolar: 4,
     arc: 0.0,
-    delay: 0, //16.666
+    delay: 500, //16.666
     setFlash: false,
+    /**
+     * GUI adds element or custom pointer, with options
+     */
     update: function () {
-      //
-      // GUI Options Panel
       let selector = this.selector
       const options = { depth: this.depth }
 
       if (this.selector === 'custom') {
         // Document from URI (CORS?)
         if (this.custom.startsWith('//') || this.custom.startsWith('http')) {
-          //|| this.custom === '#fragment'
-          // '#custom template'
+          //|| this.custom === "#fragment"
+          // "#custom template"
           selector = '#custom object'
           options.custom = this.custom
         } else {
@@ -78,103 +62,43 @@ const mpvar = {
     }
   },
 
+  /**
+   * toSVG options: default styles and filters, to shallow-copy and append
+   */
   cloneX: class {
+    /**
+     * @param {Object} opts set key values
+     */
     constructor(opts = {}) {
       for (let k in opts) {
         this[k] = opts[k]
       }
     }
 
-    //
-    // toSvg options: for atlas and OpenCV
-    //... shallow copy and append
-
+    // reduce canvas size, or wrap #text
+    width = ''
+    height = ''
+    // optimize working space
     pixelRatio = 1
     preferredFontFormat = 'woff2'
     fontEmbedCSS = ''
     imagePlaceholder = 'data:,'
-    //imagePlaceholder =
-    'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='
     style = {
       margin: 'initial',
-      transform: 'initial'
-      //imageRendering: "pixelated",
-      // display: 'block',
+      transform: 'initial',
+      animation: 'none', //animationName
+      transform: 'none'
+      //display: "block",
     }
-    includeStyleProperties = [
-      //
-      //:root{--global},
-      //"animation",
-      //"animation-play-state",
-      'background',
-      'background-blend-mode',
-      'background-color',
-      'background-image',
-      'background-position',
-      'border',
-      'border-bottom',
-      'border-left',
-      'border-radius',
-      'border-right',
-      'border-top',
-      'bottom',
-      'box-shadow',
-      'box-sizing',
-      'color',
-      'content',
-      'contain',
-      'display',
-      'filter',
-      'flex-basis',
-      'flex-direction',
-      'flex-grow',
-      'flex-shrink',
-      'flex-wrap',
-      'float',
-      'font',
-      'font-family',
-      'font-size',
-      'height',
-      //"image-rendering",
-      'inset',
-      'left',
-      'line-height',
-      'list-style',
-      'margin',
-      'max-height',
-      'max-width',
-      'min-height',
-      'min-width',
-      'mix-blend-mode',
-      'opacity',
-      'overflow',
-      'overflow-x',
-      'overflow-y',
-      'padding',
-      'perspective',
-      'position',
-      'right',
-      'rotate',
-      'scale',
-      'text-align',
-      'text-decoration',
-      'text-shadow',
-      'text-transform',
-      'top',
-      'transform',
-      'transform-origin',
-      //"transition",
-      'translate',
-      'translate3d',
-      'vertical-align',
-      'visibility',
-      'width',
-      'zoom',
-      'z-index'
-    ]
+
+    /* [ :root{--global}, animation, animation-play-state, image-rendering, transition, ];*/
+    includeStyleProperties =
+      `background,background-blend-mode,background-color,background-image,background-position,border,border-bottom,border-left,border-radius,border-right,border-top,bottom,box-shadow,box-sizing,color,content,contain,display,filter,flex-basis,flex-direction,flex-grow,flex-shrink,flex-wrap,float,font,font-family,font-size,height,inset,left,line-height,list-style,margin,max-height,max-width,min-height,min-width,mix-blend-mode,opacity,overflow,overflow-x,overflow-y,padding,perspective,position,right,rotate,scale,text-align,text-decoration,text-shadow,text-transform,top,transform,transform-origin,vertical-align,visibility,width,zoom,z-index`.split(
+        ','
+      )
 
     //
-    // Filter (like precept/inPolar): reduce memory use... don't alter whitespace!
+    // Filter (like precept/inPolar): reduce memory use, but don't alter whitespace
     // Child nodes may be malformed, or create documents in the loop
 
     allow = new Set(['FORM', 'FIELDSET', 'MODEL-VIEWER'])
@@ -192,13 +116,13 @@ const mpvar = {
       'DATALIST'
     ])
 
-    // public static (...not this.#clone) since access/override moving structs
+    /**
+     * Filter Nodes by hierarchy:
+     * complex return of (mostly unnecessary) multi-factor (map/pyramid) structure
+     * @param {Node} clone
+     */
     static filterEmpty(clone) {
-      //this.#node = clone;
       const { grade } = mpvar
-      //
-      // Filter Clone Nodes from Memory
-      // complex return of (mostly unnecessary) multi-factor (map/pyramid) structure
 
       // 0. hierarchy
 
@@ -248,37 +172,35 @@ const mpvar = {
         (el.textContent.trim() === '' && rect.css?.style?.background === 'none') // block fullscreen overlay
       // 2. relatives (...shallow, grade.el) exceed mip size
       const overflow =
-        // !! NEGATE CLONE == RECT.EL ??  (text|el) ?: [data-idx]    el==ancestor
+        // !! NEGATE CLONE === RECT.EL ??  (text|el) ?: [data-idx]    el==ancestor
         //!el.isSameNode(ancestor) &&
-        rect.uv?.mip < 2 &&
+        rect.uv.mip < 2 &&
         (ancestor.querySelectorAll('[data-idx]').length > 8 || // L0-1: match parent/self (data-idx FAR UP tree)
           el.childElementCount > 16) // L0: self
 
       //if (hidden || overflow) console.log("filter", clone, mip);
-      // ~7 less elements per frame: (blank.gif, <br />, <object>, <script>, <source>)
       return !hidden || !overflow
+      // ~7 less elements per frame: (blank.gif, <br />, <object>, <script>, <source>)
       //if (!!clone.shadowRoot || element.getRootNode() instanceof ShadowRoot)
     }
 
+    /**
+     * Filter nodes for background:
+     * remove children, since box size set
+     * @param {Node} clone
+     */
     static filterSelf(clone) {
-      // draw background: hide children, since box size set
       return !clone.parentElement
     }
   },
   geo: new THREE.BoxGeometry(1, 1, 1),
   mat: new THREE.MeshBasicMaterial({ color: 'cyan' }),
-  mat_shape: new THREE.MeshBasicMaterial({
-    alphaHash: true,
-    depthWrite: false
-  }),
+  mat_shape: new THREE.MeshBasicMaterial({ alphaHash: true, depthWrite: false }),
   mat_line: new THREE.MeshBasicMaterial({ color: 'cyan', wireframe: true }),
   mat_shader: new THREE.RawShaderMaterial({
     //discourse.threejs.org/t/13221/18
     //discourse.threejs.org/t/33191/12
-    uniforms: {
-      map: { type: 't', value: null },
-      atlasSize: { type: 'f', value: null }
-    },
+    uniforms: { map: { type: 't', value: null }, atlasSize: { type: 'f', value: null } },
     vertexShader: `precision mediump float;
 
       uniform mat4 modelViewMatrix;
@@ -291,7 +213,6 @@ const mpvar = {
 
       uniform float atlasSize;
       varying vec2 vUv;
-
 
       void main() {
         vUv = vec2(uvOffset.x, uvOffset.y) + ((uv* uvOffset.z) / atlasSize ) ;
@@ -309,62 +230,63 @@ const mpvar = {
       `
   }),
   tool: {
-    //
-    // Tools and fnVar: compatibility or direct access?
-    eq: function (value, opts) {
+    /**
+     * Equivalent coercion
+     * @param {any} value primary operator
+     * @param {Object} opts lambda access mode: avg, deep, diff
+     * @returns {(boolean|number)} equality or equivalent precision
+     */
+    eq: function (value, opts = {}) {
       let equals = true
       const epsilon = 6
-      function dec(v) {
-        //const isNumeric = (val) => typeof val !== 'boolean' && val !== '' && !isNaN(val);
-        v = isFinite(+v) ? +v.toFixed(epsilon) : v
+      function dec(v, deep) {
+        // to decimal precision
+        const numeric = typeof v === 'number' && !isNaN(v) && isFinite(v)
+        v = numeric ? +v.toFixed(epsilon) : v
         return v
       }
 
-      if (!opts) {
-        // numeric precision
-        equals = dec(value)
+      if (opts.diff) {
+        // compare objects
+        const A = value
+        const B = opts.diff
+        if (!opts.deep) {
+          // string === string
+          equals = JSON.stringify(A) === JSON.stringify(B)
+        } else {
+          // keys === keys
+          let a, b
+          for (const key in A) {
+            a = A[key]
+            b = B[key]
+            equals = key in B ? dec(a) === dec(b) : false
+            if (!equals) break
+          }
+        }
+        // ...or: A.isSameNode(B), |A-B|<0.001
       } else if (opts.avg) {
         // simple moving average
         const avg = opts.avg
         const acc = avg.average + (value - avg.average) / (1 + avg.count)
         avg.average = acc
         avg.count++
-      } else if (opts.diff) {
-        // compare objects
-        // A.isSameNode(B), string===string, or {...epsilon}
-        const A = value
-        const B = opts.diff
-        if (!opts.deep) {
-          // string === string
-          equals = JSON.stringify(A) === JSON.stringify(B)
-          //console.log("shallow", equals, A, B);
-        } else {
-          // keys === keys
-          let a, b
-          for (const key in A) {
-            if (a !== b) {
-              equals = false
-              break
-            }
-          }
-        }
-        //
+      } else {
+        // numeric precision
+        equals = dec(value, opts.deep)
       }
 
       return equals
     },
-    avg: function (val, acc) {
-      // moving average
-      let avg = acc.average + (val - acc.average) / (1 + acc.count)
-      // moving average
-      acc.average = avg
-      acc.count++
-    },
+    /**
+     * Count nested elements which match precept.allow
+     * @param {HTMLElement} element target for depth count
+     * @param {Object} opts traversal
+     * @returns {{root:number,slot:number}} count ancestors and descendents
+     */
     march: function (element, opts = {}) {
       const { grade, opt } = opts.mpvar
       const depth = grade?.depth || opts.depth || opt.depth
 
-      //
       // z relative to root(s) and slot depth(s)
       let inner = element
       const outer = grade?.el || document.querySelector(opt.selector) || document.body
@@ -378,6 +300,12 @@ const mpvar = {
 
       return m
     },
+    /**
+     * Add a helper to visualize raymarch fundamentals in development
+     * @param {HTMLElement} element parent to append chains
+     * @param {Object} opts link count and symbol to append on last
+     * @returns {HTMLElement} nested mp nodes
+     */
     chain: function (element, opts = {}) {
       // chain of elements to count
       let nodeName = opts.nodeName || 'mp'
@@ -391,7 +319,7 @@ const mpvar = {
           chain.classList.add('odd')
         }
         // path scatter sample (no pointerevents)
-        chain.innerHTML += `<mp class='k'>${opts.count}</mp>`
+        chain.innerHTML += `<mp class="k">${opts.count}</mp>`
 
         last.append(chain)
         last = chain
@@ -403,17 +331,19 @@ const mpvar = {
 
       return chains
     },
+    /**
+     * Resource search or load
+     * @param {any} terms Node, data-idx, label
+     * @param {{io:string,node:obj}} opts io mode and node target
+     * @returns {{terms:Array,rects:Object,o:Object}} sparse array
+     */
     omni: function (terms, opts = {}) {
       const grade = opts.grade || mpvar.grade
       // Get Element(s) and rect(s)
       // options: sort, poll, callback, find/load?
       // o[delist,enlist], .. children
 
-      const omni = {
-        terms: terms instanceof Array ? terms : [terms],
-        rects: {},
-        o: { count: 0, time: performance.now() }
-      }
+      const omni = { terms: terms instanceof Array ? terms : [terms], rects: {}, o: { count: 0, time: performance.now() } }
 
       for (let i = 0; i < omni.terms.length; i++) {
         let term = omni.terms[i]
@@ -493,8 +423,15 @@ const mpvar = {
       //})
 
       omni.o.time = performance.now() - omni.o.time
+
       return omni
     },
+    /**
+     * Load to or from a resource, or poll for object key
+     * @param {(string|Object)} packet data resource
+     * @param {{io:string,node:Object}} opts io mode and node target
+     * @returns {Promise} response
+     */
     load: function (packet, opts = {}) {
       // media io
       if (!opts.node) {
@@ -519,7 +456,7 @@ const mpvar = {
           opts.node.setAttribute(opts.attribute, packet)
         })
       } else {
-        // polling obj['key']
+        // polling obj["key"]
         return new Promise((resolve, reject) => {
           let retry = 10
           const poll = setInterval(() => {
@@ -534,44 +471,19 @@ const mpvar = {
         })
       }
     },
-    find: function (term, opts = {}) {
-      return new Promise((resolve, reject) => {
-        // find rects by key
-        let rect
-
-        const grade = opts.mpvar.grade
-
-        if (['first', 'last'].includes(term)) {
-          // position
-          const rects = Array.from(grade.rects)
-          const position = term === 'first' ? 0 : rects.length - 1
-          rect = rects[position][1]
-        } else if (['atlas', 'other'].includes(term)) {
-          // all major
-          rect = grade.major[term]
-        } else if (isFinite(term)) {
-          // data-idx
-          rect = grade.rects.get(term.toString())
-        } else {
-          // HTMLElement or 'selector'
-          term = term instanceof HTMLElement ? term : document.querySelector(term)
-          term = term.dataset['idx']
-          rect = grade.rects.get(term)
-        }
-
-        resolve(rect)
-        reject('load error')
-      })
-      //return rect;
-    },
-
+    /**
+     * Compare current values to initial (unset) expectation
+     * @param {string} type feature to test
+     * @param {{node:HTMLElement,capture:HTMLElement}} opts supersets
+     * @returns {boolean} presence of feature
+     */
     diffs: function (type, opts = {}) {
       let differ = false
-      const rect = opts.rect
-      const style = rect.css.style || rect.el.style // computed or direct if not priority
+      const { rect } = opts
+      const style = rect.css.style || rect.el.style // computed, or direct (if not priority)
 
       //
-      // Different from Baseline Generic Primitive
+      // Different from baseline (default generic primitive)
 
       if (type === 'rect') {
         // should TRUE indicate need for action, like other diffs, despire FALSE being the problem?
@@ -584,12 +496,30 @@ const mpvar = {
         //
 
         differ = !rect.el.clientWidth || !rect.el.clientHeight
-        // note: opts.whitelist quirks ( || el.matches('a, img, object, span, xml, :is(:empty)' )
+        // note: opts.whitelist quirks ( || el.matches("a, img, object, span, xml, :is(:empty)" )
       } else if (type === 'matrix') {
         // note: style source may re-prioritize by accumulating frames
         const newFrame = rect.frame === -1
-        const newBound = rect.bound.width / rect.bound.height !== rect.bound.box.width / rect.bound.box.height
-        differ = newFrame || newBound || style.transform?.startsWith('matrix')
+
+        /*const newTransform =
+          (rect.bound.width / rect.bound.height).toFixed(1) !==
+          (rect.bound.box.width / rect.bound.box.height).toFixed(1);*/
+
+        // some epsilon of tolerance (px vs subpixels): near eps 0.05 and toFixed(1)
+        let newTransform = Math.abs(rect.bound.width / rect.bound.height - rect.bound.box.width / rect.bound.box.height) > 0.02
+
+        // secondary route to qualify transform hint (tool.eq(...), height/width, height1-height2)
+        // such as mp-native, but not diminish performance or be "sticky"
+        /*if (!newTransform &&  rect.minor === "poster") {
+          let m6Ancc = rect.el.parentElement.closest("[data-idx]");
+          m6Ancc &&= mpvar.grade.rects.get(m6Ancc.dataset["idx"]);
+          m6Ancc &&= m6Ancc.css.style.transform?.startsWith("matrix");
+          newTransform = m6Ancc;
+        }*/
+
+        // newTranslate cannot be easily inferred from cascade, top/right/bottom/left
+
+        differ = newFrame || newTransform || style.transform?.startsWith('matrix')
       } else if (type === 'tween') {
         // note: loose definition
         // ...transform, filter, overlay, allow-discrete
@@ -601,11 +531,11 @@ const mpvar = {
         // note: if position overflows scrollOffset, canvas may not draw
         differ = style.zIndex >= 9 && (style.position === 'fixed' || style.position === 'absolute')
         //&& !!(parseFloat(style.top) || parseFloat(style.right) || parseFloat(style.bottom) || parseFloat(style.left))
-      } else if (type === 'pseudo') {
-        // note: get pseudo capture once per frame for all rects
+      } else if (type === 'phase') {
+        // note: get :pseudo capture once per frame for all rects
         let css = rect.css
         if (css) {
-          // deepest pseudo match: pass an object (to avoid per-element / per-frame)
+          // deepest :pseudo match cache ref (to avoid per-element / per-frame)
           const root = rect.el.parentElement || document.body // note: document.body is excessive, but may prevent error in a loop
           let capture = opts.capture || {
             hover: [...root.querySelectorAll(':hover')].pop(),
@@ -621,7 +551,7 @@ const mpvar = {
       //
       // WARNING: direct update to rect
       // ?? duplicate access get/set per frame ??
-      differ ? rect.ux.u.add(type) : rect.ux.u.delete(type)
+      if (rect.ux) differ ? rect.ux.u.add(type) : rect.ux.u.delete(type)
 
       if (opts.node) {
         // todo: node may be set manually
@@ -631,17 +561,18 @@ const mpvar = {
 
       return differ
     },
+    /**
+     * Distance from camera to target or origin
+     * @param {Object} distance Object3D target
+     * @returns {number} pixel range
+     */
     dpr: function (distance) {
       const { fov, camera, grade } = mpvar
       //
       // todo: could be used for anisotropy
       const dprPractical = (fov.width + fov.height) / 2
       const camPosition = camera.position
-      const distanceZ = camPosition.distanceTo({
-        x: camPosition.x,
-        y: camPosition.y,
-        z: 0
-      })
+      const distanceZ = camPosition.distanceTo({ x: camPosition.x, y: camPosition.y, z: 0 })
       let distanceTarget = grade?.group.position || { x: 0, y: 0, z: 0 }
       let sample = distance || camPosition.distanceTo(distanceTarget)
 
@@ -650,9 +581,12 @@ const mpvar = {
 
       return fov.dpr
     },
+    /**
+     * Map() => Array[]: for access by index, reverse-order, or other positional query
+     * @param {*} object
+     * @returns
+     */
     resort(object) {
-      //
-      // Structure of Map requires coercion: for access by index, reverse-order, or other query set
       const array = []
       Array.from(object)
         .flat()
@@ -661,11 +595,15 @@ const mpvar = {
         })
       return array
     },
-    old: function () {
+    /**
+     * Dispose of resources in DOM and THREE
+     * @returns {Promise} complete
+     */
+    old: function (idx) {
       const { scene, grade } = mpvar
+
       //console.log(mpvar.renderer.info)
       return new Promise((resolve, reject) => {
-        //
         // THREE traverse dispose
         const groups = scene?.getObjectsByProperty('type', 'Group')
         if (groups && groups.length) {
@@ -693,21 +631,19 @@ const mpvar = {
                     }
                   }
                 } else {
-                  // ...?
+                  // front...?
                   //cache = material.userData.cache
-                  // front
                   //if (!cache) {
                   material.map && material.map.dispose()
                   material.dispose()
                   //}
                 }
 
-                // Loader rules...?
-                if (obj.animate?.gif) {
-                  // Cache loader SuperGif case study:
-                  // hogs memory, frames backwards reused, strange loader signature...?
-                  //obj.animate.gif.pause()
-                  obj.animate.gif = obj.animate.context = obj.animate.patch = null
+                // Lambda access: Gifuct, body/wire...?
+                let anim = obj.animate
+                if (anim?.gif) {
+                  //anim.gif.pause()
+                  anim.gif = anim.context = anim.patch = null
                 }
                 //
                 cache = obj.userData.cache
@@ -730,7 +666,7 @@ const mpvar = {
 
         // CSS3DRenderer clones
         const css3d = mpvar.rendererCSS.domElement
-        //const clones = css3d.querySelectorAll(':not(.mp-block)')
+        //const clones = css3d.querySelectorAll(":not(.mp-block)")
         css3d.querySelectorAll('[data-batch]').forEach((el) => {
           el.firstElementChild.remove()
           el.parentElement.removeChild(el)
@@ -746,14 +682,14 @@ const mpvar = {
             canvas = null
           }
 
-          // Keys clear
+          // clear keys of grade rects
           grade.major.atlas.clear()
           grade.major.other.clear()
-          mpvar.grade.major.text = null
+          mpvar.grade.major.text = new WeakMap()
         }
 
         // Shader Atlas [...]
-        //let atlas = document.getElementById('atlas').children
+        //let atlas = document.getElementById("atlas").children
         //for (let c = atlas.length - 1; c >= 0; c--) {
         // atlas[c].parentElement.removeChild(atlas[c])
         //}
@@ -762,6 +698,12 @@ const mpvar = {
         reject('no')
       })
     },
+    /**
+     * Resize dimensions to constrain long edge
+     * @param {number} width x/cols
+     * @param {number} height y/rows
+     * @param {number} thumb reduced size
+     */
     pyr: function (width, height, thumb = 16) {
       // Reduce image to thumbnail
       let pyr = { cols: width, rows: height }
@@ -769,31 +711,28 @@ const mpvar = {
         // limit long edge
         const orient = pyr.cols > pyr.rows ? 'cols' : 'rows'
         const scale = thumb < pyr[orient] ? thumb / pyr[orient] : 1
-        pyr = {
-          cols: Math.ceil(pyr.cols * scale),
-          rows: Math.ceil(pyr.rows * scale)
-        }
+        pyr = { cols: Math.ceil(pyr.cols * scale), rows: Math.ceil(pyr.rows * scale) }
       }
       return [pyr.cols, pyr.rows]
     }
   }
 }
-//
-//
-//
 
 const mpos = {
+  /**
+   * Access mpvar scope
+   * @param {string} tool key map
+   * @param {*} value tool parameter
+   * @param {Object} opts tool lambda access
+   * @returns {(Object|Promise)}
+   */
   fnVar: function (tool, value, opts = {}) {
-    //
-    // Syntactic Sugar: allow keys and map variable scope
-
     if (value === null || value === undefined) {
       console.log(tool + ': bad value')
       return
     }
 
-    // filter user variables from core
-    //opts.mpvar = this.mpvar;
+    // filter user scope access
     const whitelist = ['batch', 'cache', 'camera', 'controls', 'fov', 'grade', 'gui', 'opt', 'renderer', 'scene']
     opts.mpvar = Object.fromEntries(Object.entries(mpvar).filter(([key]) => whitelist.includes(key)))
 
@@ -806,25 +745,27 @@ const mpos = {
       // opts.grade = ?
     }
 
-    // Tool use
-    // note: find Object3D ...but... march/chain query DOM
+    // tool access
     if (['march', 'chain'].includes(tool) && typeof value === 'string') {
-      // permit element or selector
+      // todo: test omni to (1) find Object3D (2) march/chain DOM selector/element
       value = document.querySelector(value)
     }
 
-    //
-    // use tool
+    // tool wrapper
     const fnvar = mpvar.tool[tool]
     const response = fnvar ? fnvar(value, opts) : 'no fnVar'
     console.log('fnVar:' + tool, opts.value, response)
     return response
   },
 
+  /**
+   * Initialize: scene, renderer, camera, controls, gui
+   * @param {Object} opts proxy environment
+   * @returns {Object} opts
+   */
   init: function (opts = {}) {
     const { opt, fov } = mpvar
 
-    //
     // WebWorker...
     mpvar.worker = new Worker('worker.js')
     mpvar.worker.onmessage = (e) => {
@@ -833,25 +774,22 @@ const mpos = {
     } // -->
 
     const promise = new Promise((resolve, reject) => {
-      //
-      // Mode: Proxy or Standalone
+      // Mode: proxy or standalone
       const proxy = !!(opts.scene && opts.camera && opts.renderer)
 
       mpvar.scene = opts.scene || new THREE.Scene()
       mpvar.scene.autoUpdate = mpvar.scene.matrixAutoUpdate = mpvar.scene.matrixWorldAutoUpdate = false
 
-      //const canvas = document.createElement('canvas')
-
       mpvar.renderer =
         opts.renderer ||
         new THREE.WebGLRenderer({
-          canvas: opts.config?.renderer || undefined,
+          canvas: opts.config?.renderer
           //antialias: false,
-          precision: 'lowp'
+          //precision: "lowp",
           //powerPreference: "low-power",
         })
 
-      mpvar.renderer.setPixelRatio(fov.dpr)
+      mpvar.renderer.setPixelRatio(1)
       const domElement = mpvar.renderer.domElement
       opts.host = proxy ? domElement.parentElement : document.body
 
@@ -866,25 +804,24 @@ const mpos = {
       //mpvar.camera = opts.camera || new THREE.OrthographicCamera(fov.width / -2, fov.width / 2, fov.height / 2, fov.height / -2, 8, 1000)
 
       //
-      // Inject Stage
+      // Stage injection
       const template = document.createElement('template')
       template.innerHTML = `
-    <section id='mp'>
-      <div id='custom' class='tool mp-offscreen'>
-        <object alt='OSC'></object>
-        <!-- iframe, template -->
-      </div>
-      <aside id='atlas' class='tool'>
-        <!--<canvas></canvas>-->
-        <hr id='caret' />
-      </aside>
-      <div id='css3d'></div>
-    </section>`
+      <section id="mp">
+        <div id="custom" class="tool mp-offscreen">
+          <object alt="OSC"></object>
+          <!-- iframe, template -->
+        </div>
+        <aside id="atlas" class="tool">
+          <!--<canvas></canvas>-->
+          <hr id="caret" />
+        </aside>
+        <div id="css3d"></div>
+      </section>`
 
       opts.host.appendChild(template.content)
       const mp = proxy ? opts.host : document.getElementById('mp')
       mp.classList.add('mp-block')
-      //mpvar.atlas = mp.querySelector('#atlas canvas')
       mpvar.caret = mp.querySelector('#caret')
 
       mpvar.camera.layers.enableAll()
@@ -893,10 +830,15 @@ const mpos = {
         mpvar.renderer.setSize(fov.width, fov.height)
         mp.appendChild(domElement)
         mpvar.renderer.setClearColor(0x00ff00, 0)
-        // helpers
-        const axes = new THREE.AxesHelper(fov.basis)
-        mpvar.scene.add(axes)
       }
+
+      // helpers
+      const axes = new THREE.AxesHelper(99)
+      mpvar.scene.add(axes)
+      const gridHelper = new THREE.GridHelper(window.screen.width, 4, 0xd0d0d0, 0xf0f0f0)
+      gridHelper.rotateX(3.14 / 2)
+      gridHelper.position.set(window.screen.width / 2, -window.screen.width / 2, 0)
+      mpvar.scene.add(gridHelper)
 
       // CSS3D
       const css3d = document.getElementById('css3d')
@@ -905,10 +847,11 @@ const mpos = {
       css3d.appendChild(mpvar.rendererCSS.domElement)
       css3d.querySelectorAll('div').forEach((el) => el.classList.add('mp-block'))
 
+      // Control camera
       const controls = new MapControls(mpvar.camera, domElement)
       controls.screenSpacePanning = true
       controls.maxDistance = frustum
-
+      // center position
       const halfHeight = -(fov.height / 2)
       mpvar.camera.position.setY(halfHeight + 0.125)
       controls.target.setY(halfHeight)
@@ -920,16 +863,10 @@ const mpos = {
       const ux = mpos.ux
       window.stats = new Stats()
       mp.appendChild(stats.dom)
-      //
-      const gridHelper = new THREE.GridHelper(fov.width, 4, 0x444444, 0xc0c0c0)
-      gridHelper.rotateX(3.14 / 2)
-      mpvar.scene.add(gridHelper)
-
-      // First Paint
+      // bitmask event targets
       ux.events.raycaster.layers.set(2)
-      //ux.render()
 
-      // User Events: Window, Scene, Raycaster
+      // User Events: window, scene, raycaster
       controls.addEventListener('change', ux.render, false)
 
       const events = ['pointerdown', 'pointermove', 'click']
@@ -937,7 +874,7 @@ const mpos = {
         domElement.addEventListener(event, ux.event, false)
       })
 
-      // User Events: Window Layout Shift
+      // User Events: window layout shift
       window.addEventListener('scroll', ux.reflow, false)
 
       const resize = new ResizeObserver((entries) => {
@@ -960,9 +897,9 @@ const mpos = {
         threshold: [0.25, 0.5]
       })
 
-      // User Events: CSS Clones
-      //const cloneCSS = mp.querySelector('#css3d > div > div > div')
-      //domElement.addEventListener('input', ux.event, false)
+      // User Events: cloned CSS
+      //const cloneCSS = mp.querySelector("#css3d > div > div > div");
+      //domElement.addEventListener("input", ux.event, false);
 
       const gui = new GUI()
       gui.domElement.classList.add('mp-native')
@@ -972,8 +909,8 @@ const mpos = {
         request: [['xml_suite.html', 'xml_track.html', 'xml_guide.html', 'xml_adslot.html']],
         selector: [['body', 'main', 'custom']],
         depth: [0, 32, 1],
-        inPolar: [1, 4, 1],
-        delay: [[0, fps, fps * 2, fps * 4, fps * 8, 125, 250, 333.333, 500, 1000]],
+        inPolar: [3, 4, 0.5],
+        delay: [[0, fps / 2, fps, fps * 2, fps * 4, fps * 8, 125, 250, 333.333, 500, 1000]],
         arc: [0, 1, 0.25]
       }
       for (const key in opt) {
@@ -999,6 +936,10 @@ const mpos = {
               mpos.mod.add()
             })
           })
+        } else if (key === 'inPolar') {
+          controller.onFinishChange((v) => {
+            mpvar.grade.inPolar = v
+          })
         }
       }
 
@@ -1008,29 +949,30 @@ const mpos = {
       reject('err')
     })
 
-    // note: delay timer may go here, BUT needs grade to continue...
+    // note: no grade yet..?
     console.log('init:', promise)
     return promise
   },
   mod: {
     precept: {
-      //
-      // Types for NodeIterator
+      // selectors match node
       manual: `.mp-loader,.mp-poster,.mp-native`.split(','),
       allow: `.mp-allow,div,main,section,article,nav,header,footer,aside,tbody,tr,th,td,li,ul,ol,menu,figure,address`,
-      block: `.mp-block,canvas[data-engine~='three.js'],head,style,script,link,meta,applet,param,map,br,wbr,template,track,source,iframe:not([src])`,
+      block: `.mp-block,canvas[data-engine~="three.js"],head,style,script,link,meta,applet,param,map,br,wbr,template,track,source,iframe:not([src])`,
       poster: `.mp-poster,canvas,img,picture,figcaption,h1,h2,h3,h4,h5,h6,p,ul,ol,li,th,td,summary,caption,dt,dd,code,span,root`,
       native: `.mp-native,a,canvas,iframe,frame,object,embed,svg,table,details,fieldset,form,label,button,input,select,textarea,output,dialog,video,audio[controls]`,
       native3d: `model-viewer,a-scene,babylon,three-d-viewer,#stl_cont,#root,.sketchfab-embed-wrapper,StandardReality`,
       cors: `iframe,object,.yt`,
       unset: `.mp-offscreen`,
-      //
+      // phase differs
       tween:
-        `width,height,border,margin,padding,top,right,bottom,left,position,flex,display,visibility,opacity,mask,filter,mix-blend-mode,background-blend-mode,color,background,font,align-content,stretch,float,border-radius,box-shadow,animation,transition,transform,z-index`.split(
+        `align-content,animation,background,background-blend-mode,border,border-radius,bottom,box-shadow,color,display,filter,flex,float,font,height,left,margin,mask,mix-blend-mode,opacity,padding,position,right,top,transform,transition,visibility,width,z-index`.split(
           ','
         ),
-      //
-      // Code Comment
+      /**
+       * Parse formatted instructions (first, on add)
+       * @param {Node} node #comment NodeType 3
+       */
       parse: function (node) {
         //console.log(node.nodeName, node.textContent);
         console.log('%c#comment: ' + node.textContent.substr(0, 64), 'color: #fff; background-color: #444;')
@@ -1044,7 +986,14 @@ const mpos = {
         }
       }
     },
+    /**
+     * Records state type of graded element
+     */
     tRect: class {
+      /**
+       * @param {HTMLElement} node element with [data-idx]
+       * @param {Object} opts lambda access
+       */
       constructor(node, opts = {}) {
         for (let k in opts) {
           this[k] = opts[k]
@@ -1052,85 +1001,82 @@ const mpos = {
         this.el = node
       }
 
-      el = {}
-      idx
       bound = {}
-      css = {
-        // style: {},
-        diff: {},
-        rotation: {},
-        scale: 1,
-        transforms: 0
-      }
-      ux = { i: 0, o: 0, u: new Set() /*p:*/ }
-      frame = -1
-      inPolar = 3
-      major
-      minor
+      css = { html: '', matrix: 0, rotation: { x: 0, y: 0, z: 0 }, scale: 1, style: { none: true }, tween: {} }
+      diffs = { bound: {}, html: false, phase: false, rotation: {}, scale: 1, tween: {} }
 
+      el = {}
+      frame = -1
+      idx = -Infinity
+      inPolar = 3
+      major = ''
+      minor = ''
+
+      uv = {}
+      ux = { i: 0, o: 0, u: new Set() }
       z = 0
     },
+    /**
+     * Structure maps DOM:THREE state, per precept
+     */
     tGrade: class {
-      //
-      // Build DOM Tree Structure
-
+      /**
+       * @param {Object} opts lambda access
+       */
       constructor(opts) {
         this.depth = opts.depth
         this.group.name = opts.selector || Date.now()
 
         const atlas = this.atlas
-        // atlas getFontEmbedCSS() should await once, from user precept...?
-
-        //
-        // Offscreen Canvas
-        //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
         atlas.canvas = document.createElement('canvas')
-        // note: offscreen, transfercontrols, multiple readback
-        //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
-        atlas.ctx = atlas.canvas.getContext('2d', {
-          willReadFrequently: true,
-          alpha: true
-        })
+        atlas.ctx = atlas.canvas.getContext('2d', { willReadFrequently: true, alpha: true })
         atlas.ctx.imageSmoothingEnabled = false
+
+        // todo: offscreenCanvas, transferControls, multiple readback, imageBitmap, copyTexture...
+        //developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Pixel_manipulation_with_canvas
+        //devnook.github.io/OffscreenCanvasDemo/use-with-lib.html
       }
 
-      #lock = 0 // atlas key(s) reserved space
-
-      // Template Isolate
-      group = new THREE.Group()
-      batch = ++mpvar.batch // unique group identifier
+      #lock = 0 // atlas key reserve..?
       atlas = {
+        canvas: {},
+        cells: 10, // divisor
+        ctx: {},
+        inline: {}, // cloneX
+        instanced: {},
+        keyTest: {}, // cyan guide structure
         load: { listener: 0, image: new Image() },
-        //idxMip: this.#lock, // implies poster++ (from depth/type) and not other
-        //idxMip2: 0,
-        // configure
-        size: 512,
-        cells: 10,
+        size: 512, // canvas area
         uv: {
-          // idx (count), maximum, map(pixels)
+          // mipmap[ratio]: { idx[count], span[cells], area[pixels] }
           '+0.00': { idx: 0, span: 0, area: 0 },
-          '+0.25': { idx: 0, span: 1, area: 4 * 4 },
-          '+0.50': { idx: 0, span: 2, area: 32 * 32 },
-          '+1.00': { idx: 0, span: 5, area: 64 * 64 }, //this.#lock
-          '+2.00': { idx: 0, span: 2, area: 112 * 128 }
-        }
-        //cellMip: 12,
-        //cellMip2: 4,
+          '+0.25': { idx: 0, span: 1, area: 8 * 16 },
+          '+0.50': { idx: 0, span: 2, area: 16 * 48 },
+          '+1.00': { idx: 0, span: 5, area: 48 * 128 }, //this.#lock
+          '+2.00': { idx: 0, span: 2, area: 128 * 128 }
+        },
+        uvOffset: {} // atlas coordinate
       }
-      elsMin = 0 // inPolar or Observer
-      elsMax = 0 // data-idx
-      inPolar = 3
+
+      batch = ++mpvar.batch // UID
+      capture = {} // pseudo:hover
+      depth = 0 // root z, per precept
+      el = {} // root element
+      elsMax = 0 // all data-idx
+      elsMin = 0 // viewed rects
+      group = new THREE.Group() // isolate
+      inPolar = 4 // view threshold
       // sets and subsets
+      major = { atlas: new Map(), other: new Map(), queue: new Set(), revoke: new Set(), text: new WeakMap() }
+      rects = new Map() // superset
+      wait = false // sync render
+      //scroll: { x: window.scrollX, y: -window.scrollY };
 
-      rects = new Map()
-      major = {
-        // live values
-        queue: new Set(),
-        atlas: new Map(),
-        other: new Map(),
-        text: new WeakMap()
-      }
-
+      /**
+       * MipMap cell availability
+       * @param {boolean} grow allocate more mip spans
+       * @returns {boolean} rebuild texture atlas
+       */
       mmFull = function (grow) {
         // note: possibly too many elements (for atlas, or overall), but
         // treeDeep sets mat (rect.major==atlas), so count there (no await, before set key...)
@@ -1160,8 +1106,7 @@ const mpos = {
             this.atlas.uv['+1.00'].span++
             this.atlas.uv['+0.50'].span++
 
-            // todo: rebuild here (now mpos.add HARD refresh), or assume caller will follow-up
-            // mpos.mod.add()
+            // todo: rebuild via mpos.mod.add(), or assume caller follows up
           }
 
           // flag to lower filter threshold
@@ -1170,16 +1115,17 @@ const mpos = {
           return true
         }
       }
-
-      //scroll: { x: window.scrollX, y: -window.scrollY }
     },
+    /**
+     * Index nodes from selector
+     * @param {Object} grade structure for rectangle elements
+     * @param {Object} opts lambda access
+     */
     treeFlat: function (grade, opts = {}) {
-      // todo: if user passes bad selector, catch again
       const element = opts.selector || grade.el
       const precept = opts.precept || this.precept
       const parse = opts.parse || precept.parse
 
-      //
       // Flat-Grade: filter, grade, sanitize
       const ni = document.createNodeIterator(element, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT)
       const sibling = (parent) => {
@@ -1191,8 +1137,7 @@ const mpos = {
           // #comment (or CDATA, xml, php)
           parse(node)
         } else {
-          //
-          // Prototype for Records
+          // Prototype records state
           const rect = new this.tRect(node, {})
 
           if (mpos.set.inPolar(rect)) {
@@ -1218,19 +1163,13 @@ const mpos = {
               const idx = grade.elsMax++
               rect.idx = idx.toString()
               rect.el.setAttribute('data-idx', idx)
+              // for testing:
+              rect.el.title = idx // for testing!
 
               if (opts.grade) {
-                //rect.ux.o++;
-                //rect.ux.u.add('matrix');
-                //rect.ux.u.add('tween');
-                //console.log("opts.grade", rect.el);
+                /* element appended */
               }
               grade.rects.set(idx.toString(), rect)
-              //rect.css = {
-              //scale: 1,
-              //transform: 0,
-              //rotation: { x: 0, y: 0, z: 0 }
-              //};
             }
           }
         }
@@ -1241,6 +1180,11 @@ const mpos = {
       // grow mipmap on HARD refresh (not anonymous mod.add, which flags)
       grade.mmFull(opts.grade)
     },
+    /**
+     * Recursive engine to grade nodes, per precept
+     * @param {Object} grade structure for rectangle elements
+     * @param {Object} opts lambda access
+     */
     treeDeep: function (grade, opts = {}) {
       const precept = this.precept
 
@@ -1248,15 +1192,18 @@ const mpos = {
       const depth = opts.depth - zSlot
       console.log('zSlot', opts.zSlot)
 
+      /**
+       * Apply rated class (major:minor) and ux priority, to map DOM:THREE
+       * @param {Object} rect element record
+       * @param {number} z depth from root, per precept
+       * @param {string} mat material type sets ux policy
+       * @param {boolean} unset toggle style quirks for transcribe process..?
+       */
       function setRect(rect, z, mat, unset) {
-        //
-        // Qualify Geometry Usage
         if (rect) {
           rect.minor = mat
           rect.z = zSlot + z
 
-          //
-          // Assign Archetype
           // note: atlas excludes rect.minor type "native" that matches CORS... to CSS3D
           // ... atlas "poster" became first-class, so the logic is !!BetterLate
           const other = rect.minor === 'loader' || rect.minor === 'wire' || rect.el.matches([precept.cors, precept.native3d])
@@ -1273,7 +1220,7 @@ const mpos = {
             rect.ux.i = 1
           }
 
-          if (rect.inPolar >= grade.inPolar) {
+          if (rect.inPolar + 0.5 >= grade.inPolar) {
             // Begin Subsets: atlas || other
             mpos.set.key(grade, rect)
             // note: counter logic duplicated in step sync queue (major, priority)
@@ -1283,17 +1230,19 @@ const mpos = {
             // note: observe off-screen (!inPolar) elements...?
           }
 
-          // Atlas cellMip2 test 1
-          //if (["poster", "native", "child"].includes(rect.minor) */) {
-          //  const area = rect.bound.box.width * rect.bound.box.height
-          //  tool.avg(area, atlasWide)
-          //}
+          // note: initial count of ground truth here, if await...?
         }
         return unset
       }
+
+      /**
+       * Grade node type with precept, to assert major class
+       * @param {HTMLElement} node descendant of root
+       * @param {string} mat precept match
+       * @param {boolean} manual class user-specified
+       * @param {number} layer traversal / termination
+       */
       function setMat(node, mat, manual, layer) {
-        //
-        // Qualify Geometry Type
         if (manual) {
           // priority score
           precept.manual.every((classMat) => {
@@ -1305,7 +1254,7 @@ const mpos = {
             return classMat
           })
         } else if (node.matches([precept.native, precept.native3d])) {
-          // todo: shared 3d spaces
+          // todo: share native 3d spaces
           mat = 'native'
         } else if (node.matches(precept.poster) || layer === 0) {
           mat = 'poster'
@@ -1313,9 +1262,13 @@ const mpos = {
         return mat
       }
 
+      /**
+       * Recursive engine to grade by type and count
+       * @param {HTMLElement} sel descendant
+       * @param {number} deep traversal / termination
+       * @param {boolean} unset quirks
+       */
       function treeSet(sel, deep, unset) {
-        //
-        // DEEP-GRADE: type, count
         const z = depth - deep
 
         // SELF
@@ -1376,29 +1329,53 @@ const mpos = {
 
       return treeSet(opts.selector, depth)
     },
+    /**
+     * Non-critical operations, as grade processes to sync
+     * @param {Object} grade structure for rectangle elements
+     */
     treeSort: function (grade) {
       const { atlas, rects } = grade
 
-      //
-      // Complete Preparation
       for (const [idx, rect] of rects) {
         if (rect.minor) {
-          //rect.idx = Number(idx)
+          //rect.idx = Number(idx) // key()
         } else {
-          // free memory
-          const node = document.querySelector('[data-idx="' + idx + '"]')
+          // remove key
+          const node = document.querySelector("[data-idx='" + idx + "']")
           node && node.removeAttribute('data-idx')
           rects.delete(idx)
         }
       }
-      return
-    },
-    add: async function (selector, opts = {}) {
-      const { opt, tool, fov, geo, mat, mat_shader, mat_line, scene, cloneX } = mpvar // grade needs attention pre/post
-      const precept = this.precept
 
       //
-      // Options
+      // Viewport Helper (bounds mesh)
+      // no recreate, for random document idx
+      const viewHelper = grade.el.getRootNode().body
+      if (!viewHelper.dataset['idx']) {
+        const idx = [viewHelper.nodeName, grade.batch, new Date().getTime()].join('_')
+        const rect = new mpos.mod.tRect(viewHelper, { idx: idx, major: 'other', minor: 'wire', z: -9, fix: true, add: 1 })
+        viewHelper.setAttribute('data-idx', idx)
+        mpos.set.inPolar(rect)
+        //rect.ux.i = 1;
+
+        console.log('sync viewHelper', viewHelper)
+
+        // define manually
+        grade.rects.set(idx, rect)
+        mpos.set.key(grade, rect)
+      }
+    },
+    /**
+     * Create graded records from nodes, for synthetic ux
+     * @param {(HTMLElement|string)} selector root node
+     * @param {Object} opts gui parameters
+     * @returns {Object} graded structure
+     */
+    add: async function (selector, opts = {}) {
+      const { opt, tool, geo, mat, mat_shader, mat_line, scene, cloneX } = mpvar
+      const precept = this.precept
+
+      // options
       opts.depth ||= opt.depth
       opts.parse ||= precept.parse
       // selector: term permits selector/element/uri, and opt default
@@ -1406,31 +1383,25 @@ const mpos = {
 
       // grade:
       let grade = opts.grade || new this.tGrade(opts)
-      //if(isFinite(opts.grade))
 
       //
-      // Document Element NodeIterator for Typed Geometry
+      // Element NodeIterator for geometry type
       if (opts.grade) {
         const m = mpos.fnVar('march', opts.selector, {})
         opts.zSlot = m.root
-        //
-        // Lightweight addition using existing resources
-        // no: low, dispose, or new instanced
+        // grade append: element(s) extend existing
         this.treeFlat(grade, opts)
         this.treeDeep(grade, opts)
         this.treeSort(grade)
       } else {
-        // Set selector (or uri object)
+        // set selector (or uri object)
         let om = mpos.fnVar('omni', opts.selector, { grade: grade })
         let element = om.terms[0]
-
-        //let element = document.querySelector(opts.selector);
-        //console.log("...", element, opts.selector, selector, opt.selector);
         if (!element || (!!grade.wait && element.isSameNode(grade.el))) {
           return
         }
 
-        // Load external uri into object resource
+        // external uri loads into object resource
         if (opts.custom) {
           await tool
             .load(opts.custom, { io: 'src', node: element, attribute: 'data' })
@@ -1447,50 +1418,49 @@ const mpos = {
             })
         }
 
-        // Dispose Memory: last batch is old
+        // dispose objects from last batch
         grade.el = opts.selector = element
         grade.wait = Infinity
         await tool.old()
 
-        //const atlasWide = { count: 0, average: 0 }
+        // grade rebuild: structure is replaced
         this.treeFlat(grade)
         this.treeDeep(grade, opts)
         this.treeSort(grade)
 
         //
         // Texture Atlas: relative to grade
+        // note: async mipmap[w] from naive average area (size/cellMip),
+        // but update dynamic (atlas size, cellMip) between treeDeep (elsMax++, areaAvg++) and treeSort (cellMip2, idxMip2)
         const atlas = grade.atlas
         document.querySelector('#mp #atlas').appendChild(atlas.canvas)
-        // note: if dynamic (atlas size, cellMip), update between treeDeep (elsMax++, areaAvg++) and treeSort (cellMip2, idxMip2)
         atlas.canvas.width = atlas.canvas.height = atlas.size
         atlas.canvas.title = `${grade.group.name}#${grade.batch} ${atlas.size}px/${atlas.cells}`
-        // ... cellMip2 from average area ( & size & cellMip )
 
         const cellMap = atlas.size / atlas.cells
         // set MipMap pixel references
         let xColumn = atlas.uv['+1.00'].span
         for (const [mip, uv] of Object.entries(atlas.uv)) {
           // resolution
-          atlas.uv[mip].map = Math.floor(cellMap * mip)
+          atlas.uv[mip].map = Math.floor(mip * cellMap)
           // offset x column
           if (mip == '+1.00' || mip <= 0) continue
           uv.xColumn = xColumn
           xColumn += uv.span
         }
 
-        //
         // Atlas Key structure: RawShaderMaterial cellMap guide
-        atlas.keyTest = { x: 0.5, y: 1.0, alpha: 'rgba( 0, 128, 128, 0.125 )' }
+        atlas.keyTest = { x: 0.6, y: 1.0, alpha: 'rgba( 0, 128, 128, 0.125 )' }
         // normal uvw to atlas transforms
         atlas.ctx.fillStyle = atlas.keyTest.alpha
         atlas.ctx.fillRect(atlas.size * atlas.keyTest.x, atlas.size * atlas.keyTest.y - cellMap, cellMap, cellMap)
 
-        //
-        // Instanced Mesh and
+        // Instanced Mesh for standard DOM structure
         const shader = mpos.set.shader(atlas.canvas, atlas.cells, mat_shader)
         const instanced = new THREE.InstancedMesh(geo, [mat, mat, mat, mat, shader, mat_line], grade.elsMax)
         instanced.layers.set(2)
         mpos.set.use(instanced, true)
+
         // Shader Atlas
         instanced.userData.shader = shader
         instanced.userData.el = grade.el
@@ -1505,11 +1475,12 @@ const mpos = {
 
         atlas.uvOffset = instanced.geometry.getAttribute('uvOffset')
 
-        // load font-family once (but shared if inaccurate)
+        // toSVG shared font-family
         atlas.inline = new cloneX({
-          fontEmbedCSS: await getFontEmbedCSS(grade.el), // only .lil-gui...?
+          fontEmbedCSS: await getFontEmbedCSS(grade.el), // only .lil-gui..?
           filter: cloneX.filterEmpty
         })
+
         //
         // OUTPUT
         mpvar.grade = grade
@@ -1517,24 +1488,30 @@ const mpos = {
         grade.wait = false
       }
 
-      //
-      // NOTE: await tree recursion is not complete (constants race)
+      // NOTE: await tree recursion (of grade rects) is non-blocking (to sync),
+      // but access to accumulate is naive (treeSort, load, old, unset...)
 
-      if (opt.delay && !mpos.ux.timers.delay.length) {
-        console.log('delay', opt.delay)
+      // start frameloop
+      const hasDelay = mpos.ux.timers.delay
+      if (opt.delay && !hasDelay.length) {
         grade.major.queue.add('delay')
         mpos.ux.reflow({ type: 'delay', value: opt.delay })
       }
 
+      // process frame, unless lambda append
+      if (!opts.grade && !hasDelay) mpos.step.sync(grade)
+
       console.log('add grade:', grade)
-
-      mpos.step.sync(grade)
-
-      // note: awaits (load, old, font), but async chain would not have rects processed.
       return grade
     }
   },
   set: {
+    /**
+     * Rank visibility of elements in viewport
+     * @param {Object} rect element record
+     * @param {Array} control plot to allocate unsized orphans
+     * @returns {number} visibility 1-4 (stop 3.5 is bleed)
+     */
     inPolar: function (rect, control) {
       const { grade, opt, time } = mpvar
 
@@ -1564,12 +1541,9 @@ const mpos = {
             // 2: Node is tag
             vis++
 
-            rect.css.diff.bound = rect.bound
+            if (rect.diffs) rect.diffs.bound = rect.bound
             rect.bound = rect.el.getBoundingClientRect()
-            rect.bound.box = {
-              width: rect.el.offsetWidth,
-              height: rect.el.offsetHeight
-            }
+            rect.bound.box = { width: rect.el.offsetWidth, height: rect.el.offsetHeight }
             const style = rect.css?.style || node.style
 
             const alphaTest =
@@ -1581,14 +1555,31 @@ const mpos = {
               // 3: Tag is visible
               vis++
 
-              const viewHeight = Math.max(document.documentElement.clientHeight, window.innerHeight)
-              const scrollHeight = rect.bound.bottom >= 0 && rect.bound.top - viewHeight < 0
+              function clipView(bound, orient, margin) {
+                // clipping by viewport
+                const view = Math.max(document.documentElement['client' + orient], window['inner' + orient])
 
-              if (scrollHeight) {
-                const viewWidth = Math.max(document.documentElement.clientWidth, window.innerWidth)
-                const scrollWidth = rect.bound.right >= 0 && rect.bound.left - viewWidth < 0
+                // oob debounce zone (2x vertical)
+                margin ||= view / 2
+                if (orient === 'Width') margin /= 2
+
+                let scroll
+                const [aa, bb] = orient === 'Height' ? ['bottom', 'top'] : ['right', 'left']
+                const bleed = bound[aa] >= -margin && bound[bb] - view < margin
+                if (bleed) scroll = bound[aa] >= 0 && bound[bb] - view < 0
+
+                return { scroll: scroll, bleed: bleed }
+              }
+
+              const clipY = clipView(rect.bound, 'Height')
+              const clipX = clipView(rect.bound, 'Width')
+              if (clipY.scroll && clipX.scroll) {
                 // 4: Tag in viewport
-                if (scrollWidth) vis++
+                vis++
+              } else if (clipY.bleed && clipX.bleed) {
+                // oob zone: as boxes exit viewport, update priority degrades,
+                // so prevent box lockup (on reflow debounce)
+                vis += 0.5
               }
             }
           }
@@ -1598,10 +1589,16 @@ const mpos = {
       rect.inPolar = vis
       return vis
     },
+    /**
+     * Register assigned data-idx, for queue updates
+     * @param {Object} grade structure for rectangle elements
+     * @param {Object} rect element record
+     */
     key: function (grade, rect) {
       const _major_ = grade.major[rect.major]
 
-      if (!_major_.has(rect.idx)) {
+      // idx type: major == string, grade.rects == number
+      if (!rect.revoke && !_major_.has(rect.idx)) {
         grade.elsMin++
 
         if (rect.major === 'atlas') {
@@ -1610,7 +1607,7 @@ const mpos = {
             grade.mmFull()
 
             const atlas = grade.atlas
-            const area = rect.bound.box.width * rect.bound.box.height
+            const area = rect.bound.width * rect.bound.height
             let mip = '+0.50'
 
             // node FIFO, descending mip, area no priority sort
@@ -1630,7 +1627,7 @@ const mpos = {
             rect.uv = { mip: mip }
 
             // structural rect (self, child) has no idx, dynamic size has extra idx
-            // idx: atlas.uv['+1.00'].idx++, idxMip: atlas.uv["+?.??"].idx++
+            // idx: atlas.uv["+1.00"].idx++, idxMip: atlas.uv["+?.??"].idx++
           } else if (rect.minor === 'self') {
             //
             // support background images, with minimal mip (for performance and quantity)
@@ -1648,21 +1645,48 @@ const mpos = {
 
         // add key
         _major_.set(_major_.size, rect.idx.toString())
+      } else {
+        // key exists(?) in grade:
+        // - request to revoke internal/external?
+        // - require flag, or assume if no element?
+        if (rect.revoke) {
+          //console.log("revoke keys");
+          const revoke = grade.major.revoke
+
+          // delete
+          for (const [i, idx] of _major_.entries()) {
+            if (revoke.has(idx)) {
+              _major_.delete(i)
+              grade.rects.delete(idx.toString())
+              // live public array..?
+              revoke.delete(idx)
+              // batch?
+              //break;
+            }
+          }
+
+          // dispose resources?
+          //const Object3D = scene.getObjectByProperty("name", idx);
+          //grade.elsMax--;
+          //grade.elsMin--;
+        }
       }
     },
+    /**
+     * Path to update or create geometry
+     * @param {*} rect element record
+     * @param {*} opts frame (or lambda flags)
+     */
     box: function (rect, opts = {}) {
-      const { geo, mat_line, fov, opt, grade } = mpvar
+      const { geo, mat, fov, opt, grade } = mpvar
       // setFlash: diagnose lossy frames (isolate css/transform)
-      // example: pingpong (interlace, stretch/offcenter), FOUC (bubble/pseudo, init/slow)
+      // example: pingpong (interlace, stretch/offcenter), FOUC (bubble/phase, init/slow)
       // if (setFlash) { } // manual coalesce ??= BODY.wire, !css, ux.has("matrix") && ux.o
-      const setFlash =
-        opt.setFlash &&
-        rect.frame >= opts.frame &&
-        /*rect.major === "atlas" &&*/
-        !rect.ux.u.has('matrix')
+      const setFlash = opt.setFlash && rect.frame >= opts.frame && !rect.ux.u.has('matrix')
+      /*rect.major === "atlas" &&*/
 
       // frame is "up-to-date"
-      // - todo: but could be shallow copy (~pseudo bubble, tweens/matrix)
+      // - todo: but could be shallow copy (~phase bubble, tween/matrix)
       //   - require 1-off set (css, !transform )
       // - transform falsy with !ux.u.has("matrix")?
       // - return obj :: !!setFlash :: (ux.o||ux.u.size)
@@ -1670,7 +1694,7 @@ const mpos = {
 
       //
       // Accumulate Transforms: frame differ
-      mpos.set.css(rect, opts.frame)
+      if (!setFlash) mpos.set.css(rect, opts.frame)
 
       //
       // TYPE OF MESH FROM ELEMENT
@@ -1692,7 +1716,7 @@ const mpos = {
           rect.obj = group
 
           if (rect.minor === 'native') {
-            // todo: de-dupe all 'other' (loader) via rect.obj = Group && fit/use scene.getObjectByName
+            // todo: de-dupe all "other" (loader) via rect.obj = Group && fit/use scene.getObjectByName
             //const loaded = mpvar.rendererCSS.domElement.querySelector(`[data-batch="${grade.batch}"] [data-idx="${rect.idx}"]`)
 
             // note: element may not inherit some specific styles
@@ -1720,12 +1744,37 @@ const mpos = {
             object = css3d
           } else if (rect.minor === 'wire') {
             // Mesh unclassified (currently only root node)
-            const mesh = new THREE.Mesh(geo, mat_line)
-            mesh.animate = true
-            // Out
-            mesh.userData.el = rect.el
+            //let plane = new THREE.PlaneGeometry(1, 1);
+            //plane.translate(0, 0, -9);
+            //const mesh = new THREE.Mesh(plane, mat_line);
+            //mesh.animate = true;
 
-            object = mesh
+            const material = mat.clone()
+            material.vertexColors = true
+            material.color = null
+
+            //const { left, right, top, bottom, width, height } = rect.bound;
+            const geometry = new THREE.BufferGeometry()
+            const vertices = new Float32Array([
+              0, 0, 0, 1, 0, 0 /*edge top*/, 0, 1, 0, 1, 1, 0 /*edge bottom*/, -0.25, -0.5, 0, 1.25, -0.5, 0 /*bleed top*/, -0.25, 1.5, 0,
+              1.25, 1.5, 0 /*bleed bottom*/
+            ])
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+            geometry.setAttribute(
+              'color',
+              new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0], 3)
+            )
+            geometry.translate(-0.5, -0.5, -1)
+            const line = new THREE.LineSegments(geometry, material)
+
+            group.add(line)
+
+            // Out
+            group.userData.el = rect.el
+            group.animate = line.animate = true
+            object = line
+            rect.obj = line
           } else {
             // loader dummy
             object = new THREE.Object3D()
@@ -1736,6 +1785,10 @@ const mpos = {
         object = new THREE.Object3D()
       }
 
+      /**
+       * Update matrix for mesh from bounding rectangle
+       * @param {Object} obj Object3D
+       */
       function transform(obj) {
         const { css, bound } = rect
         //
@@ -1779,7 +1832,7 @@ const mpos = {
           obj.userData.el.style.width = w
           obj.userData.el.style.height = h
           // note: actually using cumulative
-          if (css.transforms) {
+          if (css.matrix) {
             const cssScale = 'scale(' + css.scale + ')'
             const cssDeg = Math.round(css.rotation.z * (180 / Math.PI))
             const cssRotate = 'rotate(' + cssDeg + 'deg)'
@@ -1797,7 +1850,7 @@ const mpos = {
           // unit .5turn: rotate3d(-3,1,9, .5turn) use x/y/z (but only 0.5turn)
           // perspective is misleading: non-orthographic camera versus DOM css pixels
           // ThreeJS instance object incorrectly inherits nested child rotation (mostly xy)
-          //obj.rotation.order = 'YXZ'; // yaw-pitch or since most matrix2d rotate is z, ZYX...
+          //obj.rotation.order = "YXZ"; // yaw-pitch or since most matrix2d rotate is z, ZYX...
           const gimbal = css.rotation.z && (css.rotation.x || css.rotation.y) ? -1 : 1
           obj.rotation.x = css.rotation.x || 0
           obj.rotation.y = -css.rotation.y || 0
@@ -1825,14 +1878,14 @@ const mpos = {
       // Matrix Frame Update
       if (!setFlash) transform(object)
 
-      let res = object
+      let bprop = object
 
       if (rect.add === 1) {
         rect.add = 2
         //rect.obj.visible = false
         // Load Additional Resource (async)
         if (rect.minor === 'loader') {
-          res = rect.obj
+          bprop = rect.obj
           mpos.set.loader(rect, object)
         } else {
           grade.group.add(object)
@@ -1846,76 +1899,79 @@ const mpos = {
         rect.obj = mpvar.scene.getObjectByName(rect.idx)
       }
 
-      //let r = res
-      let r = setFlash ? false : res
-      return res
+      // composed dummy/matrix needsUpdate: discard flash (of phase push_back)..?
+      bprop = setFlash ? false : bprop
+      return bprop
     },
+    /**
+     * Bubble phase to accumulate matrix/style for differs (pre/post) to enqueue
+     * @param {*} rect element record
+     * @param {*} frame pointer reflow or delay
+     */
     css: function (rect, frame) {
       const { grade, tool, time } = mpvar
 
-      //
-      // CSS Style Transforms: accumulate a natural box model
-      // frame or ScrollEvent
+      // frame from delay or reflow
       if (frame > rect.frame) {
-        // css style: transform, transformOrigin, backgroundColor, zIndex, position
-        const { css, ux } = rect
-
-        //
-        // Implicit: diffs reference
-        css.diff.rotation = rect.css.rotation
-        css.diff.scale = rect.css.scale
-        css.diff.tween = rect.css.tween
-        css.diff.pseudo = ux.u.has('pseudo')
-        const differ = {
-          bound: rect.bound
-          //rotation: rect.css.rotation || { x: 0, y: 0, z: 0 },
-          //scale: rect.css.scale,
-          //pseudo: ux.u.has("pseudo"),
-          //tween: rect.css.tween,
+        if (rect.el.isSameNode(document.body)) {
+          // viewHelper: doesn't need frame/css... unless body is selector, or phase capture?
+          rect.frame = frame
+          return
         }
-        // Reset diffs feature
-        css.scale = 1
-        css.transforms = 0
-        css.rotation = { x: 0, y: 0, z: 0 }
-        css.tween = {}
-        const stateOld = ux.u.has('pseudo')
-        ux.u.clear()
 
-        // => rate()
-        // ux.u transforms: need matrix up-front (> children)
-        // => transforms() => box()
-        // ux.u atlas: combined matrix pre/post (skew cell) and tween (draw cell)
-        // => atlas()
+        // css style: transform, transformOrigin, backgroundColor, zIndex, position
+        const { ux, css, diffs } = rect
+
         //
-        // inPolar &&
-        // transforms (box) :: frame-1, rotated/matrix, pre/post diff (boundingRect), manual/native
-        // atlas (meta) :: rect/bound/matrix + css/tween/pseudo
+        // Differs (pre/post): stash
+        // note: inPolar sets rect.bound early (filter)
+        diffs.html = css.html //TEST
+        diffs.phase = ux.u.has('phase')
+        diffs.rotation = css.rotation
+        diffs.scale = css.scale
+        diffs.tween = css.tween
+        diffs.matrix = css.matrix
+
         //
-        // Contrary to name, css
+        // Differs feature: reset
+        css.rotation = { x: 0, y: 0, z: 0 }
+        css.scale = 1
+        css.tween = {}
+        css.matrix = 0
+        const stateOld = ux.u.has('phase')
+        ux.u.clear()
+        //
+        // Discrete style: reset
+        // note: properties like includeStyleProperties for toSvg/cloneX
+        mpos.mod.precept.tween.forEach((prop) => {
+          //if (css.style?.hasOwnProperty(prop)) // need indirect
+          css.tween[prop] = css.style[prop]
+        })
+        // passive flush/fuse (test #swarm/#flood)
+        css.html = rect.el.innerHTML.replace(/[\s=<>"'%:;(//)(!--)]+|(class|active)+/gi, '')
 
         //
         // Explicit: diffs feature
         let matrix = tool.diffs('matrix', { rect: rect })
         // style computed for feature lazily / progressively
-        if (!css.style && (ux.i || matrix)) css.style = window.getComputedStyle(rect.el)
+        if (css.style.none && (ux.i || matrix)) css.style = window.getComputedStyle(rect.el)
         // Priority ux: escalate
-        if (rect.major === 'atlas') tool.diffs('pseudo', { rect: rect, capture: grade.capture })
-        const priority = tool.diffs('tween', { rect: rect }) || ux.u.has('pseudo') || css.diff.pseudo || matrix
+        if (rect.major === 'atlas') tool.diffs('phase', { rect: rect, capture: grade.capture })
+        const priority = tool.diffs('tween', { rect: rect }) || ux.u.has('phase') || diffs.phase || matrix
         ux.o = priority ? ux.i + 1 : ux.i
-        ux.o += ux.u.size
+        //ux.o += ux.u.size;
         // compute qualified stylesheet (not inline)
-        if (!css.style && ux.o) css.style = window.getComputedStyle(rect.el)
+        if (css.style.none && (ux.o || ux.u.size)) css.style = window.getComputedStyle(rect.el)
 
         //
         // Constants
         let el = rect.el
-        let max = 8 // deep tree?
-        let style, transform, scale, degree, radian
-        const allow = mpos.mod.precept.allow
+        let max_depth = 8 // deep tree?
+        let style
 
-        const hover = stateOld || (ux.o > 1 && ux.u.has('pseudo') && rect.el.matches(':hover'))
+        const hover = stateOld || (ux.o > 1 && ux.u.has('phase') && rect.el.matches(':hover'))
 
-        while (el && max--) {
+        while (matrix && el && max_depth--) {
           if (el.isSameNode(document.body) || el.isSameNode(document.documentElement) || !el.parentElement) {
             break
           }
@@ -1925,11 +1981,11 @@ const mpos = {
           const _rect_ = grade.rects.get(el.getAttribute('data-idx'))
           if (_rect_?.ux.o) {
             // output (rect.o) was escalated, but matrix (rect.u) may be removed in post if no differ (to reduce atlas queue)
-            // if (_rect_.ux.u.has('matrix')) { // matrix was removed if unchanged, but output was escalated
+            // if (_rect_.ux.u.has("matrix")) { // matrix was removed if unchanged, but output was escalated
             // accumulate ancestor matrix
             style = _rect_.css.style || css.style // || window.getComputedStyle(el)
 
-            if (style && style !== 'none' /*tool.diffs('matrix', { rect: rect })*/) {
+            if (style && style !== 'none' /*tool.diffs("matrix", { rect: rect })*/) {
               // Parse CSS transforms. Prefer matrix3d() when available
               const transformStr = style.transform || ''
 
@@ -1968,7 +2024,7 @@ const mpos = {
                   css.rotation.x += tool.eq(rx)
                   css.rotation.y += tool.eq(ry)
                   css.rotation.z += tool.eq(rz)
-                  css.transforms++
+                  css.matrix++
                 }
               } else {
                 // Fallback to 2D matrix(...) and explicit rotate functions
@@ -1980,7 +2036,7 @@ const mpos = {
                     const ang = Math.atan2(vals[1], vals[0])
                     css.scale *= scaleVal
                     css.rotation.z += tool.eq(ang)
-                    css.transforms++
+                    css.matrix++
                   }
                 }
 
@@ -1998,7 +2054,7 @@ const mpos = {
                 if (ryMatch) css.rotation.y += parseFloat(ryMatch[1]) * (Math.PI / 180)
                 if (rzMatch) css.rotation.z += parseFloat(rzMatch[1]) * (Math.PI / 180)
                 if (r3Match) {
-                  const parts = r3Match[1].split(',').map(v => parseFloat(v.trim()))
+                  const parts = r3Match[1].split(",").map(v => parseFloat(v.trim()))
                   if (parts.length === 4 && parts.every(n => !Number.isNaN(n))) {
                     const [ax, ay, az, angle] = parts
                     const rad = angle * (Math.PI / 180)
@@ -2011,7 +2067,7 @@ const mpos = {
             }
             //}
             if (hover) {
-              // test: hover bubbles (not focus/active) for contageous effects, like pseudo
+              // test: phase bubbles :hover (not focus/active), for contageous effects
               _rect_.ux.o++
             }
           }
@@ -2020,108 +2076,144 @@ const mpos = {
           el = el.parentElement.closest('[data-idx]')
         }
 
-        // update rect properties from frame
-        // to reduce queue of atlas/transforms
+        //
+        // Rect style updates from frame, to reduce queue (atlas/transforms)
+        // note: inPolar pre-sets rect[bound/box], but "here" is "live" getBoundingClientRect
         rect.css = css
 
-        // curated shortlist of discrete style properties related to presentation
-        // similar to cloneX includeStyleProperties for toSvg
-        mpos.mod.precept.tween.forEach((prop) => {
-          //if (css.style?.hasOwnProperty(prop)) // need indirect
-          css.tween[prop] = css.style[prop]
-        })
+        //
+        // Implicit: compare frame result (pre/post) for "true" change
+        // push_back: css captures <>> matrix
 
-        // NOTE: inPolar caches rect.bound/box (getBoundingClientRect), but is more "live" here
+        // new html: passive not pageload
+        // push_back: rate bubbles <>> phase
+        const allow = mpos.mod.precept.allow
+        const newHTML = diffs.html ? diffs.html !== css.html && rect.major === 'atlas' && rect.frame > 1 : false // rect.el.matches([allow]) && rect.minor === "poster")
+        // new keyframe: transition, animation, or property
+        const newTween = !tool.eq(diffs.tween, { diff: css.tween })
 
-        // Implicit: compare frame result (pre/post) for "true" change, or inherited...
-        // deep: A.isEqualNode(B)
+        // new bounding: (...or circle/square rotated 90-degrees?)
+        const newTranslate = !tool.eq(diffs.bound, { diff: rect.bound })
 
-        const newTransform = css.diff.scale !== css.scale || !tool.eq(css.diff.rotation, { diff: css.rotation })
-        //if(newTransform) {console.log('newTransform', newTransform, rect.el, css.diff.rotation, css.rotation);}
+        if (matrix || newTranslate || diffs.matrix !== css.matrix) {
+          // note: shallow style inheritance test
+          // checks newTranslate (in addition to naive matrix)
+          // or (for example) as rotating rectangle approaches 0-deg
+          // it will "gimbal lock" OTHERWISE REMOVE THIS CLAUSE
 
-        // shallow (but could be square rotated 90-degrees)
-        const newBounds = differ.bound && !tool.eq(css.diff.bound, { diff: rect.bound })
-        //if(newBounding) {console.log('newBounding', newBounding, rect.el, css.diff.bound, rect.bound);}
-        // tween doesn't initialize with values
-        const newTweens = css.diff.tween && !tool.eq(css.diff.tween, { diff: css.tween })
-        //if(newTweens) {console.log('newTweens', newTweens, rect.el, css.diff.tween, css.tween);}
-        if (newTransform || newBounds) {
-          ux.u.add('matrix')
-        }
+          // new rotation:
+          const newRotate = !tool.eq(diffs.rotation, { diff: css.rotation })
+          // new matrices:
+          const newTransform = newRotate || diffs.scale !== css.scale
 
-        // 1. if same bound width/height
-
-        if (ux.u.has('matrix')) {
-          // Revoke explicit key for subjective sync (rate, atlas...)
-          if (!newTransform) {
-            // transformed, but not transforming (on frame)
-            if (!newBounds) {
-              // implies reference is unchanged (yet ux.o remains elevated by differs)
-              if (tool.eq(css.diff.rotation, { diff: css.rotation }))
-                // no change, including circle/square at 90deg
-                ux.u.delete('matrix')
-            } else if (
-              css.diff.bound.width === rect.bound.width &&
-              css.diff.bound.height === rect.bound.height &&
-              tool.eq(css.diff.rotation, { diff: css.rotation })
-            ) {
-              // only position change (on page scroll):
-              // matrix ignored: atlas>toSvg (slow, unset angles)
-              // matrix include: box>transforms (coalesce)
-              ux.u.delete('matrix')
-              //...add tweens (if not)?
-            }
+          // Implicit:
+          // capture: atlas ignore most matrix   <<   transforms ignore old matrix
+          // bubble:  atlas focus new style      >>   transforms focus atlas style
+          if (newTransform || newTranslate) {
+            ux.u.add('matrix')
           } else {
-            // transform does not require style update, or user qualification may intervene
-            // if no tweens and no i, we can reduce a lot of purely rotational redraws
-            // users could easily specify i=1 (native) or add a animation name
-            if (!(ux.o || ux.u.has('tweens') || ux.u.has('pseudo'))) {
-              ux.u.delete('matrix')
+            // proactively
+            if (!newTranslate) ux.u.delete('matrix')
+          }
+
+          //
+          // Unset Features from Queue:
+          if (ux.u.has('matrix')) {
+            // element has technical transform
+            // 3.5: coalesce features of transform<>>visibility
+            //ux.o += ux.u.size;
+
+            // probably resize
+            const newSize = !tool.eq(diffs.bound.box, { diff: rect.bound.box }) || diffs.scale !== css.scale
+            // probably pagescroll
+            const newScroll = newTranslate && !newSize && !css.matrix
+            // probably rotational symmetry
+            const newSymmetry = !newSize && newRotate
+
+            // note: if element leaves viewport visible (inPolar 3.5 bleed)
+            // as transition/delay continues (play state=stopped),
+            // texture will NOT UPDATE, without
+            // ... flush.fuse or differ.html === css.html
+
+            // increase rate: slider, resizable
+            //if (newSize) ux.o += ux.u.size;
+            // decrease rate: pure rotation
+            if (newRotate && !newSize) {
+              //&& ((!newTween || !ux.u.has("tween")) && (!newHTML || !newTransform))
+              //ux.u.delete("tween");
+              //ux.o = 0;
+            }
+
+            // test case: sync pingpongs ? atlas : transforms
+            // so debounce basic scroll push_back (greedy toSvg),
+            // but preserve direct ux.u matrix rotation (to avoid detached, parallax frames)
+            // ...?
+            if (newScroll && time.st.pingpong) {
+              ux.u.delete('tween')
+              ux.u.delete('phase')
             }
           }
         }
 
-        if (!newTweens && ux.u.has('tween')) {
-          // discard keyframes without change, unless a child of the element is tagged active
-          //const actors = rect.el.querySelector(allow);
-          //if (!actors) ux.u.delete("tween");
-          ux.u.delete('tween')
-        } else if (newTweens && !ux.u.has('tween')) {
-          // detect incidental changes...?
+        // phase: pseudo/tween animation/transition
+        // 1. state [playing/stopped/stateOld]
+        // 2. delay [...differs, ...callback(ms)]
+        // 3. ...mp-custom?
+        if (!newTween && ux.u.has('tween')) {
+          // interpolate running animation
+          // note: bubble (lambda) children cascade (via rate)
+          if (!newHTML && !time.st.pingpong) ux.u.delete('tween')
+        } else if (newTween && !ux.u.has('tween')) {
+          // detect incidental changes
+          // note: relaxing tween with pingpong may leave artifacts
           ux.u.add('tween')
         }
 
-        // frame update
+        // frame has current ux diffs, regardless of access by step.sync
         rect.frame = frame
-        //if (ux.o) rect.frame = frame;
 
         if (frame === 0) {
           // mouseevents (0) provide some increments
-          // note: rect/init values of -Infinity, -1, 0, 0.001 null may be interesting...
+          // note: rect.frame inits with -1
           const tick = 0.001
           rect.frame += tick
         }
       }
 
-      return // { width: rect.box.width, height: rect.box.height };
+      return // {width:w,height:h}
     },
+    /**
+     * update matrix manually
+     */
     use: function (object, off) {
       const { time } = mpvar
-      // update matrix manually
-
       //if (!off && !time.st.subsub) return;
 
       const matrixUpdate = off ? 'matrixAutoUpdate' : 'needsUpdate'
       if (object.isInstancedMesh) {
         object.instanceMatrix[matrixUpdate] = !off
         //object.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-        //if (!off) object.computeBoundingSphere() // not every frame!
+        if (off) {
+          // raycast requires bounding sphere (not every frame!)
+          const center = new THREE.Vector3(mpvar.fov.width / 2, mpvar.fov.height / 2, 0)
+          object.boundingSphere = new THREE.Sphere(center, mpvar.fov.basis * 4)
+          // narrow AABB reduces coplanar intersect
+          const min = new THREE.Vector3(-mpvar.fov.width / 2, -mpvar.fov.height, -99)
+          const max = new THREE.Vector3(mpvar.fov.width * 1.5, mpvar.fov.height * 2, 99)
+          object.boundingBox = new THREE.Box3(min, max)
+        } else if (!time.st.flush.fuse) {
+          // note: limit range of z-index 99 may smooth occlusion by oversized models
+          //object.computeBoundingBox();
+        }
       } else {
         if (object.isMesh || object.isGroup) object[matrixUpdate] = !off
         //if (object.isGroup)
         //  object.children.forEach((child) => (child[matrixUpdate] = !off));
       }
     },
+    /**
+     * RawShaderMaterial atlas which updates from mipmap/uvw
+     */
     shader: function (canvas, texStep, mat_shader) {
       //discourse.threejs.org/t/13221/17
       const texAtlas = new THREE.CanvasTexture(canvas)
@@ -2135,9 +2227,10 @@ const mpos = {
       return m
     },
 
+    /**
+     * Set group scale from dummy, on asset load
+     */
     fit: function (dummy, group, opts = {}) {
-      // Group Scale from Element Dummy
-
       if (opts.add) group.add(opts.add)
 
       if (group.children.length) {
@@ -2166,9 +2259,10 @@ const mpos = {
         // mpos.ux.render()
       }
     },
-
+    /**
+     * Stash asset data at uri key, with flags (for disposal...)
+     */
     cache: function (asset, uri, data) {
-      // Stash resource at uri, with flag for disposal
       if (data) asset.data = data
       console.log('set cache', asset)
       mpvar.cache.set(uri, asset)
@@ -2177,57 +2271,60 @@ const mpos = {
         if (obj.isObject3D && obj.userData) obj.userData.cache = true
       })
     },
+    /**
+     * Match mime to Loader, hook, and fit resource
+     */
     loader: async function (rect, dummy) {
-      //
-      // Loaded++: match mime to Loader, and async fit dummy/group
-
       const { cache, grade, cloneX, geo, mat, mat_shape, mat_line, tool } = mpvar
 
-      // source: location, Element, Object[src]
+      // resource type: Element, Object[src], location..?
       const source = rect.el
-      let uri = typeof source === 'string' ? source : source.data || source.src || source.currentSrc || source.href
+      const uri = source.data || source.src || source.currentSrc || source.href
+
       // source media match: loader or general
       const mimes = {
-        OPENCV: ['JPG', 'JPEG', 'PNG', 'WEBP'], //[avif,heif,hevc,heic,avc]
         VIDEO: ['MP4', 'MOV', 'OGV', 'WEBM'],
         GIF: ['GIF'],
+        SDF: ['TXT'],
+        OPENCV: ['JPG', 'JPEG', 'PNG', 'WEBP'], //[avif,heif,hevc,heic,avc]
         GLTF: ['GLB', 'GLTF'],
         SVG: ['SVG'],
         JSON: ['JSON']
       }
       mimes.all = Object.values(mimes).flat().join('|')
       mimes.pattern = new RegExp(`\\.(${mimes.all})(?=\\?|$)`, 'i')
-
-      // RegEx test pattern
+      // regex test pattern
       let mime = uri && uri.match(mimes.pattern)
       mime = mime ? mime[1].toUpperCase() : 'File'
-      // Loaders: THREE (MIME/File), OpenCV, callback
-      let loader = !!((mime === 'File' && uri) || [mimes.GIF, mimes.GLTF, mimes.SVG, mimes.JSON].flat().includes(mime))
+
+      /**
+       * Loaders: THREE.[MIME/File]Loader, OpenCV, Gifuct, Video...
+       */
+      let loader = !!((mime === 'File' && uri) || [mimes.GLTF, mimes.SVG, mimes.JSON].flat().includes(mime))
 
       // Dynamically load Loader
-      //
-      //const { namedExport1, namedExport2 } = await import('./myModule.js');
+      //const { namedExport1, namedExport2 } = await import("./myModule.js");
 
-      //
-      // Cache: models (or whatever...?)
+      // Asset src and dst
       let asset = cache.get(uri) || { mime: mime, data: false, flag: {} }
-
-      //console.log(source, uri, mime, loader, dummy )
       let group = rect.obj
+      //console.log(source, uri, mime, loader, dummy )
 
       if (mimes.VIDEO.includes(mime)) {
         //
-        // HANDLER: such as VideoTexture, AudioLoader...
+        // VideoTexture:
+        // note: generic manager for playback in document template
         const material = mat_shape.clone()
         const texture = new THREE.VideoTexture(source)
         material.map = texture
         const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
+
         // unique overrides
         mesh.matrix.copy(dummy.matrix)
         grade.group.add(mesh)
         mpos.set.use(mesh, true)
 
-        // ux
+        // Output
         rect.obj = mesh
         mesh.name = mesh.userData.idx = rect.idx
         mesh.userData.el = rect.el
@@ -2238,6 +2335,8 @@ const mpos = {
         const material = mat_shape.clone()
         const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
 
+        //
+        // Gifuct
         const promisedGif = fetch(uri)
           .then((resp) => resp.arrayBuffer())
           .then((buff) => {
@@ -2261,17 +2360,13 @@ const mpos = {
             let tempCtx = tempCanvas.getContext('2d')
 
             //
-            //
-            // Draw Gif Frames to cache: for update in step>transforms
-            // step>transformsmemory?
+            // Draw Gif frames to cache: for update in step>transforms
             const [width, height] = tool.pyr(gif.lsd.width, gif.lsd.height, 64)
             let frameImageData
             frames.forEach((frame) => {
-              //
-              //
               let dims = frame.dims
 
-              // Render gif: update patch
+              // render gif: update patch
               if (frame.disposalType === 2) {
                 gifCtx.clearRect(0, 0, gifCtx.canvas.width, gifCtx.canvas.height)
               }
@@ -2282,14 +2377,13 @@ const mpos = {
                 frameImageData = tempCtx.createImageData(dims.width, dims.height)
               }
 
-              // set the patch data as an override
+              // set patch data as override
               frameImageData.data.set(frame.patch)
-              // draw the patch back over the canvas
+              // draw patch back over canvas
               tempCtx.putImageData(frameImageData, 0, 0)
               gifCtx.drawImage(tempCtx.canvas, dims.left, dims.top)
 
-              //
-              // Thumbnail
+              // thumbnail
               const cached = document.createElement('canvas')
               const ctx = cached.getContext('2d')
               cached.width = width
@@ -2310,12 +2404,8 @@ const mpos = {
             gifCanvas.width = width
             gifCanvas.height = height
             material.map = new THREE.CanvasTexture(gifCanvas)
-            mesh.animate = {
-              gif: frames,
-              duration: duration,
-              gifCtx: gifCtx /*, tempCtx: tempCtx,frameImageData: false*/
-            }
-            // Output: mesh (...but added to group it fits to a box)
+            mesh.animate = { gif: frames, duration: duration, gifCtx: gifCtx /*, tempCtx: tempCtx,frameImageData: false*/ }
+            // Output: mesh (added to group, fits boundingRect)
             grade.group.add(mesh)
             mpos.set.use(mesh, true)
             rect.obj = mesh
@@ -2325,52 +2415,95 @@ const mpos = {
 
             return gif
           })
-
-        //
       } else {
         let gc
 
         if (!loader && ((mime !== 'File' && uri) || (mime === 'File' && !uri))) {
-          //
-          // LOAD Element: OpenCV
+          // sniff role of element source:
+          // - MSDF (small+text): context of defined type is simple
+          // - CV (large/image): coerce general nodes of complex layout
 
-          if (uri && !dummy) {
-            // source element from uri file
-            gc = source = document.createElement('img')
-            source.src = uri
-            const osc = document.querySelector('#mp address.mp-offscreen')
-            osc.appendChild(source)
-            dummy = mpos.set.box({ el: source })
-          }
+          let sdf = rect.el.matches(
+            /* [mpos.mod.precept.poster, mpos.mod.precept.native] */
+            'object,iframe,svg,h1,h2,h3,p,li,td,pre,summary,figcaption,input,label,button'
+          )
+          sdf &&=
+            rect.el.nodeName !== 'IFRAME'
+              ? rect.el.innerText.trim()
+              : await fetch(rect.el.src).then((txt) => {
+                  return txt.text()
+                })
 
-          const [width, height] = tool.pyr(source.naturalWidth, source.naturalHeight, 128)
+          if (mimes.SDF.includes(mime) || sdf?.length < 16) {
+            rect.add++
 
-          const inline = new cloneX({ width: width, height: height })
-          toSvg(source, inline)
-            .then((clone) => {
-              let img = new Image()
-              let load = img.addEventListener('load', (e) => {
-                removeEventListener('load', load)
-                // update progress and run module
-                rect.add++
-                mpos.set.opencv(e.target, group, dummy)
-                // cleanup
-                img.remove()
-                img = null
+            // Troika requires internet: //cdn.jsdelivr.net/gh/lojjic/unicode-font-resolver
+            // and CSS aspect-ratio:1/1;
+            //const { Text } = await import('cdn.jsdelivr.net/npm/troika-three-text@0.52.4/+esm')
+            const myText = new Text()
+            //myScene.add(myText)
+
+            const em = parseFloat(rect.css.style.fontSize) / 100
+            // Set properties to configure:
+            myText.text = sdf
+            myText.fontSize = em
+            myText.lineHeight = parseFloat(rect.css.style.lineHeight)
+            myText.color = rect.css.style.color
+            myText.maxWidth = rect.bound.box.width / 100
+            myText.anchorX = 0.5
+            myText.anchorY = -0.5
+
+            // Output
+            //mpos.set.fit(dummy, group);
+            grade.group.add(myText)
+            //mpos.set.use(myText, true);
+            rect.obj = myText
+
+            // Update the rendering:
+            myText.sync()
+          } else {
+            //
+            // Load Element as OpenCV PolyPath
+
+            if (uri && !dummy) {
+              // source element from uri file
+              gc = source = document.createElement('img')
+              source.src = uri
+              const osc = document.querySelector('#mp address.mp-offscreen')
+              osc.appendChild(source)
+              dummy = mpos.set.box({ el: source })
+            }
+
+            const [width, height] = tool.pyr(source.naturalWidth, source.naturalHeight, 32)
+
+            const inline = new cloneX({ width: width, height: height })
+            toSvg(source, inline)
+              .then((clone) => {
+                let img = new Image()
+                let load = img.addEventListener('load', (e) => {
+                  removeEventListener('load', load)
+                  // update progress and run module
+                  rect.add++
+                  mpos.set.opencv(e.target, group, dummy)
+                  // cleanup
+                  img.remove()
+                  img = null
+                })
+
+                //github.com/bubkoo/html-to-image/pull/146
+                // v1.7.0 viewBox breaks SVG on Firefox, so replace output encode/decode (brittle)
+                //clone.replace("viewBox%3D", "preserveAspectRatio%3D%22none%22%20viewBox%3D")
+                img.src = clone
+                clone = null
+              })
+              .catch((error) => {
+                console.log('src problem', error)
               })
 
-              // https://github.com/bubkoo/html-to-image/pull/146
-              // v1.7.0 viewBox breaks SVG on Firefox (...output encode/decode replace is brittle)
-              img.src = clone // clone.replace('viewBox%3D', 'preserveAspectRatio%3D%22none%22%20viewBox%3D')
-              clone = null
-            })
-            .catch((error) => {
-              console.log('src problem', error)
-            })
-
-          if (gc) {
-            gc.parentElement.removeChild(gc)
-            gc = source = null
+            if (gc) {
+              gc.parentElement.removeChild(gc)
+              gc = source = null
+            }
           }
         } else {
           if (asset.data) {
@@ -2381,32 +2514,24 @@ const mpos = {
             callback(unique)
           } else {
             //
-            // LOAD Custom: stage specific or generic
-            if (mimes.GIF.includes(mime)) {
-              //gc = source.cloneNode()
-              //document.querySelector('#custom').appendChild(gc)
-            }
-
-            //mime.match(/^(GLTF|GLB)$/gi)
-            //cdn.jsdelivr.net/npm/three-gltf-loader@1.111.0/index.min.js
-            //import data from "//cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/loaders/GLTFLoader.js" with { type: "json" };
-
+            // set loader primary import
             loader = mimes.SVG.includes(mime)
               ? new SVGLoader()
-              : //: mimes.match('GIF')
-              //? new SuperGif({ gif: gc, max_width: 64, auto_play: false })
-              mimes.JSON.includes(mime)
+              : mimes.JSON.includes(mime)
               ? new THREE.ObjectLoader()
               : mimes.GLTF.includes(mime)
               ? new GLTFLoader()
               : new THREE.FileLoader()
 
+            // set loader secondary plugin
             if (mimes.GLTF.includes(mime)) {
+              //const { DRACOLoader } = await import('https://cdn.jsdelivr.net/npm/three/examples/js/libs/draco/')
               const dracoLoader = new DRACOLoader()
               dracoLoader.setDecoderPath('//www.gstatic.com/draco/versioned/decoders/1.5.6/')
               loader.setDRACOLoader(dracoLoader)
             }
 
+            // set loader callback parameters
             const params = loader instanceof THREE.Loader ? uri : callback
             const res = loader.load(
               params,
@@ -2420,6 +2545,10 @@ const mpos = {
             )
           }
 
+          /**
+           * Callback from THREE.Loader instance
+           * @param {Object} data xml response
+           */
           function callback(data) {
             rect.add++
             console.log('load', mime, data)
@@ -2431,14 +2560,14 @@ const mpos = {
               // todo: assign scene values from data-idx
 
               // Output
-
+              data.name = uri.slice(uri.lastIndexOf('/'))
               mpos.set.fit(dummy, group, { add: data })
               if (!asset.data) mpos.set.cache(asset, uri, data)
             } else if (mimes.GLTF.includes(mime)) {
               // DRACO?
-              const model = data.scene
-              group.add(model)
-              mpos.set.use(model, true)
+              const mesh = data.scene
+              group.add(mesh)
+              mpos.set.use(mesh, true)
             } else if (mimes.SVG.includes(mime)) {
               // Object.data Extension: Scalable Vector Graphics Format
               const paths = data.paths || []
@@ -2462,46 +2591,10 @@ const mpos = {
               // Output
               mpos.set.fit(dummy, group)
               if (!asset.data) mpos.set.cache(asset, uri, data)
-            } /* else if (mime.match('.GIF')) {
-              // File Extension: Graphics Interchange Format
-              const canvas = loader.get_canvas()
-              // SuperGif aka LibGif aka JsGif
-              // todo: manual frame index from delta (investigate negative order bug?)
-              const material = mat_shape.clone()
-              material.map = new THREE.CanvasTexture(canvas)
-              const mesh = new THREE.Mesh(geo, [mat, mat, mat, mat, material, mat_line])
+            }
 
-              // Output: mesh (added to group it fits to a box)
-              grade.group.add(mesh)
-              rect.obj = mesh
-              mesh.name = mesh.userData.idx = rect.idx
-              //material.userData.SuperGif = loader
-              // prioritize play state
-              rect.ux.i = 1
-              mesh.animate = { gif: loader }
-              mesh.animate.gif.pause()
-              //mpos.set.use(mesh, true)
-              //mesh.layers.set(2)
-
-              if (gc) {
-                gc = null
-                // resized
-                const gifs = document.querySelectorAll('#custom .libgif, #custom .jsgif')
-                gifs.forEach((gif) => {
-                  let c = gif.querySelector('canvas')
-                  c.parentElement.removeChild(c)
-                  c = null
-                  gif.innerHTML = ''
-                  gif.parentElement.removeChild(gif)
-                })
-              }
-
-              // Cache TBD
-              //asset.flag.loader = loader
-              //asset.flag.material = material
-            }*/
-
-            // set.use
+            // set.use()
+            if (loader.hasOwnProperty('dispose')) loader.dispose()
           }
         }
 
@@ -2510,6 +2603,9 @@ const mpos = {
 
       //return group
     },
+    /**
+     * OpenCV: image > kmeans > inrange > contours > shapes
+     */
     opencv: function (image, group, dummy) {
       let kmeans = {}
       let Module = {
@@ -2517,17 +2613,21 @@ const mpos = {
         wasmBinaryFile: './opencv_js.wasm',
         preRun: [
           function (e) {
-            //console.log('preRun')
+            //console.log("preRun")
           }
         ],
         _main: function (c, v, o) {
-          //console.log('_main', c, v, o)
+          //console.log("_main", c, v, o)
           const cv = this
           let image = this._stdin.image
           let kmeans = this._stdin.kmeans
 
           try {
             const clusters = 16
+            /**
+             * Zeroes 1x1
+             * @param {Object} mat
+             */
             function release(mat) {
               //cv.setTo([0, 0, 0, 0]) // <- pre-optimizes kmeans result to {}
               cv.resize(mat, mat, new cv.Size(1, 1), 0, 0, cv.INTER_NEAREST)
@@ -2595,7 +2695,7 @@ const mpos = {
               const rgba = label.rgba
               // skip transparent
               if (rgba.a < 2) {
-                delete kmeans[key]
+                kmeans[key] = undefined
                 return
               }
 
@@ -2619,7 +2719,7 @@ const mpos = {
 
               const mask = new cv.Mat.zeros(size, 0)
               const range = 32 // rather greedy
-              lo.setTo(level(rgba, -range, 16)) // 16 remove some text alpha
+              lo.setTo(level(rgba, -range, 24)) // 16 remove some text alpha
               hi.setTo(level(rgba, range, 255))
               cv.inRange(src, lo, hi, mask)
               // inrange
@@ -2643,11 +2743,12 @@ const mpos = {
 
               // HIERARCHY
               label.retr = {}
+              const mArea = 3 // absolute since everything is thumbnail
               for (let i = 0; i < contours.size(); ++i) {
                 const cnt = poly.get(i)
                 // minimum area
                 const area = cv.contourArea(cnt)
-                const min = area > (Math.min(size.width, size.height) / 16) ** 2
+                const min = area > mArea
                 if (min) {
                   // relationship
                   const hier = Array.from(hierarchy.intPtr(0, i))
@@ -2673,7 +2774,7 @@ const mpos = {
               release(hierarchy)
 
               if (!Object.keys(label.retr).length) {
-                delete kmeans[key]
+                kmeans[key] = undefined
               }
             }
             release(src)
@@ -2778,99 +2879,226 @@ const mpos = {
     }
   },
   step: {
+    /**
+     * Construct policy to qualify phase (capture/bubble), and update traversal conditions of ux properties: view, style, matrix
+     * @param {Object} grade structure for rectangle elements
+     * @param {Object} step sync state
+     */
     rate: function (grade, step) {
       const { tool, time, opt } = mpvar
       const { major } = grade
       const { frame, queue } = step
 
-      //
-      // Traverse: style transforms (set/unset), view settings, and qualify ux
-
       // flags to interlace workloads
       const gate = step.syncFPS === 0 || time.st.gate
 
-      //deepest pseudo match (frame cache)
+      //deepest :pseudo match (frame cache)
       const root = grade.el.parentElement
       if (root && time.st.pingpong)
-        // ...pingpong subsub?
         grade.capture = {
           hover: [...root.querySelectorAll('[data-idx]:hover')].pop(),
           active: [...root.querySelectorAll('[data-idx]:active')].pop(),
           focus: [...root.querySelectorAll('[data-idx]:focus')].pop()
         }
 
-      // this is redundant
-      //if (!time.st.pingpong) return;
-
+      let stateOld, stateNew, inPolar
       for (const [idx, rect] of grade.rects) {
-        //const rect = grade.rects.get(idx)
-        //
-        // get ux.u (for feature tests, pre/post) before css refreshes phase
-        const { ux } = rect
-        // phase: effects bubble and cascade (style, transform matrix...)
-        const stateOld = ux.u.has('pseudo') || rect.frame === -1
-        // ?? early-exit midrange frames ?? == 80fps w/o all textures
-        if (!stateOld && !time.st.subsub) continue
+        //HTMLUnknownElementPrototype
+        if (!rect || !rect.el || !rect.el.isConnected) {
+          // first point of failure, but one of 10 modules in loop x1000
+          // deleting keys by batch, not individually
+          rect.revoke = true // stub for unloading "other"
+          grade.major.revoke.add(rect.idx)
+          //mpos.set.key(grade, rect);
+          continue
+        }
+
+        // Phase: cascade (of events/effects) will push_back (from capture/bubble)
+        // the ux.u feature diffs (style, matrix...) of pre/post (for css/transforms)
+        let { ux } = rect
+        stateOld = ux.u.has('phase') || rect.frame === -1
+        // early-exit redundant keyframes: reduce queue, boost fps!!1
+        if (!stateOld && !time.st.gate) continue
 
         //
-        // Phase Refresh
-        mpos.set.inPolar(rect)
-        let inPolar = rect.inPolar >= grade.inPolar
-        if (inPolar || stateOld) mpos.set.css(rect, step.frame)
-        const stateNew = rect.major === 'atlas' && (ux.o || ux.u.size) // && time.st.subsub
+        // Phase refresh: get properties early, which overlap atlas/transforms
+        // being specific (not pedantic) to provide valuable relationships
+        // which pruning (i.e. pingpong) may destroy (artifacts)
+        mpos.set.inPolar(rect) // visibility is central
+        inPolar = rect.inPolar + 0.5 >= grade.inPolar // +0.5 bleed, which preloads assets
+        if (stateOld || inPolar) mpos.set.css(rect, step.frame)
+        stateNew = ux.u.size // && rect.major === "atlas" && time.st.pingpong
 
-        if (stateOld || stateNew /* && inPolar */) {
+        //console.log(stateOld, stateNew, !time.st.flush.fuse);
+
+        // Enqueue, iterate children (phase capture)
+        if (stateOld || ((stateNew || !time.st.flush.fuse) && inPolar)) {
           // element ux changed or elevated
           step.queue.add(idx)
-          if (rect.el.tagName !== 'BODY') continue
+          if (rect.el.tagName === 'BODY') continue
 
           // note: css:pseudo (phase) is experiment (tied to rate pre/post)
 
-          // note: pseudo is (active), or was (blur), so enqueue (with children)
+          // note: phase is (active), or was (blur), so enqueue (with children)
           // ... to update atlas/transform by forcing ux.u="all"
-          // todo: set ux.o++ priority (if ux.p), and use ux.u correctly
-          // ... compare, inherit?
 
-          if (rect.ux.u.has('pseudo') && rect.major === 'atlas' && rect.minor === 'self' /*|| rect.minor === "child"*/) {
-            // enqueue children (ignore types which terminate)
-            // todo: check if descendents length is the same (on-demand, trigger, chron)
-            if (!rect.child) {
-              // cache a static list
-              rect.child = new Set()
+          if (
+            //rect.ux.u.has("phase") &&
+            // phase capture: (v1) [box/css] (v2) [pseudo] (v3) [phase=pseudo+]?
+            // now: does atlas/other need full/partial set
+            //      of children to inherit queue updates?
+            // [view | [e | [c][c][c] ] ]
+            //
+            // i.e. offscreen, !isFocus
+            rect.ux.u.size ||
+            rect.child?.size ||
+            !time.st.flush.fuse /*|| rect.minor === "child"*/
+            /* &&
+            rect.minor === "self"*/
+          ) {
+            // cache (valid) children for enqueue, and verify list at interval
+            let idx, rect_capt, style, tween
+            if (
+              !rect.child ||
+              !time.st.flush.fuse
+              /*(rect.ux.u.size && !rect.child) ||
+              (!rect.ux.u.size && !time.st.flush.fuse)*/
+            ) {
+              // todo: selector filter
+              // 1. structure (1-deep): nav, main, article, section, aside, footer
+              //  - is:(mp, div, p, ul, ol, li, table, form) // span, details,
+              //  - not:(br, a, span, source, track) // summary, figcaption, iframe, video,
+              const child = rect.el.querySelectorAll(
+                ':scope > [data-idx], :scope > [data-idx] > [data-idx], :scope > :is(mp, div, p, ul, ol, li, table, form)'
+              )
 
-              for (const [idx, rel] of grade.rects) {
-                // add child relation from full list
-                // ignore major.other, which propagation lacks support
-                if (!rect.el.isSameNode(rel.el) && rect.el.contains(rel.el) && rel.major !== 'other') rect.child.add(idx)
+              // compare is broad, not fuzzy (!![data-idx] && length !== length)
+              // todo: compare set, notify to delete old keys
+              const smokeTerm = child.length || !time.st.flush.fuse
+              rect.child = new Set() // may be empty, but won't blow up loops
+
+              if (smokeTerm) {
+                let max_depth = 16
+                for (const node_capt of child) {
+                  // capture child relation (major.other lacks deep support, but data-idx may filter)
+                  if (max_depth-- > 0) {
+                    // push_back: once property captured
+                    // set rect.ux.i++ to always integrate,
+                    // or stash discrete hook, and refine per-frame (lossy)
+
+                    // diff tween: animated children (.ticker)
+                    idx = node_capt.dataset['idx'] // undefined is ok
+                    style = window.getComputedStyle(node_capt)
+                    tween = tool.diffs('tween', { rect: { css: { style: style } } })
+
+                    // diff html: particles (#flood #swarm)
+                    const push_back = grade.rects.get(rect.idx)
+                    if (push_back.diffs.html) {
+                      const newHTML = push_back.css.html !== push_back.diffs.html
+                      if (newHTML) tween = true
+                    }
+
+                    if (tween) {
+                      rect_capt = { el: node_capt, idx: idx, css: { style: style, tween: tween }, push_back: rect.idx }
+
+                      rect.child.add(rect_capt)
+                    }
+
+                    // /* && !rect.el.isSameNode(node_capt) && rect.el.contains(node_capt) */
+
+                    /*
+                    const idx = node_capt.dataset["idx"];
+                    if (isFinite(idx)) {
+                      rect.child.add(node_capt.dataset["idx"]);
+                    } else {
+                      // anonymous child may lack [data-idx] (of grade rect),
+                      // but contain properties to bubble to parent phase
+                      // or be "empty" tags (br, noscript)
+                      const style = window.getComputedStyle(node_capt);
+                      const tween = tool.diffs("tween", {
+                        rect: { css: { style: style } },
+                      });
+
+                      //if (tween) ux.u.add("tween"); // once
+                      if (tween) ux.i++; //always
+                      //console.log("child!idx", node_capt, tween);
+                    }
+
+                    //window.getComputedStyle(childs[0]).animation
+                    */
+                  }
+                }
               }
+
+              // background process to cascade...?
             }
 
-            // child evaluate
-            for (const idx of rect.child) {
-              // Frame capture: non-linear, but less brutal than ux.u=all
-              // may accrue frame ticks from multiple parents :)
-              const rect_cap = grade.rects.get(idx)
+            // child evaluate: lossy/view
+            // RATE reduces queue from css (which bubbles),
+            // so also update children (must capture)
+            //
+            // [ TUNE to BYPASS queues if FRAME phase UNCHANGED MATRIX]
+            //
+            // PHASE[?PSEUDO+] > TRANSFORM[?MATRIX]
+            // ux.u ONLY(?) SEGMENTS atlas (step.queue)
+            // since transforms loop all rects (NOT step.queue),
+            // BUT since css>phase is PRE-RATED (INCLUDING inPolar and pingpong)
+            // box (and/or transforms) could
+            //
+            // transforms[rects] > box > css[?frame > ?...matrix] > transform > needsUpdate
 
-              mpos.set.inPolar(rect_cap)
-              if (rect_cap.inPolar >= grade.inPolar) {
-                // NOTE: maybe some bounding tests would want to include offscreen children?
+            for (const node_capt of rect.child) {
+              idx = node_capt.idx
 
-                // todo: cheap (ux.i && u.pseudo), or full inPolar/css?
-                //rect_cap.frame = rect.frame;
-                //rect_cap.ux.o = rect.ux.o;
-                //rect_cap.ux.u = rect.ux.u
-                //if (rect.ux.u.has("pseudo")) rect_cap.ux.u.add("pseudo");
-                //if (rect.ux.u.has("matrix")) rect_cap.ux.u.add("matrix");
+              if (idx) {
+                // Frame capture: non-linear, but less brutal than ux.u=all
+                // may accrue frame ticks from multiple parents :)
+                rect_capt = grade.rects.get(idx)
+                if (!rect_capt) continue
 
-                mpos.set.css(rect_cap, step.frame)
+                mpos.set.inPolar(rect_capt)
+                // note: some types may curate offscreen hitboxes?
+                if (rect_capt.inPolar + 0.5 >= grade.inPolar) {
+                  // accumulate full bubble phase
+                  mpos.set.css(rect_capt, step.frame)
 
-                // boost priority
-                //rect_cap.ux.u.add('pseudo')
-                // stateOld/pseudo effect (hover or otherwise) should attempt to curate children
-                // by tween, or inPolar, or stylesheet pre/post... what is contageous in the bubble?
-                // users COULD be FORCED to add an EMPTY ANIMATION to trigger TWEEN
-                if (rect_cap.ux.u.has('pseudo')) step.queue.add(idx)
-                // && ux.u.size / matrix / tween
+                  // Leak-in Effects: propogate defaults during capture,
+                  // by association, in attempt to curate children
+                  const smokeLeak = false
+                  if (smokeLeak) {
+                    rect_capt.frame = rect.frame
+                    if (rect.ux.u.size) rect_capt.ux.o += rect.ux.u.size
+                    if (rect.ux.u.has('phase')) rect_capt.ux.u.add('phase')
+                    if (rect.ux.u.has('tween')) rect_capt.ux.u.add('tween')
+                    if (rect.ux.u.has('matrix')) rect_capt.ux.u.add('matrix')
+
+                    if (rect.ux.u.size) step.queue.add(idx)
+                  }
+                }
+              } else {
+                // anonymous child lacks [data-idx] (of grade rect),
+                // but may push_back properties to parent (during phase capture)
+
+                //node_capt.z = 1;
+                //const nc_inPolar = mpos.set.inPolar(node_capt);
+                //if(!nc_inPolar) continue;
+
+                // note: some types may curate offscreen hitboxes?
+                if (node_capt?.css.tween && time.st.gate && inPolar) {
+                  // node flags parent of animation (renewed by flush.fuse),
+                  // and keeps lambda terms (internal counter, pingpong loss)
+
+                  const push_back = grade.rects.get(node_capt.push_back)
+                  push_back.ux.u.add('phase')
+                  //node_capt.ux.o++; // once
+                  //if (tween) rect.ux.i++; //always
+
+                  //console.log("push_back", node_capt.push_back);
+                  // exit, assume homogenous properties
+                  break
+                }
+
+                // const node_capt = {el:el, idx:?, css: {style:{}, ...phase:?}, z:0 }
               }
             }
           }
@@ -2879,11 +3107,19 @@ const mpos = {
         }
         if (opt.arc) {
           // mokeypatch a update
-          // bug: trigger once like 'move', and update minor.other
+          // bug: trigger once like "move", and update minor.other
           rect.ux.u.add('matrix')
         }
       }
+
+      // note: stub of rect class, assumes homogenous atlas
+      if (grade.major.revoke.size && time.st.pingpong) mpos.set.key(grade, { major: 'atlas', revoke: true })
     },
+    /**
+     * Process state of event queue, for element types
+     * @param {Object} grade structure for rectangle elements
+     * @param {(number|string)} pointer type of invocation
+     */
     sync: function (grade, pointer) {
       if (!grade || grade.wait || (pointer && !grade.major.queue.size)) {
         // drop frame
@@ -2894,7 +3130,7 @@ const mpos = {
       //const { major, atlas } = grade;
 
       grade.wait = true
-      grade.inPolar = opt.inPolar
+      //grade.inPolar = opt.inPolar;
       // private stash for atlas/transforms
       const step = {
         frame: 0,
@@ -2909,33 +3145,9 @@ const mpos = {
 
       grade.major.queue.clear()
       let reflow = false
-      if (!pointer) {
-        //
-        // HARD-update: build queue for rects
-
-        // Viewport Helper (bounds mesh)
-        // no recreate, for random document idx
-        const viewHelper = grade.el.getRootNode().body
-        if (!viewHelper.dataset['idx']) {
-          const idx = [viewHelper.nodeName, grade.batch, new Date().getTime()].join('_')
-          const rect = new mpos.mod.tRect(viewHelper, {
-            idx: idx,
-            major: 'other',
-            minor: 'wire',
-            z: -9,
-            fix: true,
-            add: 1
-          })
-          viewHelper.setAttribute('data-idx', idx)
-          mpos.set.inPolar(rect)
-          //rect.ux.i = 1;
-
-          // define manually
-          grade.rects.set(idx, rect)
-          mpos.set.key(grade, rect)
-        }
-      } else {
-        //
+      // note: !pointer was frame 0 (no race), before Observer
+      // could precede it, so now (queue speed increased) viewHelper moved to treeSort
+      if (pointer) {
         // SOFT-update: Observer or frame
 
         for (const idx of step.queue) {
@@ -2961,7 +3173,7 @@ const mpos = {
           const now = time.sFence.oldTime
           const elapsed = (now - time.sPhaseLast || now) + 0.001
           time.sPhaseLast = now
-          // deviation from nominal: ms is more sensitive at 1/60 than 125+
+          // deviation from nominal: ms is more sensitive at 1 / 60 than 125+
           const diff = time.sFenceFPS - elapsed
           sPhaseSync = -(delay / diff)
           // note: [1] normal [.2] ok stress [12] slow
@@ -2978,7 +3190,7 @@ const mpos = {
       // averages for quality modulation
       let sA = ((s0 + s1) / 2 + (s2 + s3)) / 3
       step.quality = (sA + sFenceSync + sPhaseSync) / 2
-      //console.log(step.quality.toFixed(2), '=', +sA.toFixed(2), +sPhaseSync.toFixed(2), +sFenceSync.toFixed(2))
+      //console.log(step.quality.toFixed(2), "=", +sA.toFixed(2), +sPhaseSync.toFixed(2), +sFenceSync.toFixed(2))
 
       /* 
       // logging [ALL NORMAL 2026-02-22]
@@ -3000,7 +3212,7 @@ const mpos = {
       // Pass state to recursive loops (full/partial)
       if (!pointer || reflow) {
         // Emulate page flow: reduce and detect changes
-        if (time.st.pingpong) this.rate(grade, step)
+        if (time.st.gate) this.rate(grade, step)
         // NOTE: if rate and atlas don't use the exact same effect
         // i.e. st.pingpong, or st.gate, or nothing, or st.subsub...
         // they negate one anothers changes
@@ -3044,15 +3256,21 @@ const mpos = {
       /* // WebWorker
       mpvar.worker.postMessage(
         {
-          msg: 'atlas',
-          origin: 'worker.js',
+          msg: "atlas",
+          origin: "worker.js",
           opts: { rect: false }
         },
         []
       ) */
     },
+    /**
+     * Process texture atlas, from filtered elements
+     * @param {Object} grade structure for rectangle elements
+     * @param {Object} step sync state
+     * @returns
+     */
     atlas: function (grade, step = {}) {
-      const { tool, fov, cloneX } = mpvar
+      const { tool, fov, cloneX, time } = mpvar
       const { atlas, major } = grade
       let { frame, queue, syncFPS, quality } = step
 
@@ -3060,9 +3278,9 @@ const mpos = {
       if (step.syncFPS === 0) step.queue = new Set(major.atlas.values())
       let index = step.queue.size
       // breakpoints to paint
-      step.paint = step.syncFPS === 0 && index >= 24 ? [index, Math.floor(index * 0.5)] : []
+      step.paint = step.syncFPS === 0 && index >= 24 ? [Math.floor(index * 0.5)] : []
 
-      //console.log('atlas queue', step.queue.size)
+      //console.log("atlas queue", step.queue.size)
       if (!atlas.ctx || !step.queue.size) {
         // catch error: loop no canvas of rebuilt page (relic)
         // set !grade.wait or let modules work (render)
@@ -3070,14 +3288,60 @@ const mpos = {
         return
       }
 
-      function meta(rect) {
-        // trim ux: infer final boundary
-        if (step.syncFPS === 0) return true
-        if (rect.inPolar < grade.inPolar) return false
+      /**
+       * Backpropagate: broad queue is rated early, so prune categorical... or bypass (lossy determinism) with flush for holistic reconcile
+       * @param {Object} rect element record
+       * @returns valid property
+       */
+      function bprop(rect) {
+        let push
 
-        const shallow = rect.ux.u.has('tweens') || rect.ux.u.has('pseudo')
-        const whitelist = rect.ux.o > 1
-        return shallow || whitelist
+        // mat backgrounds are opt-in (under quarantine for contageous properties)
+        const shell = rect.minor === 'self' || rect.minor === 'child'
+
+        let inPolar = rect.inPolar + 0.5 >= grade.inPolar // trim + bleed
+        if (inPolar) {
+          // trim
+          inPolar = rect.inPolar >= grade.inPolar
+
+          // TRIM + BLEED:
+          // - flush.fuse update qualified textures
+          // - basePaint texture
+
+          // proactively ignore most ux.u matrix (rotation or stretching)
+          let prop = rect.ux.u.has('tween') || rect.ux.u.has('phase') || (rect.ux.o && !(rect.ux.u.size === 1 && rect.ux.u.has('matrix')))
+
+          // PUSH: prop active, in trim
+          // DROP: matrix, in bleed  ...+flushfuse
+
+          // if prop reduce (if not, nothing) general enough
+          // ?? major filter/pivot inPolar or prop ??
+
+          // animations oob throttle frequency:
+          // drop interpolated keyframes, and push phase/stateOld
+          // ... phase/stateOld may be "lost" so ux.o is the next tier... but also includes tween/matrix
+          if (prop) push = inPolar || (rect.ux.u.size && !time.st.flush.fuse)
+          /*push = inPolar
+            ? prop
+            : prop && rect.ux.u.has("matrix") && !time.st.flush.fuse;*/
+        }
+        // mixin 0: FORCE 1st draw
+        // mixin 1: REDUCE overdraw (matrix rotation, oob tween)
+        // mixin 3: MISC BUFFER?: ++ux.o --self/child
+
+        //
+        // first basic state visible: init or new rect
+        // step.frame === 0 // reflows (passively ignore)
+        // step.syncFPS === 0 // 0 on init or T/F from gate
+        // rect.frame === -1 // new element (but css already overwrites)
+        // !rect.uv.w === new element (uninitialized, like frame-1)
+        const basePaint = step.syncFPS === 0 || !rect.uv.w //&& !(back || step.frame === 0)
+        //
+
+        // css bumps ux.o if matrix is significant
+        //const whitelist = rect.ux.o;
+        // dont basePaint minimal shell, because onLoad draws unstyled container phase
+        return push || (!shell && basePaint)
       }
 
       // Structures for toSVG > Node Options:
@@ -3092,9 +3356,10 @@ const mpos = {
 
       for (const idx of step.queue) {
         const rect = grade.rects.get(idx)
-        const uv = rect?.uv
+
         // trim meta ux: reduce ANY queue of indirect affects!
-        if (uv && meta(rect)) {
+        if (rect?.uv?.mip && bprop(rect)) {
+          const uv = rect.uv
           // toSvg options: reset shallow clone
           let options = { ...inline }
           options.style = { ...cloneX.style }
@@ -3122,6 +3387,9 @@ const mpos = {
             //options.style.display = "inline-block" // tame pop-in
           }
 
+          // reduce overhead for simple element (unless ghost text..?)
+          if (rect.el.childElementCount === 0) options.filter = false
+
           if (rect.minor === 'self') {
             // isolate background (exclude child elements)
             // todo: types (for sizes, bullets, media sliders...)
@@ -3130,6 +3398,10 @@ const mpos = {
             // (options.style {...visibility, ...opacity}) = { visibility: "hidden", opacity: 0 }
             // path 2: filter children to rely on width/height
             options.filter = cloneX.filterSelf
+            // reset indeterminate offsets (keyframe, whitespace)
+            options.style.animation = ''
+            options.style.transform = ''
+            //options.style.margin = "";
           }
 
           toSvg(rect.el, options)
@@ -3147,7 +3419,7 @@ const mpos = {
 
                 if (uv.w === undefined) {
                   // assign scale
-                  const cellsMipMax = ((mm.span / uv.mip) * atlas.cells) / uv.mip // minus 1 slot for keyTest
+                  const cellsMipMax = ((mm.span / uv.mip) * atlas.cells) / uv.mip // minus 1 slot for keyTest..?
 
                   // 1. w == mip, but number (shader) not string (key)
                   // 2. mip scale set (treeDeep > setRect > key), but observe inventory
@@ -3206,30 +3478,39 @@ const mpos = {
             })
             .catch((error) => {
               // bad image source or type, or unexpected content (xml load/unload)
-              console.log('source error:', error)
+              // or sync caught a rect being unloaded
+              //console.log("source error:", error);
             })
-            .finally(() => {
-              next()
-            })
+            .finally(next)
         } else {
           // reflow was minor...?
           next()
         }
       }
 
+      /**
+       * queue next, breakpoint or complete
+       */
       function next() {
         const paint = step.paint.indexOf(index) > -1
         index--
         if (paint || index === 0) {
-          // paint breakpoint, or queue done
           mpos.step.transforms(grade, step, paint)
         }
       }
     },
+    /**
+     * Process geometry matrix, texture, and event targets
+     * @param {Object} grade structure for rectangle elements
+     * @param {Object} step sync state
+     * @param {boolean} paint atlas breakpoint
+     */
     transforms: function (grade, step, paint) {
       const { atlas, major, rects } = grade
       const { frame, queue, syncFPS } = step
       const { time, tool } = mpvar
+
+      //console.log("step.queue", step.syncFPS, step.queue.size);
 
       //
       // Proceed with internal updates (meshes, raycast) before render
@@ -3241,6 +3522,15 @@ const mpos = {
       // [atlas/other] ?: instanceId / Mesh.userData.el
       // dispatch event: { rect: {...el}, uv: {...xy}, ...dataIdx }
       const targets = []
+      /**
+       * Backpropagate: broad queue is rated early, so prune categorical... or bypass (lossy determinism) with flush for holistic reconcile
+       * @param {Object} rect element record
+       * @returns valid property
+       */
+      function bprop(rect) {
+        // note: inPolar gates rate (and push_back), but also flush ux detached after loss (scrolling, collapsing...)
+        return step.frame === 0 || rect.frame < 0 || queue.has(rect.idx) || !time.st.flush.fuse
+      }
 
       //time.st.pingpong?
       if (!paint) {
@@ -3249,20 +3539,25 @@ const mpos = {
         //grade.scroll = { x: window.scrollX, y: window.scrollY }
         for (const [count, idx] of major.other) {
           const rect = rects.get(idx)
+          const rate = bprop(rect) //|| rect.minor === "wire";
 
           let scroll = rect.fix ? { x: 0, y: 0, fix: true } : false
-          const dummy = mpos.set.box(rect, { scroll: scroll, frame: frame })
+          const newBox = rate && mpos.set.box(rect, { scroll: scroll, frame: frame })
 
           // Object3D loaded (rect.add>2, !detached, ?cached)
           if (rect.obj) {
-            if (dummy) mpos.set.use(rect.obj) // || rect.obj.animate
+            if (newBox) mpos.set.use(rect.obj) // || rect.obj.animate
+
+            if (!newBox) {
+              //console.log("!newBox other")
+            }
 
             // raycast whitelist data-idx
             targets.push('r_idx_' + rect.idx)
 
             // update visibility
             // note: off-screen Mesh has no third material visibility state (unlike instancedMesh), so it "appears" more
-            const vis = rect.fix ? true : rect.inPolar >= grade.inPolar
+            const vis = rect.fix ? true : rect.inPolar + 0.5 >= grade.inPolar
             rect.obj.visible = vis
             //if ( rect.add === 3 ) rect.add = 4
             //( while rect.obj.children.length-- ) {} // subgroups
@@ -3304,19 +3599,37 @@ const mpos = {
       const instanced = atlas.instanced
       const color = new THREE.Color()
       let newBox, newRGB, newUVW
+      //console.log("queue", queue);
+
       for (const [count, idx] of major.atlas) {
         const rect = rects.get(idx)
+        const rate = bprop(idx)
 
-        const dummy = mpos.set.box(rect, { frame: frame })
-        if (dummy) instanced.setMatrixAt(count, dummy.matrix)
-        newBox = dummy
+        if (!rect) {
+          // TODO: possibly rect.el could be replaced __?
+          // TODO: notify instanced count of removal/absence of element/key
+          //newBox = true;
+          //ontinue;
+          //if (!time.st.flush.fuse) newBox = true
+        }
+
+        const inPolar = rect.inPolar + 0.5 >= grade.inPolar // bleed+0.5 makes safe area
+
+        //let dummy = rate //|| rect.ux.u.has("matrix");
+        if (rate || inPolar) {
+          // oob: boxes still MOVE beyond visible viewport (inPolar)... but EFFECTS degrade!
+          newBox = mpos.set.box(rect, { frame: frame })
+          if (newBox) instanced.setMatrixAt(count, newBox.matrix)
+          //newBox = dummy;
+          // ... maybe UX PHASE could INHERIT a MATRIX,
+          // but if RATE changes CAPTURE, it should be THOROUGH
+        }
 
         //
         // Primitive feature differ (backgroundColor)
         // todo: ad-hoc flags (clipping scroll, linked:toolgroup, catmull metaballs)
-        const inPolar = rect.inPolar >= grade.inPolar
 
-        if (inPolar && (rect.ux.u.has('tween') || rect.ux.u.has('pseudo'))) {
+        if (inPolar && (rect.ux.u.has('tween') || rect.ux.u.has('phase'))) {
           // Instance color phase (pre/post)
           let oldRGB = new THREE.Color()
           if (instanced.instanceColor) instanced.getColorAt(count, oldRGB)
@@ -3335,13 +3648,8 @@ const mpos = {
           }
 
           // differ colors update
-          let rgb1 = [tool.eq(oldRGB.r), tool.eq(oldRGB.g), tool.eq(oldRGB.b)]
-          let rgb2 = [tool.eq(color.r), tool.eq(color.g), tool.eq(color.b)]
-          const equalsNode0 = tool.eq(oldRGB, { diff: color, deep: true })
-          const equalsNode =
-            tool.eq(oldRGB.r) === tool.eq(color.r) && tool.eq(oldRGB.g) === tool.eq(color.g) && tool.eq(oldRGB.b) === tool.eq(color.b)
-          //console.log("eqNode", equalsNode0, equalsNode, rgb1, rgb2, );
-          if (!equalsNode) {
+          const equalColor = tool.eq(oldRGB, { diff: color, deep: true })
+          if (!equalColor) {
             instanced.setColorAt(count, color)
             newRGB = true
           }
@@ -3352,7 +3660,8 @@ const mpos = {
         let vis = -1
         let x, y, z
         const uv = rect.uv
-        if (dummy || rect.ux.u) {
+        if (rate || inPolar) {
+          //|| rect.ux.u.size || rect.ux.o
           newUVW = true
           if (uv || rect.minor === 'self') {
             // rated structure/hierarchy crossed boundary
@@ -3360,8 +3669,8 @@ const mpos = {
               x = uv.wX
               y = 1 - uv.wY
               z = uv.w
-            } else if (inPolar || grade.inPolar === 4) {
-              // partial update (idle/stale) from reflow delay?
+            } else if (inPolar || grade.inPolar > 3.5) {
+              // oob: partial update (idle/stale) from reflow delay?
               x = atlas.keyTest.x
               y = 1 - atlas.keyTest.y
             }
@@ -3375,7 +3684,7 @@ const mpos = {
         }
 
         // Raycast whitelist [instanceId]
-        if (uv && inPolar /*&& rect.minor !== 'self'*/) {
+        if (uv && inPolar /*&& rect.minor !== "self"*/) {
           // note: event/raycast is strongly bound (like capture/bubble)
           // propagation quirks are thrown further by curating hierarchy (mat.self)
           targets.push(Number(count))
@@ -3419,14 +3728,12 @@ const mpos = {
         }
       }
     },
-    events: {
-      target: new Set(),
-      synthetic: {},
-      raycaster: new THREE.Raycaster(),
-      pointer: new THREE.Vector2()
-    },
+    events: { target: new Set(), synthetic: {}, raycaster: new THREE.Raycaster(), pointer: new THREE.Vector2() },
+    /**
+     * Enqueue pointers to sync, from update types
+     * @param {Event} e Event-like pointer
+     */
     reflow: function (e) {
-      // balance lag of input versus update
       const { ux, step } = mpos
       const { grade, opt } = mpvar
       if (!grade) {
@@ -3441,11 +3748,12 @@ const mpos = {
         // debounce concurrent: pools greedily (with influence to lower fps)
         // avoid: duplicate, stale frames (debounce >= delay)
         // pingpong: effective framerate is 15-30fps (not 120fps of opt.delay)
-        const debounce = pointer === 'delay' ? 1 / 60 : 1 / 30
+        const debounce = pointer === 'delay' ? Math.min(e.value * 2, 1 / 15) : 1 / 45
         requestIdleCallback(
           (deadline) => {
             // add unique
             // deadline.didTimeout happens a lot, (i.e. reflow from scroll with no delay)
+            // const reduceQuality = !(deadline.didTimeout && pointer==="delay")
             if (queue.size) step.sync(grade, pointer)
           },
           { timeout: debounce }
@@ -3479,7 +3787,7 @@ const mpos = {
 
         // if delay invoked, update access at gui opt
         // note: don't overwrite so render can restore after sleep
-        //if(timer === 'delay' && timeout !== mpvar.opt.delay) mpvar.opt.delay = timeout
+        //if(timer === "delay" && timeout !== mpvar.opt.delay) mpvar.opt.delay = timeout
 
         ux.timers.clear(timer)
         if (e.value === -1) {
@@ -3520,7 +3828,7 @@ const mpos = {
               let pointer = e.type
               if (e.type === 'scroll') {
                 // update visibility?
-                pointer = opt.inPolar === 4 ? 'trim' : 'move'
+                pointer = opt.inPolar > 3 ? 'trim' : 'move'
               }
               enqueue(pointer)
             }
@@ -3528,6 +3836,11 @@ const mpos = {
         )
       }
     },
+    /**
+     * Render and update time/performance
+     * @param {*} gate frame sync
+     * @returns {boolean} frame idle
+     */
     render: function (gate) {
       const { grade, mat_shader, scene, camera, renderer, rendererCSS, tool, time, cache, opt } = mpvar
 
@@ -3545,11 +3858,11 @@ const mpos = {
           const delay = stop * seek
           if (opt.delay) {
             // nonzero delay ignored
-            console.log('delay', delay)
+            //console.log("slow", delay);
             mpos.ux.reflow({ type: 'delay', value: delay })
           }
         } else {
-          console.log('drop')
+          //console.log("sleep");
           // 3. drop frame excess (load, blur, dev console...)
           return
         }
@@ -3612,7 +3925,7 @@ const mpos = {
         const sma = Math.floor(time.sFenceDelta / time.sFenceFPS) // Math.floor(.6/.3)
         slice.boundary += 2 * sma - 1 // fast [0-1], slow [8-16+]
 
-        if (slice.boundary > 32) {
+        if (slice.boundary > 30) {
           // reset accumulator (truncate outliers)
           slice.sma.count /= 2
           slice.boundary = 1
@@ -3621,6 +3934,17 @@ const mpos = {
 
         //stackoverflow.com/questions/11285065/#answer-51942991
         time.sFenceDelta %= time.sFenceFPS
+
+        //
+        const flush = time.st.flush
+        const fuse = Date.now()
+        if (flush.fuse && flush.fuse <= fuse) {
+          // !flush aligns on gate to offer routine access,
+          // so delayed scheduler is !not idempotent
+          flush.fuse = 0
+        } else if (flush.fuse <= 0) {
+          flush.fuse = fuse + 1000 // 1 seconds?
+        }
       }
 
       // range [1-4+] guarded on reflow, not granular events
@@ -3631,8 +3955,8 @@ const mpos = {
       //
       // Time Slice Decorators: used in sync loop to reduce update queue!!1
       time.st.gate = syncFPS // (FIFO) render time measure: ground truth
-      time.st.subsub = slice.boundary >= 16 && slice.ramp < 2 // (Batch) idle: !!burst
-      time.st.pingpong = (syncFPS && time.st.subsub) || (slice.sma.average < 16 && time.sFenceSync < -1.75) // (Round robin) gate or slice is stable: !!50% load balance
+      time.st.subsub = slice.boundary <= 7 && slice.ramp < 2 // (Batch) idle: !!burst
+      time.st.pingpong = (syncFPS && time.st.subsub) || (slice.sma.average <= 15 && time.sFenceSync < -1.5) // (Round robin) gate or slice is stable: !!50% load balance
 
       const obr = cache.get('onBeforeRender')
       if (time.st.pingpong) {
@@ -3647,29 +3971,29 @@ const mpos = {
             if (typeof callback === 'function') callback()
           })
         }
+      }
 
-        //
-        // Non-critical Routines
-        if (grade) {
-          // animation step
-          grade.group.traverse((obj) => {
-            if (obj.animate) {
-              if (obj.animate === true) {
-                const animationTime = Date.now() / 50
-                // wiggle document root
-                obj.rotation.x = Math.sin(animationTime) / 100
-                obj.rotation.y = Math.cos(animationTime) / 200
-                obj.position.z = -9
-              } else if (obj.animate.gif) {
-                // refresh SuperGif
-                //obj.material.map.needsUpdate = true
-              }
+      //
+      // Non-critical Routines
+      if (grade) {
+        // animation step
+        grade.group.traverse((obj) => {
+          if (obj.animate) {
+            if (obj.animate === true) {
+              const animationTime = Date.now() / 500
+              // wiggle document root
+              obj.rotation.x = Math.sin(animationTime) * 3.14 * (Math.PI / 180)
+              obj.rotation.y = Math.cos(animationTime) * 3.14 * (Math.PI / 180)
+              //obj.position.z = -9;
+            } else if (obj.animate.gif) {
+              // refresh SuperGif
+              //obj.material.map.needsUpdate = true
             }
-          })
+          }
+        })
 
-          // lazy update (not always from controls raycast)
-          tool.dpr()
-        }
+        // lazy update (not always from controls raycast)
+        tool.dpr()
       }
 
       if (time.st.gate || gate === 0) {
@@ -3689,12 +4013,14 @@ const mpos = {
 
       //requestAnimationFrame(this)
     },
+    /**
+     * Event propagation to target (idx of rect.major), and bubble delegate
+     * @param {Event} e event
+     * @returns {Object} target for dispatch
+     */
     raycast: function (e) {
       const { grade, camera, caret, time, tool } = mpvar
       let synthetic = {}
-
-      //
-      // Align Event to Pair (atlas/other) for Delegation
       // note: update queue > transforms > inPolar > events.target[] > raycast (group > layer 2)
       if (grade && grade.wait !== Infinity) {
         const events = mpos.ux.events
@@ -3720,7 +4046,7 @@ const mpos = {
         if (intersects.length) {
           const hit = intersects[0]
 
-          //console.log('hit', hit)
+          //console.log("hit", hit)
           const useId = hit.object.isInstancedMesh
 
           //time.st.pingpong && tool.dpr(hit.distance)
@@ -3737,18 +4063,18 @@ const mpos = {
           caret.title = rect.idx + rect.el.nodeName
           const caretROI = caret.style
           // visibility
-          const color = rect.inPolar >= 4 ? 'rgba(0,255,0,0.5)' : 'rgba(255,0,0,0.5)'
+          const color = rect.inPolar > 3 ? 'rgba(0,255,0,0.33)' : 'rgba(255,0,0,0.33)'
           caretROI.backgroundColor = color
           // location
-          if (rect.uv?.hasOwnProperty('w')) {
+          if (rect.uv.hasOwnProperty('w')) {
             const cell = 100 * (1 / grade.atlas.cells) * rect.uv.w
             caretROI.width = caretROI.height = cell + '%'
             caretROI.left = 100 * rect.uv.wX + '%'
             caretROI.bottom = 100 * (1 - rect.uv.wY) + '%'
             caretROI.right = 'inherit'
           } else {
-            // child container
-            //caretROI.width = '100%'
+            // structural mat.minor==="child"
+            //caretROI.width = "100%";
             caretROI.backgroundColor = 'transparent'
             caretROI.left = caretROI.bottom = 'inherit'
             caretROI.right = 0
@@ -3760,17 +4086,19 @@ const mpos = {
           // todo: fallback events for special interactions
         }
 
-        events.synthetic = synthetic // preserve last user event?
+        // preserve last user event
+        events.synthetic = synthetic
       }
       return synthetic
     },
+    /**
+     * Synthetic event dispatch, inferred by raycaster target phase (parallel to queue)
+     * @param {{type:PointerEvent}} e pointer events (click, pointerdown, pointermove)
+     * @returns {boolean} filter inert events
+     */
     event: function (e) {
-      //
-      // Raycaster Targets: divine synth phase events (decoupled from update queue)
       // todo: synchronize trailing/current click-target... and multi-sample ray area?
-      // e.type: click, pointerdown, pointermove
       const { rect, uv } = mpos.ux.raycast(e)
-      // Events (parallel to queue)
       let uxPass = !rect || !uv,
         uxLoss
       const { controls, time } = mpvar
@@ -3780,7 +4108,7 @@ const mpos = {
         // Class of behavior pattern: abort if nothing, throttle (...unless something?)
 
         // indirect activity (cursor trails in/out phase)
-        const uxPure = e.type === 'pointermove' && !rect.ux.u.has('pseudo')
+        const uxPure = e.type === 'pointermove' && !rect.ux.u.has('phase')
         // indeterminate motion path
         const uxIdle = e.type === 'pointermove' && !rect.ux.u.size && !time.st.pingpong
         // interactive object
@@ -3791,7 +4119,7 @@ const mpos = {
         uxLoss = !uxDeep && (uxPure || uxIdle)
       }
 
-      //console.log('uxRaw', e.type, rect, uxPass, uxLoss)
+      //console.log("uxRaw", e.type, rect, uxPass, uxLoss)
       if (uxPass || uxLoss) {
         // prevent and recover from flood!
         controls.enablePan = true
@@ -3818,7 +4146,7 @@ const mpos = {
       const x = uvX + rect.bound.left //+ scrollX;
       const y = uvY + rect.bound.top //+ scrollY;
 
-      //console.log('element uv', uvX, uvY, 'window', x, y)
+      //console.log("element uv", uvX, uvY, "window", x, y)
 
       //
       // Event Candidate(s) to emit
@@ -3844,18 +4172,14 @@ const mpos = {
       //console.log("event emits", e.type, emit || element);
 
       // Synthetic Event
-      const MouseEventInit = {
-        view: element.ownerDocument.defaultView,
-        bubbles: true,
-        cancelable: true
-      }
+      const MouseEventInit = { view: element.ownerDocument.defaultView, bubbles: true, cancelable: true }
 
       // Synthetic Propagate: delegate quirks (e.relatedTarget, xyz <= parent, nodeType==widget)
       let NodeWalker
       if (emit) {
-        // Dispatch Specific
-        MouseEventInit.screenX = x + scrollX //pageX, screenX, clientX
-        MouseEventInit.screenY = y + scrollY //pageY, screenY, clientY
+        // Dispatch Specific: pageX, screenX, clientX
+        MouseEventInit.screenX = x + scrollX
+        MouseEventInit.screenY = y + scrollY
         NodeWalker = emit
       } else {
         // Dispatch General

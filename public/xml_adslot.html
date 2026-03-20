@@ -184,7 +184,7 @@
   const { opt, fov, controls, camera, batch, cache, scene, renderer } = mpvar
 
   opt.selector = 'main';
-  opt.depth = 4
+  opt.depth = 4;
   opt.delay = 125;
 
 
@@ -249,7 +249,9 @@
 
         // icon
         
-        const rect = mpos.fnVar('find', icon_target.dataset.idx, {}).then((rect) => {
+        const om = mpos.fnVar('omni', icon_target.dataset.idx, {});
+        const rect = om.rects[icon_target.dataset.idx];
+        
           mpos.fnVar('load', 'obj', { node: rect }).then((key) => {
             icon_target.style.border = ".125em dashed red";
             icon_target.style.opacity = "opacity";
@@ -265,7 +267,7 @@
             })
             
           })
-        })
+        
 
       }
 
