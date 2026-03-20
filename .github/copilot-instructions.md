@@ -58,6 +58,7 @@ Race-to-idle (burst): render time slices sync variable performance by distributi
 |gate|(FIFO) render time measure|ground truth|
 |subsub|(Batch) idle|!!burst|
 |pingpong|(Round robin) gate or slice is stable|!!50% load balance |
+|!flush[fuse]|scheduled reconciliation|prune effects|
 |step.quality|multifactor normalized|performance|
 |||@balance stale negation|
 
@@ -68,5 +69,5 @@ Race-to-idle (burst): render time slices sync variable performance by distributi
 |sFenceSync|(delta/FPS) | [-2.0]| [-0.2] |
 |slice.ramp|subframe | [1] any FPS 15-120 | [2-4+] excess render (debounce controls or reflow) |
 |slice.boundary|gate or lambda | [0-8] hovers | [8-16+] quickly ramps up|
-|slice.quota.average|accumulate boundary to limit | [1-4] ideal; [4-8] target; [8-16] ok;  | [16-32] poor; [32-64] critical; |
+|slice.sma.average|accumulate boundary to limit | [1-4] ideal; [4-8] target; [8-16] ok;  | [16-32] poor; [32-64] critical; |
 || | |>125ms normalised in step.quality as quotient deviates (lossy frame)|
